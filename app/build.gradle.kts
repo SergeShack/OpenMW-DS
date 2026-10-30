@@ -18,6 +18,11 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// Side-by-side "mod" build: `-PdsMod=true` (or dsMod=true in ~/.gradle/gradle.properties) uses its
+// own package id, launcher label and storage folder, so it installs next to the official build and
+// keeps its own saves and config. Off by default.
+val dsMod = (findProperty("dsMod") as String?)?.toBoolean() == true
+
 // ---------------------------------------------------------------------------------------------
 // Release version — the SINGLE source of truth for "what version is this?".
 //
@@ -99,7 +104,12 @@ android {
     }
 
     defaultConfig {
-        applicationId = "org.openmw.ds"
+        applicationId = if (dsMod) "org.openmw.ds.mod" else "org.openmw.ds"
+        manifestPlaceholders["appLabel"] = if (dsMod) "OpenMW-DS Mod" else "@string/app_name"
+        // Folder under /storage/emulated/0 that holds saves, config, mods and resources.
+        buildConfigField("String", "STORAGE_DIR", "\"${if (dsMod) "OpenMW-DS-mod" else "OpenMW-DS"}\"")
+        // The update check on launch would offer the official release, which is a different app.
+        buildConfigField("boolean", "UPDATE_CHECK_ON_LAUNCH", "${!dsMod}")
         minSdk = 26
 
         //noinspection OldTargetApi

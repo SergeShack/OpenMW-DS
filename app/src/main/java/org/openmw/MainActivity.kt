@@ -245,7 +245,7 @@ class MainActivity : ComponentActivity() {
                             // call can't hold up the config observer behind it. Result lands in
                             // UpdateChecker.state, which the Settings screen observes — it only
                             // CHECKS; the ~71MB download stays an explicit user action.
-                            scope.launch(Dispatchers.IO) {
+                            if (BuildConfig.UPDATE_CHECK_ON_LAUNCH) scope.launch(Dispatchers.IO) {
                                 UpdateChecker.checkOnLaunch()
                             }
                         }
