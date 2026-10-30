@@ -167,6 +167,13 @@ android {
         }
         tasks.matching { it.name == cmakeTaskName }.configureEach {
             finalizedBy(restorePinnedLibs)
+            // CMake's openmw install step writes into generateOpenMWAssets' output dir, which Gradle
+            // wipes when that task runs on a fresh build. If it ran after CMake, the APK had no
+            // libopenmw assets (the "missing settings.cfg" crash), so run it first.
+            dependsOn(generateOpenMWAssets)
+            // ...and declare the dir as an output here too, or Gradle never sees that CMake filled
+            // it and merge${cap}Assets stays UP-TO-DATE, with the same missing assets.
+            outputs.dir(generatedAssetsDir)
         }
         // Lint's release "vital" model/analysis tasks scan the merged assets — which
         // include our generated_assets srcDir (registered under `sourceSets` below via
@@ -181,6 +188,9 @@ android {
             it.name.contains("lint", ignoreCase = true) && it.name.contains(cap)
         }.configureEach {
             dependsOn(generateOpenMWAssets)
+            // The CMake task declares that dir as an output as well (see above), so lint must
+            // wait for it too or the same implicit-dependency validation fails.
+            dependsOn(cmakeTaskName)
         }
     }
 
@@ -200,7 +210,11 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("release")
+            // No release-keystore.properties: sign with the debug key so a local release build can
+            // still be installed. It won't install over an APK signed with the real release key.
+            signingConfig = signingConfigs.getByName(
+                if (keystorePropertiesFile.exists()) "release" else "debug"
+            )
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

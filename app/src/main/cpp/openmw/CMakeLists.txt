@@ -330,7 +330,9 @@ ExternalProject_Add(boost
 	BUILD_COMMAND ${wrapper_command} make -j${NPROC}
 	INSTALL_COMMAND ${wrapper_command} make install install >> /dev/null
 
-	COMMAND ${wrapper_command} llvm-ranlib ${prefix}/lib/libboost_{filesystem,program_options,iostreams}.a
+	# Listed out, not libboost_{a,b,c}.a: ninja runs this via /bin/sh, which is dash on Debian/Ubuntu
+	# and has no brace expansion (Fedora's /bin/sh is bash, which hid this).
+	COMMAND ${wrapper_command} llvm-ranlib ${prefix}/lib/libboost_filesystem.a ${prefix}/lib/libboost_program_options.a ${prefix}/lib/libboost_iostreams.a
 )
 
 ExternalProject_Add(ffmpeg
