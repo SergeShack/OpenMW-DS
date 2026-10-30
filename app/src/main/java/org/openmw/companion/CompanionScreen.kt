@@ -16422,6 +16422,7 @@ private fun InventoryItemList(
     val wornIds = remember(state.equipment) { state.equipment.values.toSet() }
     val equippedFilter = selectedCategoryLabel == EQUIPPED_FILTER
     val selectedGroup = INV_CATEGORIES.find { it.label == selectedCategoryLabel }
+    val cardRows by UiPreferences.invCardRowsFlow().collectAsState()
     // The bottom "Equipped" collapsible section (All view) starts collapsed, matching the barter
     // menu's Equipped drop-down.
     var equippedExpanded by remember { mutableStateOf(false) }
@@ -16507,10 +16508,9 @@ private fun InventoryItemList(
                 isWorn = { isWorn(it) },
                 forceHighlight = equippedFilter,
                 chargeById = chargeById,
-                // ALWAYS 4 rows. Hiding the Equipped bar used to buy a 5th row; instead that freed
-                // height now goes into taller (and, via the card's own scaling, proportionally
-                // wider) cards — see the INV_CARD_* geometry block.
-                rows = INV_CARD_ROWS,
+                // Card Size: 4 rows, or 3 for Large. Hiding the Equipped bar no longer adds a 5th
+                // row; the cards just get bigger (see INV_CARD_*).
+                rows = cardRows,
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp)
             )
         } else {
@@ -17180,9 +17180,9 @@ private fun ItemRow(
 // bounded height) is what keeps every card a uniform height regardless of name/stat content — each
 // card fills its evenly-divided grid cell.
 //
-// [INV_CARD_ROWS] is ALWAYS 4 (Aug 2026). It used to be bumped to 5 whenever the Equipped bar was
-// hidden — which, since that pref defaults to hidden, meant 5 was what most players actually saw.
-// The freed height now makes the CARDS bigger instead of adding a row.
+// [INV_CARD_ROWS] is the 4-row design size. The main grid uses the Card Size setting instead
+// (UiPreferences.invCardRowsFlow, 4 or 3); with 3 rows the scale below just comes out ~1/3 larger.
+// Hiding the Equipped bar no longer adds a 5th row.
 //
 // The numbers below (width, icon size, font sizes, paddings — including the ones inside the shared
 // stat widgets) are all authored against [INV_CARD_HEIGHT] as the REFERENCE cell height. [ItemCard]
@@ -21334,6 +21334,7 @@ private fun OptionsSubPage(
                     item { TextSizeRow() }
                     item { UiSoundsRow() }
                     item { OptionsSubLabel("Inventory tab") }
+                    item { InventoryCardSizeRow() }
                     item { EquippedInListRow() }
                     item { OptionsSubLabel("HUD favourites") }
                     // Mixing leads: it renames the two rows under it, so reading it first is what
@@ -22113,6 +22114,40 @@ private fun EquippedBarRow() {
     }
 }
 */
+
+// Inventory card size, as the grid's row count: Normal = 4 rows, Large = 3 rows (bigger tiles and
+// text, fewer items on screen). Cards only, so the pills are greyed while List is selected.
+@Composable
+private fun InventoryCardSizeRow() {
+    val context = LocalContext.current
+    val rows by UiPreferences.invCardRowsFlow().collectAsState()
+    val style by UiPreferences.inventoryTabStyleFlow().collectAsState()
+    val cards = style == InventoryTabStyle.CARDS
+
+    Column(Modifier.fillMaxWidth().padding(vertical = 9.dp)) {
+        Text("Card Size", color = Bone, fontSize = 14.sp, fontFamily = MwBody)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "Large shows bigger tiles and text, with fewer items on screen at once.",
+            color = BoneDim, fontSize = 11.sp, fontFamily = MwBody, lineHeight = 14.sp
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OptionPill(
+                Modifier.weight(1f),
+                label = "Normal",
+                active = rows == 4,
+                enabled = cards
+            ) { UiPreferences.setInvCardRows(context, 4) }
+            OptionPill(
+                Modifier.weight(1f),
+                label = "Large",
+                active = rows == 3,
+                enabled = cards
+            ) { UiPreferences.setInvCardRows(context, 3) }
+        }
+    }
+}
 
 // Whether worn items are also listed inline in the Inventory "All" view (independent of the bar).
 // When Hidden, equipped items are reached only via the Equipped tab (top) or the bar (if shown).

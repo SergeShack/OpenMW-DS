@@ -778,6 +778,15 @@ const val FAV_SLOTS_DEFAULT = 2
 val TEXT_SIZE_RANGE = 0.85f..1.25f
 const val TEXT_SIZE_DEFAULT = 1.0f
 
+/** Inventory tab card size, stored as the card grid's ROW COUNT. Each card scales uniformly with the
+ *  height its row gets (see ItemCard), so fewer rows = proportionally larger tiles AND text: 3 rows is
+ *  ~1/3 larger than the 4 every layout was designed at. Unlike the text size above this scales dp
+ *  too, which is fine here because the grid scrolls horizontally — it costs items on screen, never
+ *  clipping. 2 rows is not offered: the card is ~4x as wide as it is tall, so at that height barely
+ *  more than one card would fit across the panel. */
+val INV_CARD_ROWS_RANGE = 3..4
+const val INV_CARD_ROWS_DEFAULT = 4
+
 /** HUD minimap pinch zoom, a multiplier on the minimap's fixed crop (`MINIMAP_CROP_FRACTION`) (1.0 = unchanged).
  *
  *  FLOOR 0.25 shows one whole cell across the panel's short side. Further out would run past the
@@ -801,6 +810,7 @@ object UiPreferences {
     private const val INVENTORY_TAB_STYLE = "inventory_tab_style"
     private const val HIDE_EQUIPPED_BAR = "hide_equipped_bar"
     private const val SHOW_EQUIPPED_IN_LIST = "show_equipped_in_list"
+    private const val INV_CARD_ROWS = "inventory_card_rows"
     private const val ADAPTIVE_DIMMING = "adaptive_dimming"
     // The two ends of the adaptive-dimming ramp, expressed as SCREEN BRIGHTNESS (1f = untouched,
     // 0f = black) rather than overlay opacity, because that is what the options rows show the
@@ -1048,6 +1058,9 @@ object UiPreferences {
     // getBoolean load fallback.
     private val showEquippedInListFlow = MutableStateFlow(false)
 
+    // Row count of the Inventory tab's card grid — the player's card size (fewer rows = bigger cards).
+    private val invCardRowsFlow = MutableStateFlow(INV_CARD_ROWS_DEFAULT)
+
     // Where the looting / bartering service UIs are drawn (BOTTOM / SPLIT / TOP). Default SPLIT
     // (icon grid on top, controls on the bottom). TOP is pending — the menu greys that pill.
     private val lootingLocationFlow = MutableStateFlow(ScreenLocation.SPLIT).rememberDefault()
@@ -1238,6 +1251,7 @@ object UiPreferences {
             ?.let { inventoryTabStyleFlow.value = it }
         hideEquippedBarFlow.value = p.getBoolean(HIDE_EQUIPPED_BAR, true)
         showEquippedInListFlow.value = p.getBoolean(SHOW_EQUIPPED_IN_LIST, false)
+        invCardRowsFlow.value = p.getInt(INV_CARD_ROWS, INV_CARD_ROWS_DEFAULT).coerceIn(INV_CARD_ROWS_RANGE)
         adaptiveDimmingFlow.value = p.getBoolean(ADAPTIVE_DIMMING, ADAPTIVE_DIMMING_DEFAULT)
         // Clamped on read as well as on write (same reasoning as topPanelOpacity below): a stored
         // value from a corrupt prefs file, or from a build whose ranges differed, must never be able
@@ -1858,6 +1872,16 @@ object UiPreferences {
     fun setShowEquippedInList(context: Context, show: Boolean) {
         showEquippedInListFlow.value = show
         editor(context).putBoolean(SHOW_EQUIPPED_IN_LIST, show).apply()
+    }
+
+    /** Row count of the Inventory tab's card grid (fewer rows = larger cards). */
+    fun invCardRowsFlow(): StateFlow<Int> = invCardRowsFlow.asStateFlow()
+
+    /** Set the Inventory card grid's row count (clamped to [INV_CARD_ROWS_RANGE]) and persist. */
+    fun setInvCardRows(context: Context, rows: Int) {
+        val clamped = rows.coerceIn(INV_CARD_ROWS_RANGE)
+        invCardRowsFlow.value = clamped
+        editor(context).putInt(INV_CARD_ROWS, clamped).apply()
     }
 
     /** Where the conversation UI is drawn (BOTTOM / SPLIT / TOP). */
