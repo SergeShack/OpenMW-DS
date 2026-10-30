@@ -66,13 +66,14 @@ funnel through popGuiMode. NOTE: this restores only the ON-CLOSE finish roll; th
 per-take roll (PickpocketItemModel::stealItem) is still bypassed because companion
 takes move items via Lua moveInto rather than the native item model.
 
+diff --git a/apps/openmw/mwgui/windowmanagerimp.cpp b/apps/openmw/mwgui/windowmanagerimp.cpp
+index a93ae9a2af..50b587dafe 100644
 --- a/apps/openmw/mwgui/windowmanagerimp.cpp
 +++ b/apps/openmw/mwgui/windowmanagerimp.cpp
-@@ -659,6 +659,15 @@
-         // the stack, so hiding it mid-conversation does not end the dialogue or clear history.
+@@ -669,6 +669,15 @@ namespace MWGui
          if (mDialogueWindow && getMode() == GM_Dialogue)
              mDialogueWindow->setVisible(!companionDsConversation() && !loading);
-+
+ 
 +        // COMPANION: hide the container/loot/pickpocket window when Looting is in DS mode so
 +        // the companion (bottom) screen is the sole looting surface; show the native window
 +        // when Looting is Vanilla (companionDsLooting() false). ContainerWindow::onClose()
@@ -81,10 +82,11 @@ takes move items via Lua moveInto rather than the native item model.
 +        // ends normally only when the container mode is actually removed.
 +        if (mContainerWindow)
 +            mContainerWindow->setVisible(!companionDsLooting() && containsMode(GM_Container));
-
++
          bool gameMode = !isGuiMode();
-
-@@ -711,6 +720,16 @@
+ 
+         MWBase::Environment::get().getInputManager()->changeInputMode(!gameMode);
+@@ -720,6 +729,16 @@ namespace MWGui
              mHud->setDrowningBarVisible(false);
              mInventoryWindow->setVisible(
                  getMode() == GM_Container || getMode() == GM_Barter || getMode() == GM_Companion);
@@ -99,9 +101,9 @@ takes move items via Lua moveInto rather than the native item model.
 +            if (mInventoryWindow && companionDsLooting() && getMode() == GM_Container)
 +                mInventoryWindow->setVisible(false);
          }
-
+ 
          GuiMode mode = mGuiModes.back();
-@@ -1501,8 +1520,21 @@
+@@ -1510,8 +1529,21 @@ namespace MWGui
              mKeyboardNavigation->saveFocus(mode);
              if (containsMode(mode))
              {

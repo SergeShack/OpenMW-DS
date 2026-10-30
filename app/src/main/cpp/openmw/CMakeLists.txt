@@ -70,6 +70,11 @@ ProcessorCount(NPROC)
 if(NPROC EQUAL 0)
 	set(NPROC 2)  # Fallback to 2 cores if detection fails
 endif()
+# OPENMW_DS_JOBS caps it: one -O3 -flto clang job can use over 1 GB, so a machine with many cores
+# and little RAM (16 cores / 14 GB) runs out of memory at the full core count.
+if(DEFINED ENV{OPENMW_DS_JOBS})
+	set(NPROC $ENV{OPENMW_DS_JOBS})
+endif()
 
 # Detect ABI and setup architecture-specific variables for the Gradle environment
 if(NOT DEFINED ARCH)

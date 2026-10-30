@@ -39,12 +39,14 @@ This patch also declares the three Phase-1 companionDs*() bridges (used here and
 companion-hide-container-on-hideui.patch / companion-hide-barter-on-hideui.patch,
 which are applied after this one in the chain and share this translation unit).
 
+diff --git a/apps/openmw/mwgui/windowmanagerimp.cpp b/apps/openmw/mwgui/windowmanagerimp.cpp
+index 8696c43e28..a93ae9a2af 100644
 --- a/apps/openmw/mwgui/windowmanagerimp.cpp
 +++ b/apps/openmw/mwgui/windowmanagerimp.cpp
-@@ -640,6 +640,15 @@
+@@ -633,6 +633,15 @@ namespace MWGui
          mConsole->updateSelectedObjectPtr(currentPtr, newPtr);
      }
-
+ 
 +#ifdef __ANDROID__
 +    // COMPANION: defined in androidmain.cpp. Each returns true when the matching Game UI element
 +    // is in DS mode, so the native top-screen window is suppressed (the companion draws it on the
@@ -57,12 +59,10 @@ which are applied after this one in the chain and share this translation unit).
      void WindowManager::updateVisible()
      {
          bool loading = (getMode() == GM_Loading || getMode() == GM_LoadingWallpaper);
-@@ -648,6 +657,16 @@
-         mHud->setVisible(mHudEnabled && !loading);
-         // COMPANION: keep floating actor-name tooltips visible even when the HUD is
+@@ -650,6 +659,16 @@ namespace MWGui
          // hidden via the Hide UI toggle. update() only shows the focus-object name.
          mToolTips->setVisible(!loading);
-
+ 
 +        // COMPANION: hide the dialogue window when Conversation is in DS mode so the
 +        // companion (bottom) screen is the sole conversation surface; show the native
 +        // window when Conversation is Vanilla (companionDsConversation() false). Gated on
@@ -74,3 +74,5 @@ which are applied after this one in the chain and share this translation unit).
 +            mDialogueWindow->setVisible(!companionDsConversation() && !loading);
 +
          bool gameMode = !isGuiMode();
+ 
+         MWBase::Environment::get().getInputManager()->changeInputMode(!gameMode);
