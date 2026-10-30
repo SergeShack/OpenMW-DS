@@ -1010,6 +1010,7 @@ private fun CompanionDropdownMenu(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val dim = rememberPopupDimAlpha()
+    val density = LocalDensity.current
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
@@ -1019,10 +1020,22 @@ private fun CompanionDropdownMenu(
         containerColor = dimColor(StonePanel, dim),
         shadowElevation = 0.dp,
         border = BorderStroke(1.dp, dimColor(Bronze, dim)),
-        shape = RoundedCornerShape(3.dp),
-        content = content
-    )
+        shape = RoundedCornerShape(3.dp)
+    ) {
+        // Menu text reads larger than the panels behind it (see MENU_TEXT_SCALE). fontScale only, so
+        // every row's sp size grows by the same factor and the dp layout is untouched; it stacks on
+        // the player's Text Size setting rather than replacing it.
+        val scope = this
+        CompositionLocalProvider(
+            LocalDensity provides Density(density.density, density.fontScale * MENU_TEXT_SCALE)
+        ) { scope.content() }
+    }
 }
+
+/** Extra text scale for every companion DropdownMenu: their rows were authored at 13sp, which the
+ *  player found too small to read comfortably on the 3.9" panel (Oct 30 2026), even at the ~16sp a
+ *  Large inventory card used to blow them up to. 1.4 → ~18sp rows. */
+private const val MENU_TEXT_SCALE = 1.4f
 
 /** Darken an OPAQUE colour as if the dim scrim were over it — for an opaque colour, compositing
  *  black at [alpha] IS a lerp toward black, so this matches exactly what the rest of the screen
@@ -17322,14 +17335,16 @@ private fun ItemCard(
                 if (isFav) {
                     Box(Modifier.align(Alignment.TopEnd).padding(top = 3.dp, end = 3.dp)) { FavStar() }
                 }
-
-                ItemContextMenu(
-                    item = item, worn = worn, equippable = equippable, usable = usable, readable = readable,
-                    expanded = menuOpen,
-                    onDismiss = { menuOpen = false; DropdownState.closeAll() }
-                )
             }
         }
+
+        // Outside the scaled density: it carries into the menu's popup, so the menu would shrink
+        // or grow with the card instead of matching the other companion menus.
+        ItemContextMenu(
+            item = item, worn = worn, equippable = equippable, usable = usable, readable = readable,
+            expanded = menuOpen,
+            onDismiss = { menuOpen = false; DropdownState.closeAll() }
+        )
     }
 }
 
