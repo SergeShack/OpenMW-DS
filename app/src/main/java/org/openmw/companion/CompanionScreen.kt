@@ -1011,6 +1011,7 @@ private fun CompanionDropdownMenu(
 ) {
     val dim = rememberPopupDimAlpha()
     val density = LocalDensity.current
+    val menuTextScale by UiPreferences.menuTextSizeFlow().collectAsState()
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
@@ -1022,20 +1023,15 @@ private fun CompanionDropdownMenu(
         border = BorderStroke(1.dp, dimColor(Bronze, dim)),
         shape = RoundedCornerShape(3.dp)
     ) {
-        // Menu text reads larger than the panels behind it (see MENU_TEXT_SCALE). fontScale only, so
-        // every row's sp size grows by the same factor and the dp layout is untouched; it stacks on
-        // the player's Text Size setting rather than replacing it.
+        // The player's Menu text size (MENU_TEXT_SIZE_RANGE). fontScale only, so every row's sp size
+        // grows by the same factor and the dp layout is untouched; it stacks on the player's Text
+        // Size setting rather than replacing it.
         val scope = this
         CompositionLocalProvider(
-            LocalDensity provides Density(density.density, density.fontScale * MENU_TEXT_SCALE)
+            LocalDensity provides Density(density.density, density.fontScale * menuTextScale)
         ) { scope.content() }
     }
 }
-
-/** Extra text scale for every companion DropdownMenu: their rows were authored at 13sp, which the
- *  player found too small to read comfortably on the 3.9" panel (Oct 30 2026), even at the ~16sp a
- *  Large inventory card used to blow them up to. 1.4 → ~18sp rows. */
-private const val MENU_TEXT_SCALE = 1.4f
 
 /** Darken an OPAQUE colour as if the dim scrim were over it — for an opaque colour, compositing
  *  black at [alpha] IS a lerp toward black, so this matches exactly what the rest of the screen
@@ -21347,6 +21343,7 @@ private fun OptionsSubPage(
                 // BOTTOM DISPLAY SETTINGS: how the companion screen itself looks.
                 OptionsPage.BOTTOM_DISPLAY -> {
                     item { TextSizeRow() }
+                    item { MenuTextSizeRow() }
                     item { UiSoundsRow() }
                     item { OptionsSubLabel("Inventory tab") }
                     item { InventoryCardSizeRow() }
@@ -22846,6 +22843,75 @@ private fun ConversationWindowRow() {
 
 /** Interior notches on the Text size slider: 85% to 125% in 5% steps is 8 intervals, 7 notches. */
 private const val TEXT_SIZE_SLIDER_STEPS = 7
+
+/**
+ * Text size of the context (long-press) menus, on top of [TextSizeRow]'s size. Same slider and the
+ * same commit-on-release as that row: no menu is open while this page is up, so live updates would
+ * buy nothing, and committing once saves a prefs write per drag frame.
+ */
+@Composable
+private fun MenuTextSizeRow() {
+    val context = LocalContext.current
+    val saved by UiPreferences.menuTextSizeFlow().collectAsState()
+    var dragging by remember { mutableStateOf<Float?>(null) }
+    val shown = dragging ?: saved
+    val ticker = remember { SliderTickThrottle(steps = MENU_TEXT_SIZE_SLIDER_STEPS + 1) }
+
+    Column(Modifier.fillMaxWidth().padding(vertical = 9.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Menu text size", color = Bone, fontSize = 14.sp, fontFamily = MwBody,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                "${(shown * 100).roundToInt()}%",
+                color = BronzeLight, fontSize = 12.sp, fontFamily = MwData
+            )
+        }
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "Size of the text in long-press menus (Equip, Info, Drop…), on top of Text size.",
+            color = BoneDim, fontSize = 11.sp, fontFamily = MwBody
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "${(MENU_TEXT_SIZE_RANGE.start * 100).roundToInt()}%",
+                color = BoneDim, fontSize = 11.sp, fontFamily = MwData
+            )
+            Slider(
+                value = shown,
+                onValueChange = { ticker.onValue(it, MENU_TEXT_SIZE_RANGE); dragging = it },
+                onValueChangeFinished = {
+                    dragging?.let { UiPreferences.setMenuTextSize(context, it) }
+                    dragging = null
+                },
+                valueRange = MENU_TEXT_SIZE_RANGE,
+                steps = MENU_TEXT_SIZE_SLIDER_STEPS,
+                colors = SliderDefaults.colors(
+                    thumbColor = BronzeLight,
+                    activeTrackColor = BronzeLight,
+                    inactiveTrackColor = BronzeDark,
+                    activeTickColor = Color.Transparent,
+                    inactiveTickColor = Color.Transparent
+                ),
+                modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
+            )
+            Text(
+                "${(MENU_TEXT_SIZE_RANGE.endInclusive * 100).roundToInt()}%",
+                color = BoneDim, fontSize = 11.sp, fontFamily = MwData
+            )
+        }
+        ScopedResetButton("Reset menu text size") {
+            UiPreferences.setMenuTextSize(context, MENU_TEXT_SIZE_DEFAULT)
+        }
+    }
+}
+
+/** Interior notches on the Menu text size slider: 90% to 150% in 5% steps is 12 intervals, 11 notches. */
+private const val MENU_TEXT_SIZE_SLIDER_STEPS = 11
 
 @Composable
 private fun GameBrightnessRow() {

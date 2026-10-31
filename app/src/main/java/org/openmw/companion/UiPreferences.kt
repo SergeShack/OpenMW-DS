@@ -778,6 +778,11 @@ const val FAV_SLOTS_DEFAULT = 2
 val TEXT_SIZE_RANGE = 0.85f..1.25f
 const val TEXT_SIZE_DEFAULT = 1.0f
 
+/** Extra text scale for companion context (long-press) menus, on top of the text size above.
+ *  Menu rows are 48dp tall, so even 1.5 (~20sp) fits. */
+val MENU_TEXT_SIZE_RANGE = 0.9f..1.5f
+const val MENU_TEXT_SIZE_DEFAULT = 1.25f
+
 /** Inventory tab card size, stored as the card grid's ROW COUNT. Each card scales uniformly with the
  *  height its row gets (see ItemCard), so fewer rows = proportionally larger tiles AND text: 3 rows is
  *  ~1/3 larger than the 4 every layout was designed at. Unlike the text size above this scales dp
@@ -833,6 +838,7 @@ object UiPreferences {
     private const val FAV_MIXED = "fav_mixed"
     private const val VANILLA_FONT = "vanilla_font"
     private const val TEXT_SIZE = "text_size"
+    private const val MENU_TEXT_SIZE = "menu_text_size"
     private const val MINIMAP_ZOOM = "minimap_zoom"
     private const val TOP_KEYBOARD_BUTTON = "top_keyboard_button"
     private const val TOP_QUICK_SLOTS_BUTTON = "top_quick_slots_button"
@@ -1025,6 +1031,9 @@ object UiPreferences {
     // would stop screens fitting well before the text got usefully larger. The range is the price
     // of text-only: past 1.25 the fixed-height rows (stat bar, tab labels, split rows) clip.
     private val textSizeFlow = MutableStateFlow(TEXT_SIZE_DEFAULT)
+
+    // Context-menu text scale, a multiplier on top of textSizeFlow (see MENU_TEXT_SIZE_RANGE).
+    private val menuTextSizeFlow = MutableStateFlow(MENU_TEXT_SIZE_DEFAULT)
 
     // The HUD minimap's pinch zoom, as a multiplier on its fixed crop (1.0 = the original view).
     private val minimapZoomFlow = MutableStateFlow(MINIMAP_ZOOM_DEFAULT)
@@ -1290,6 +1299,7 @@ object UiPreferences {
         favMixedFlow.value = p.getBoolean(FAV_MIXED, false)
         vanillaFontFlow.value = p.getBoolean(VANILLA_FONT, true)
         textSizeFlow.value = p.getFloat(TEXT_SIZE, TEXT_SIZE_DEFAULT).coerceIn(TEXT_SIZE_RANGE)
+        menuTextSizeFlow.value = p.getFloat(MENU_TEXT_SIZE, MENU_TEXT_SIZE_DEFAULT).coerceIn(MENU_TEXT_SIZE_RANGE)
         minimapZoomFlow.value = p.getFloat(MINIMAP_ZOOM, MINIMAP_ZOOM_DEFAULT).coerceIn(MINIMAP_ZOOM_RANGE)
         topKeyboardButtonFlow.value = p.getBoolean(TOP_KEYBOARD_BUTTON, false)
         topQuickSlotsButtonFlow.value = p.getBoolean(TOP_QUICK_SLOTS_BUTTON, false)
@@ -1790,6 +1800,16 @@ object UiPreferences {
         val v = scale.coerceIn(TEXT_SIZE_RANGE)
         textSizeFlow.value = v
         editor(context).putFloat(TEXT_SIZE, v).apply()
+    }
+
+    /** Context-menu text scale, on top of the companion text size. */
+    fun menuTextSizeFlow(): StateFlow<Float> = menuTextSizeFlow.asStateFlow()
+
+    /** Set the context-menu text scale and persist. Clamped to [MENU_TEXT_SIZE_RANGE]. */
+    fun setMenuTextSize(context: Context, scale: Float) {
+        val v = scale.coerceIn(MENU_TEXT_SIZE_RANGE)
+        menuTextSizeFlow.value = v
+        editor(context).putFloat(MENU_TEXT_SIZE, v).apply()
     }
 
     /** The HUD minimap's zoom multiplier (1.0 = the original fixed view). */
