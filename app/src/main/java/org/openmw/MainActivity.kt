@@ -46,6 +46,7 @@ import org.openmw.ui.view.TUNED_PERF_SETTINGS_VERSION
 import org.openmw.ui.view.applyTunedPerformanceSettings
 import org.openmw.ui.view.seedConsoleWindowSize
 import org.openmw.utils.CaptureCrash
+import org.openmw.utils.applyBookSize
 import org.openmw.utils.ConfigFileObserver
 import org.openmw.utils.GameFilesPreferences
 import org.openmw.utils.GameFilesPreferences.getScreenStayOn
@@ -168,6 +169,8 @@ class MainActivity : ComponentActivity() {
             // OTHER panel's real size with nothing hardcoded. SHARED with the display-profile
             // dropdown, which re-runs it on a profile change — see applyGameScreenResolution.
             applyGameScreenResolution()
+            // Rewrite the Book size override from the stored setting every launch. See applyBookSize.
+            applyBookSize()
             withContext(Dispatchers.IO) {
                 // Rides the same settings.cfg pass, on the same IO dispatcher. Unrelated to the
                 // resolution insertion and deliberately NOT gated by its opt-out, which is about

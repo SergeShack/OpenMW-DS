@@ -163,6 +163,10 @@ import org.openmw.ui.view.SetupButton
 import org.openmw.ui.view.attemptLaunchGame
 import org.openmw.ui.view.resetUserSettingsFile
 import org.openmw.utils.AlphaMigration
+import org.openmw.utils.BOOK_SIZE_OPTIONS
+import org.openmw.utils.BOOK_SIZE_DEFAULT
+import org.openmw.utils.BOOK_SIZE_VANILLA
+import org.openmw.utils.applyBookSize
 import org.openmw.utils.ApkInstaller
 import org.openmw.utils.BugReport
 import org.openmw.utils.DisplayRoles
@@ -2415,6 +2419,8 @@ private fun SimplifiedSettingsScreen(onBack: () -> Unit) {
         GameFilesPreferences.loadResolutionTier(context)
     }
     val resolutionTier by resolutionTierFlow.collectAsState(initial = RESOLUTION_TIER_NATIVE)
+    val bookSizeFlow = remember(context) { GameFilesPreferences.loadBookSize(context) }
+    val bookSize by bookSizeFlow.collectAsState(initial = BOOK_SIZE_DEFAULT)
     var showResetDialog by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var confirmModOrder by rememberSaveable { mutableStateOf(false) }
@@ -2658,6 +2664,22 @@ private fun SimplifiedSettingsScreen(onBack: () -> Unit) {
                             // still only READS settings.cfg at startup, so this makes the change
                             // land on the next Play rather than the launch after it.
                             context.applyGameScreenResolution()
+                        }
+                    }
+                )
+            }
+
+            // Book size. Next to Resolution, and like it applies on the next Play. See applyBookSize.
+            SettingRow(
+                title = stringResource(R.string.launcher_book_size),
+                subtitle = stringResource(R.string.launcher_book_size_tip)
+            ) {
+                BookSizeDropdown(
+                    selected = bookSize,
+                    onSelected = { percent ->
+                        scope.launch {
+                            GameFilesPreferences.saveBookSize(context, percent)
+                            context.applyBookSize()
                         }
                     }
                 )
@@ -3532,6 +3554,35 @@ private fun ResolutionTierDropdown(selected: Int, onSelected: (Int) -> Unit) {
                     onClick = {
                         expanded = false
                         if (height != selected) onSelected(height)
+                    }
+                )
+            }
+        }
+    }
+}
+
+/** The Book size picker: [BOOK_SIZE_OPTIONS], with 100% named as the original size. */
+@Composable
+private fun BookSizeDropdown(selected: Int, onSelected: (Int) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val vanillaLabel = stringResource(R.string.launcher_book_size_vanilla)
+    fun labelFor(percent: Int) = if (percent == BOOK_SIZE_VANILLA) vanillaLabel else "$percent%"
+
+    Box {
+        OutlinedButton(onClick = { expanded = true }) {
+            Text(labelFor(selected))
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            BOOK_SIZE_OPTIONS.forEach { percent ->
+                DropdownMenuItem(
+                    text = { Text(labelFor(percent)) },
+                    onClick = {
+                        expanded = false
+                        if (percent != selected) onSelected(percent)
                     }
                 )
             }

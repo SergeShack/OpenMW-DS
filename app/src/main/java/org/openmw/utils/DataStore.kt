@@ -154,6 +154,10 @@ object GameFilesPreferences {
     // survive a reinstall alongside the `settings.cfg` they derive.
     val RESOLUTION_TIER_KEY = intPreferencesKey("resolution_tier_height")
 
+    // Book size, in percent of the vanilla book/scroll/journal window (100 = vanilla). The engine
+    // doesn't read this; `applyBookSize` writes it into a `mygui/openmw_layers.xml` override.
+    val BOOK_SIZE_KEY = intPreferencesKey("book_size_percent")
+
     // The player's `[GUI] scaling factor` AS IT APPLIES AT NATIVE resolution, i.e. the base the
     // Resolution tier scales down from.
     //
@@ -650,6 +654,19 @@ object GameFilesPreferences {
     suspend fun saveResolutionTier(context: Context, targetHeight: Int) {
         context.dataStore.edit { preferences ->
             preferences[RESOLUTION_TIER_KEY] = targetHeight
+        }
+    }
+
+    /** Book window size in percent of vanilla; 100 = vanilla. Absent = [BOOK_SIZE_DEFAULT]. */
+    fun loadBookSize(context: Context): Flow<Int> {
+        return context.prefsData.map { preferences ->
+            preferences[BOOK_SIZE_KEY] ?: BOOK_SIZE_DEFAULT
+        }
+    }
+
+    suspend fun saveBookSize(context: Context, percent: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[BOOK_SIZE_KEY] = percent
         }
     }
 

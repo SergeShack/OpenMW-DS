@@ -172,6 +172,9 @@
     <string name="launcher_device_thor">AYN Thor</string>
     <string name="launcher_resolution">Resolution</string>
     <string name="launcher_resolution_tip">The resolution the game screen is drawn at. The second screen is not affected, and the game menus are scaled to match. Applies the next time you start the game.</string>
+    <string name="launcher_book_size">Book size</string>
+    <string name="launcher_book_size_tip">Draws books, scrolls and the journal larger on the game screen, text and pictures alike. Pages keep their original layout. Applies the next time you start the game.</string>
+    <string name="launcher_book_size_vanilla">Original (100%)</string>
     <string name="launcher_resolution_native">Native</string>
     <!-- Native, with the measured size of whichever screen the game is using, so "am I actually at
          4K in the dock?" is answerable without opening settings.cfg. -->
