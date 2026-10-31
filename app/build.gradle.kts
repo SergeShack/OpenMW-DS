@@ -2,6 +2,8 @@ import com.android.build.gradle.tasks.MergeSourceSetFolders
 import org.gradle.kotlin.dsl.coreLibraryDesugaring
 import java.util.Properties
 import java.util.Random
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.io.FileInputStream
 
 plugins {
@@ -126,6 +128,17 @@ android {
         // file — it also drives versionCode above. Stored WITHOUT a `v` prefix; display
         // contexts add `v` at render time.
         buildConfigField("String", "RELEASE_VERSION", "\"$releaseVersion\"")
+
+        // Mod builds only: the launcher also shows the build time, with "+" for uncommitted changes,
+        // since the git hash can't tell two test builds apart. Empty for official builds, so their
+        // BuildConfig doesn't change (and force a recompile) on every build.
+        val buildStamp = if (dsMod) {
+            val dirty = providers.exec {
+                commandLine("git", "status", "--porcelain", "--untracked-files=no")
+            }.standardOutput.asText.get().isNotBlank()
+            SimpleDateFormat("yyyy-MM-dd HH:mm").format(Date()) + if (dirty) " +" else ""
+        } else ""
+        buildConfigField("String", "BUILD_STAMP", "\"$buildStamp\"")
 
         ndk {
             //noinspection ChromeOsAbiSupport

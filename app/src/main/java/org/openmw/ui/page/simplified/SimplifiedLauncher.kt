@@ -1257,8 +1257,19 @@ private fun SimplifiedLauncherHome(onOpenSettings: () -> Unit) {
             fontWeight = FontWeight.Bold,
             modifier = Modifier
                 .align(Alignment.CenterHorizontally)
-                .padding(bottom = 10.dp)
+                .padding(bottom = if (BuildConfig.BUILD_STAMP.isEmpty()) 10.dp else 0.dp)
         )
+        // Mod builds: which build is installed (see BUILD_STAMP in app/build.gradle.kts).
+        if (BuildConfig.BUILD_STAMP.isNotEmpty()) {
+            Text(
+                text = "v${BuildConfig.RELEASE_VERSION} · ${BuildConfig.VERSION_NAME} · ${BuildConfig.BUILD_STAMP}",
+                color = MwBoneDim,
+                fontSize = 11.sp,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(bottom = 8.dp)
+            )
+        }
 
         // 1. Setup actions. Settings is deliberately a small square next to the two wide buttons.
         Row(
