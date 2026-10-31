@@ -1469,7 +1469,14 @@ private fun CompanionScreenContent() {
         // Bottom-screen host: renders unless the trigger came from a SPLIT top-grid cell (then the
         // top overlay hosts it — see ItemInfoPopupHost usage in LootingTopOverlay/BarterTopOverlay).
         if (ItemInfoPopupState.isOpen && !ItemInfoPopupState.onTopScreen) {
-            ItemInfoPopupHost()
+            // Hosted here, outside the tab pages, but it shows item info from them, so it uses
+            // Page text size too.
+            val pageTextScale by UiPreferences.pageTextSizeFlow().collectAsState()
+            val rootDensity = LocalDensity.current
+            CompositionLocalProvider(
+                LocalDensity provides Density(rootDensity.density, rootDensity.fontScale * pageTextScale),
+                LocalPageTextScale provides pageTextScale
+            ) { ItemInfoPopupHost() }
         }
 
         // Stat detail popup (Stats screen). Same in-window overlay pattern as
@@ -4214,7 +4221,9 @@ private fun ItemInfoFloatingPopup(anchor: Rect?, enchant: ItemEnchant?) {
     val screenW = with(density) { cfg.screenWidthDp.dp.toPx() }
     val screenH = with(density) { cfg.screenHeightDp.dp.toPx() }
     val marginPx = with(density) { 8.dp.toPx() }
-    val widthPx = with(density) { INFO_POPUP_WIDTH.dp.toPx() }
+    // Grows with the text so it wraps like it does at 100%, but stays inside the screen.
+    val widthDp = (INFO_POPUP_WIDTH.dp * textSlotGrow()).coerceAtMost((cfg.screenWidthDp - 16).dp)
+    val widthPx = with(density) { widthDp.toPx() }
     var popupSize by remember { mutableStateOf(IntSize.Zero) }
     val hPx = popupSize.height.toFloat()
 
@@ -4237,7 +4246,7 @@ private fun ItemInfoFloatingPopup(anchor: Rect?, enchant: ItemEnchant?) {
         modifier = Modifier
             .zIndex(21f)
             .offset { IntOffset(x.roundToInt(), y.roundToInt()) }
-            .width(INFO_POPUP_WIDTH.dp)
+            .width(widthDp)
             .onSizeChanged { popupSize = it }
             // Swallow taps so tapping the card doesn't reach the dismiss scrim underneath.
             .pointerInput(Unit) { detectTapGestures {} }
