@@ -99,11 +99,10 @@ data class GameUiElement(
     val label: String,
     val pending: Boolean = false,
 ) {
-    /** First-launch default mode. The app ships in an "all Vanilla" state (native OpenMW handles
-     *  every menu on the top screen) — the player opts into DS per element, or all at once via the
-     *  All-DS quick-set. Pending elements are locked to VANILLA regardless. (This mirrors a fresh
-     *  install immediately having "All Native" pressed.) */
-    val defaultMode: GameUiMode get() = GameUiMode.VANILLA
+    /** First-launch default mode. The app ships in the "All DS" state; the player can go back to
+     *  native menus per element, or all at once via the All Native quick-set. Pending elements are
+     *  locked to VANILLA regardless. */
+    val defaultMode: GameUiMode get() = if (pending) GameUiMode.VANILLA else GameUiMode.DS
 }
 
 /** Catalogue of every Game UI element, in display order — the single source of truth the
@@ -166,10 +165,7 @@ val GAME_UI_ELEMENTS: List<GameUiElement> = listOf(
     // slot order, the session-sticky apparatus prefill, countPotionsToBrew(), the validation order
     // and the per-potion success roll (CMP:alchemy_* bridges). The DS side is presentation only.
     GameUiElement("game_ui_alchemy", "Alchemy"),
-    // Map. Defaults to Vanilla like every element here (defaultMode is VANILLA for all of them —
-    // the app ships in an all-Vanilla state and the player opts in). That default matters more than
-    // usual for this one: the companion minimap tap already opened the native map long before the
-    // DS map existed, so leaving it alone until asked is the behaviour-preserving choice. While
+    // Map. Defaults to DS like every other element here (the app ships in the All DS state). While
     // Vanilla the Kotlin side never sends the mount command, so the native suppression flag never
     // goes true and the tap opens the plain native map exactly as it always did.
     //
@@ -442,8 +438,7 @@ val NIGHT_BRIGHTNESS_RANGE = 0f..1.00f
  *
  *  It shipped at 0.05 and then 0.15 (+86% on a clear night) earlier on Aug 20 2026 before being
  *  set here. Both of those were play-tested and liked; the decision to ship 0 anyway is a
- *  vanilla-fidelity one, matching the same stance the Game UI elements take (everything defaults
- *  to Vanilla and the player opts in). Do not read this as "0.15 was wrong".
+ *  vanilla-fidelity one. Do not read this as "0.15 was wrong".
  *
  *  Knock-on worth knowing: at 0 the `COMPANION_NIGHT_AMBIENT_OK` read-back probe never fires,
  *  because it only runs when a write actually CHANGES a colour. That diagnostic therefore appears
@@ -598,8 +593,7 @@ const val MINIMUM_INTERIOR_BRIGHTNESS_DEFAULT = 0.08f
  *
  *  It was 0.35, then 0.15, earlier on Aug 20 2026 — both play-tested and liked, because vanilla
  *  interiors ARE near-black on this handheld's panel. Shipping vanilla anyway is a fidelity call,
- *  the same stance the Game UI elements take (ship Vanilla, let the player opt in), and it is why
- *  this reads as an alias rather than as a coincidence that two constants share a number.
+ *  and it is why this reads as an alias rather than as a coincidence that two constants share a number.
  *
  *  Raising it makes the companion dim itself LESS indoors for free, since both feed the same
  *  `RenderingManager::setAmbientColour` signal (see "Game brightness floors"). Note this is still a
@@ -776,7 +770,7 @@ const val FAV_SLOTS_DEFAULT = 2
  *  at 1.25 it does not (device-checked Oct 29 2026); the floor is the smallest that stays legible on this
  *  3.9" panel. */
 val TEXT_SIZE_RANGE = 0.85f..1.25f
-const val TEXT_SIZE_DEFAULT = 1.0f
+const val TEXT_SIZE_DEFAULT = 1.2f
 
 /** Extra text scale for companion context (long-press) menus, on top of the text size above.
  *  Menu rows are 48dp tall, so even 1.5 (~20sp) fits. */
@@ -1127,11 +1121,11 @@ object UiPreferences {
     // through the ordinary visible-cursor path. INDEPENDENT of gameCursorFlow — see setTouchInput.
     private val touchInputFlow = MutableStateFlow(true)
 
-    /** Default On/Off for a Native HUD element on first launch. The crosshair and the controller
-     *  button-hint bar default On (the app ships in the all-Vanilla state, which shows the hint bar
-     *  alongside the native menus); the companion draws every other HUD element on the bottom
-     *  screen, so their native versions default Off. */
-    private fun hudDefaultOn(key: String): Boolean = key == "hud_crosshair" || key == CONTROLLER_TOOLTIPS_KEY
+    /** Default On/Off for a Native HUD element on first launch. Only the crosshair defaults On.
+     *  The controller button-hint bar defaults Off, as All DS sets it (the app ships in the All DS
+     *  state); the companion draws every other HUD element on the bottom screen, so their native
+     *  versions default Off. */
+    private fun hudDefaultOn(key: String): Boolean = key == "hud_crosshair"
 
     /** Load persisted values into the flows. Idempotent — safe to call on every compose. */
     fun init(context: Context) {

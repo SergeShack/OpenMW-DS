@@ -934,6 +934,9 @@ fun readGameResolutionFromConfig(): Pair<Int, Int>? {
 /** Target height of the Native tier, i.e. "do not downscale". Stored value, not a resolution. */
 const val RESOLUTION_TIER_NATIVE = 0
 
+/** Resolution tier a fresh install starts on. */
+const val RESOLUTION_TIER_DEFAULT = 720
+
 /**
  * Resolve a stored resolution tier against a display's REAL size.
  *

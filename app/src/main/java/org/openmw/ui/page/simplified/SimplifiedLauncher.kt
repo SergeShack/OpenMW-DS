@@ -144,6 +144,7 @@ import org.openmw.ui.page.mod.isTamrielData
 import org.openmw.ui.page.mod.readModValues
 import org.openmw.ui.page.mod.sortedByDefaultLoadOrder
 import org.openmw.ui.page.setting.SettingRow
+import org.openmw.ui.view.RESOLUTION_TIER_DEFAULT
 import org.openmw.ui.view.RESOLUTION_TIER_NATIVE
 import org.openmw.ui.view.applyGameScreenResolution
 import org.openmw.ui.view.gameScreenRealSize
@@ -2418,7 +2419,7 @@ private fun SimplifiedSettingsScreen(onBack: () -> Unit) {
     val resolutionTierFlow = remember(context) {
         GameFilesPreferences.loadResolutionTier(context)
     }
-    val resolutionTier by resolutionTierFlow.collectAsState(initial = RESOLUTION_TIER_NATIVE)
+    val resolutionTier by resolutionTierFlow.collectAsState(initial = RESOLUTION_TIER_DEFAULT)
     val bookSizeFlow = remember(context) { GameFilesPreferences.loadBookSize(context) }
     val bookSize by bookSizeFlow.collectAsState(initial = BOOK_SIZE_DEFAULT)
     var showResetDialog by rememberSaveable { mutableStateOf(false) }
@@ -2698,7 +2699,7 @@ private fun SimplifiedSettingsScreen(onBack: () -> Unit) {
             // Single Screen Device is excluded: it is the one profile that WANTS no second display,
             // so on the hardware it is meant for this notice would fire on every correct selection
             // and report the right answer as a failure.
-            if (displayProfile != DisplayRoles.PROFILE_DEFAULT &&
+            if (displayProfile != DisplayRoles.PROFILE_THOR &&
                 displayProfile != DisplayRoles.PROFILE_SINGLE &&
                 // Custom is excluded: swapSupported() asks about the PRESENTATION category, which
                 // Custom does not depend on, and its own panel lists what it found instead.

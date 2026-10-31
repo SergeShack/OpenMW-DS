@@ -32,7 +32,7 @@ object DisplayRoles {
 
     private const val TAG = "DisplayRoles"
 
-    /** AYN Thor, and the default: game on the default display, companion on the presentation one. */
+    /** AYN Thor: game on the default display, companion on the presentation one. */
     const val PROFILE_THOR = "thor"
 
     /** Retroid dual screen: the two roles exchanged, relative to [PROFILE_THOR]. */
@@ -72,7 +72,7 @@ object DisplayRoles {
     /** Stored as the Custom companion choice to mean "no companion": the single-screen behaviour. */
     const val CUSTOM_NONE = "none"
 
-    const val PROFILE_DEFAULT = PROFILE_THOR
+    const val PROFILE_DEFAULT = PROFILE_CUSTOM
 
     /**
      * Last known profile, so the two call sites can resolve a role synchronously.

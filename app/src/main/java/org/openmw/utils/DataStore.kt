@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.openmw.ui.controls.UIStateManager
+import org.openmw.ui.view.RESOLUTION_TIER_DEFAULT
 
 // Singleton instance to avoid multiple DataStore instances for the same file
 private var dataStoreInstance: DataStore<Preferences>? = null
@@ -121,7 +122,7 @@ object GameFilesPreferences {
     val TR_NOTICE_DISMISSED_KEY = stringPreferencesKey("tr_notice_dismissed_version")
     // Which physical display plays the GAME role and which plays the COMPANION role. Holds a
     // DisplayRoles.PROFILE_* id, not a boolean, so a third device profile can be added without a
-    // migration. Absent = DisplayRoles.PROFILE_DEFAULT (AYN Thor, i.e. today's behaviour).
+    // migration. Absent = DisplayRoles.PROFILE_DEFAULT (Custom).
     //
     // In the DataStore rather than SharedPreferences DELIBERATELY: this store lives on external
     // storage and survives a reinstall, and a user who needed the non-default profile to see the
@@ -644,10 +645,11 @@ object GameFilesPreferences {
     fun loadCustomCompanionFullscreen(context: Context): Flow<Boolean> =
         context.prefsData.map { it[CUSTOM_COMPANION_FULLSCREEN_KEY] ?: CUSTOM_COMPANION_FULLSCREEN_DEFAULT }
 
-    /** Render-resolution tier as a target height in pixels; 0 = Native (no downscale). */
+    /** Render-resolution tier as a target height in pixels; 0 = Native (no downscale). Absent =
+     *  [RESOLUTION_TIER_DEFAULT] (720p). */
     fun loadResolutionTier(context: Context): Flow<Int> {
         return context.prefsData.map { preferences ->
-            preferences[RESOLUTION_TIER_KEY] ?: 0
+            preferences[RESOLUTION_TIER_KEY] ?: RESOLUTION_TIER_DEFAULT
         }
     }
 
