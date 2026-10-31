@@ -188,6 +188,7 @@ import org.openmw.ui.theme.GAME_FONT_SIZE_SCALE
 import org.openmw.ui.theme.loadGameFont
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.layout.onSizeChanged
@@ -444,6 +445,14 @@ private val MwData: FontFamily
  */
 private val LocalGameFont = compositionLocalOf<FontFamily?> { null }
 
+/** Page text size currently applied to LocalDensity's fontScale (1 outside the tab pages).
+ *  [CompanionDropdownMenu] divides it back out, so menus only use Menu text size. */
+private val LocalPageTextScale = compositionLocalOf { 1f }
+
+/** The player's Text size, as applied by [ProvideCompanionFont]. Used to widen fixed-width text
+ *  slots, see [ItemCard]. */
+private val LocalTextSizeScale = compositionLocalOf { 1f }
+
 /**
  * Supplies the font setting to a companion composition. Applied at the three roots that between
  * them cover everything the companion draws on either physical screen: [CompanionScreen] (bottom),
@@ -473,6 +482,7 @@ private fun ProvideCompanionFont(content: @Composable () -> Unit) {
     val density = LocalDensity.current
     CompositionLocalProvider(
         LocalGameFont provides family,
+        LocalTextSizeScale provides textSize,
         LocalDensity provides Density(density.density, density.fontScale * scale),
         content = content
     )
@@ -1012,6 +1022,7 @@ private fun CompanionDropdownMenu(
     val dim = rememberPopupDimAlpha()
     val density = LocalDensity.current
     val menuTextScale by UiPreferences.menuTextSizeFlow().collectAsState()
+    val pageTextScale = LocalPageTextScale.current
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
@@ -1023,12 +1034,12 @@ private fun CompanionDropdownMenu(
         border = BorderStroke(1.dp, dimColor(Bronze, dim)),
         shape = RoundedCornerShape(3.dp)
     ) {
-        // The player's Menu text size (MENU_TEXT_SIZE_RANGE). fontScale only, so every row's sp size
-        // grows by the same factor and the dp layout is untouched; it stacks on the player's Text
-        // Size setting rather than replacing it.
+        // Menu text size, on top of Text size. Only fontScale changes, so the dp layout stays the
+        // same. Page text size is divided out so it doesn't stack on menus opened from a page.
         val scope = this
         CompositionLocalProvider(
-            LocalDensity provides Density(density.density, density.fontScale * menuTextScale)
+            LocalDensity provides Density(density.density, density.fontScale / pageTextScale * menuTextScale),
+            LocalPageTextScale provides 1f
         ) { scope.content() }
     }
 }
@@ -1368,12 +1379,21 @@ private fun CompanionScreenContent() {
         // splash is up, without depending on the two composables' z-order staying as it is.
         var splashVisible by remember { mutableStateOf(true) }
 
-        when (tab) {
-            Tab.INVENTORY -> InventoryPanel(state)
-            Tab.MAGIC -> MagicPanel(state)
-            Tab.HUD -> MapPanel(state, splashVisible = splashVisible, onSelectTab = { tab = it })
-            Tab.STATS -> StatsPanel(state, onSelectStat = { selectedStat = it })
-            Tab.JOURNAL -> JournalPanel()
+        // Page text size, for the tab pages only. The BottomTabBar below is left out: its labels
+        // are what limit Text size.
+        val pageTextScale by UiPreferences.pageTextSizeFlow().collectAsState()
+        val rootDensity = LocalDensity.current
+        CompositionLocalProvider(
+            LocalDensity provides Density(rootDensity.density, rootDensity.fontScale * pageTextScale),
+            LocalPageTextScale provides pageTextScale
+        ) {
+            when (tab) {
+                Tab.INVENTORY -> InventoryPanel(state)
+                Tab.MAGIC -> MagicPanel(state)
+                Tab.HUD -> MapPanel(state, splashVisible = splashVisible, onSelectTab = { tab = it })
+                Tab.STATS -> StatsPanel(state, onSelectStat = { selectedStat = it })
+                Tab.JOURNAL -> JournalPanel()
+            }
         }
 
         BottomTabBar(
@@ -16808,18 +16828,61 @@ private fun ItemIconBox(
     }
 }
 
+/** How much fixed-width text slots must widen for Text size x Page text size. Those settings only
+ *  scale text, not dp, so without this values like damage and weight get cut off. Never below 1,
+ *  so smaller text keeps the normal layout. */
+@Composable
+private fun textSlotGrow(): Float =
+    (LocalTextSizeScale.current * LocalPageTextScale.current).coerceAtLeast(1f)
+
+/** "DMG 2-14": key and value on one line instead of two. Used by the inventory cards, whose height
+ *  is fixed, so there is room for larger text. The value is cut off before the key. */
+@Composable
+private fun InlineStatLabel(key: String, value: String) {
+    Row {
+        if (key.isNotEmpty()) {
+            Text(
+                key,
+                color = BoneDim,
+                fontSize = 8.sp,
+                fontFamily = MwBody,
+                letterSpacing = 0.5.sp,
+                maxLines = 1,
+                modifier = Modifier.alignByBaseline().padding(end = 3.dp)
+            )
+        }
+        Text(
+            value,
+            color = BronzeLight,
+            fontSize = 11.sp,
+            fontFamily = MwData,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.alignByBaseline().weight(1f, fill = false)
+        )
+    }
+}
+
 /** Stat column (weapon damage / armor rating / etc.), lifted from ItemRow.
  *  [width] null → wrap content (Cards); a fixed Dp → the List's aligned fixed-width slot.
  *  [cardStyle] false (List) → value over a tiny key, right-aligned. [cardStyle] true (Cards) → the
  *  KEY on top and the value below, centred under it (matches the COND/CHARGE label-over-bar style). */
 @Composable
-private fun ItemStatColumn(statVal: String, statKey: String, width: Dp? = 66.dp, cardStyle: Boolean = false) {
+private fun ItemStatColumn(
+    statVal: String,
+    statKey: String,
+    width: Dp? = 66.dp,
+    cardStyle: Boolean = false,
+    inlineLabel: Boolean = false
+) {
     Box(
-        if (width != null) Modifier.width(width) else Modifier,
+        if (width != null) Modifier.width(width * textSlotGrow()) else Modifier,
         contentAlignment = if (cardStyle) Alignment.Center else Alignment.CenterEnd
     ) {
         if (statVal.isNotEmpty()) {
-            if (cardStyle) {
+            if (inlineLabel) {
+                InlineStatLabel(statKey, statVal)
+            } else if (cardStyle) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     if (statKey.isNotEmpty()) {
                         Text(
@@ -16873,13 +16936,20 @@ private fun ItemStatColumn(statVal: String, statKey: String, width: Dp? = 66.dp,
  *  [cardStyle] false (List) → value over "WT", right-aligned. [cardStyle] true (Cards) → "WT" on top
  *  and the value below, centred under it. */
 @Composable
-private fun ItemWeightColumn(weight: Float, width: Dp? = 44.dp, cardStyle: Boolean = false) {
+private fun ItemWeightColumn(
+    weight: Float,
+    width: Dp? = 44.dp,
+    cardStyle: Boolean = false,
+    inlineLabel: Boolean = false
+) {
     Box(
-        if (width != null) Modifier.width(width) else Modifier,
+        if (width != null) Modifier.width(width * textSlotGrow()) else Modifier,
         contentAlignment = if (cardStyle) Alignment.Center else Alignment.CenterEnd
     ) {
         if (weight > 0f) {
-            if (cardStyle) {
+            if (inlineLabel) {
+                InlineStatLabel("WT", fmtWeight(weight))
+            } else if (cardStyle) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         "WT",
@@ -16926,7 +16996,8 @@ private fun ItemWeightColumn(weight: Float, width: Dp? = 44.dp, cardStyle: Boole
  *  ItemRow. Charge takes priority when present (those items have no durability, so no conflict). */
 @Composable
 private fun ItemConditionColumn(cond: Float?, enchantCharge: Pair<Int, Int>?, width: Dp = 50.dp) {
-    Box(Modifier.width(width), contentAlignment = Alignment.Center) {
+    // Grows with the text like the other columns, otherwise COND/CHARGE wraps.
+    Box(Modifier.width(width * textSlotGrow()), contentAlignment = Alignment.Center) {
         val chargePair = enchantCharge?.takeIf { it.second > 0 }
         when {
             chargePair != null -> {
@@ -17209,9 +17280,42 @@ private const val INV_CARD_MIN_SCALE = 0.85f
 private const val INV_CARD_MAX_SCALE = 1.6f
 // Fixed widths for the card's stat cluster (right-aligned), so weight + condition/charge always sit
 // in the same spot and the stat/effect column (widest; long effect names truncate) is left of them.
-private val INV_CARD_STAT_W = 74.dp
-private val INV_CARD_WT_W = 30.dp
-private val INV_CARD_COND_W = 42.dp
+// Stat and weight show their key inline ("WT 12.5", see [InlineStatLabel]), so the weight slot is
+// wider. The three still fit in what the name leaves (72 + 34 + 44 + 2 gaps of 4 = 158 of 162dp).
+private val INV_CARD_STAT_W = 72.dp
+private val INV_CARD_WT_W = 44.dp
+private val INV_CARD_COND_W = 34.dp
+
+/** Text scale that keeps a card's name and stat rows inside its fixed height when Text size / Page
+ *  text size make them too tall. One value per fontScale, lowered by the first card that overflows,
+ *  so every card uses the same text size and later cards are right from their first frame. */
+private object CardTextFit {
+    private val fits = mutableStateMapOf<Float, Float>()
+
+    fun fit(fontScale: Float): Float = fits[fontScale] ?: 1f
+
+    /** [ratio] = available / needed height (< 1) at the current fit. */
+    fun overflowed(fontScale: Float, ratio: Float) {
+        // Slightly under the exact ratio: line heights round to whole pixels, so the exact value
+        // can still be a pixel short.
+        fits[fontScale] = (fit(fontScale) * ratio * 0.98f).coerceAtLeast(0.5f)
+    }
+}
+
+/** Measures the content at its natural height and calls [onOverflow] with `available / needed`
+ *  when it is too tall, so the caller can shrink it. Until then the content is centred and may
+ *  stick out for one frame. */
+private fun Modifier.reportHeightOverflow(onOverflow: (Float) -> Unit): Modifier =
+    layout { measurable, constraints ->
+        val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
+        val height = if (constraints.hasBoundedHeight) {
+            if (placeable.height > constraints.maxHeight) {
+                onOverflow(constraints.maxHeight.toFloat() / placeable.height)
+            }
+            constraints.maxHeight
+        } else placeable.height
+        layout(placeable.width, height) { placeable.place(0, (height - placeable.height) / 2) }
+    }
 
 /** A single-line item name that shrinks 13sp → 11sp before ellipsis-truncating, staying within the
  *  card's fixed name width. Mirrors the CornerNameLabel onTextLayout measure trick: render at the
@@ -17273,15 +17377,22 @@ private fun ItemCard(
         val base = LocalDensity.current
         val scale = if (constraints.hasBoundedHeight)
             (maxHeight / INV_CARD_HEIGHT).coerceIn(INV_CARD_MIN_SCALE, INV_CARD_MAX_SCALE) else 1f
+        // Text size / Page text size widen the stat, condition and weight slots (see
+        // [textSlotGrow]); the card widens by the same amount so the name keeps its width.
+        val cardW = INV_CARD_WIDTH +
+            (INV_CARD_STAT_W + INV_CARD_COND_W + INV_CARD_WT_W) * (textSlotGrow() - 1f)
+        // The height is fixed by the grid rows, so text that is too tall is scaled down instead,
+        // see [CardTextFit].
+        val fit = CardTextFit.fit(base.fontScale)
         CompositionLocalProvider(
-            LocalDensity provides Density(base.density * scale, base.fontScale)
+            LocalDensity provides Density(base.density * scale, base.fontScale * fit)
         ) {
             // Plain Box so the fav-star overlay still has a BoxScope to align within (the
             // provider's content lambda drops BoxWithConstraints' own scope).
             Box {
                 Row(
                     modifier = Modifier
-                        .width(INV_CARD_WIDTH)
+                        .width(cardW)
                         // Height comes from the grid's fixed-row division (uniform across all
                         // cards); fill it.
                         .fillMaxHeight()
@@ -17301,7 +17412,10 @@ private fun ItemCard(
                     Spacer(Modifier.width(6.dp))
                     // Right side: name over a compact stat row. The favourite star is a corner
                     // overlay (below) rather than inline, so it never steals width from the name.
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                    Column(
+                        Modifier.weight(1f).reportHeightOverflow { CardTextFit.overflowed(base.fontScale, it) },
+                        verticalArrangement = Arrangement.Center
+                    ) {
                         AutoShrinkItemName(
                             item.displayName(),
                             color = if (worn) BoneBright else BoneMuted,
@@ -17320,9 +17434,12 @@ private fun ItemCard(
                             horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
                             verticalAlignment = Alignment.Top
                         ) {
-                            ItemStatColumn(item.statVal, item.statKey, width = INV_CARD_STAT_W, cardStyle = true)
+                            ItemStatColumn(
+                                item.statVal, item.statKey, width = INV_CARD_STAT_W,
+                                cardStyle = true, inlineLabel = true
+                            )
                             ItemConditionColumn(item.cond, enchantCharge, width = INV_CARD_COND_W)
-                            ItemWeightColumn(item.weight, width = INV_CARD_WT_W, cardStyle = true)
+                            ItemWeightColumn(item.weight, width = INV_CARD_WT_W, cardStyle = true, inlineLabel = true)
                         }
                     }
                 }
@@ -21343,6 +21460,7 @@ private fun OptionsSubPage(
                 // BOTTOM DISPLAY SETTINGS: how the companion screen itself looks.
                 OptionsPage.BOTTOM_DISPLAY -> {
                     item { TextSizeRow() }
+                    item { PageTextSizeRow() }
                     item { MenuTextSizeRow() }
                     item { UiSoundsRow() }
                     item { OptionsSubLabel("Inventory tab") }
@@ -22844,52 +22962,83 @@ private fun ConversationWindowRow() {
 /** Interior notches on the Text size slider: 85% to 125% in 5% steps is 8 intervals, 7 notches. */
 private const val TEXT_SIZE_SLIDER_STEPS = 7
 
-/**
- * Text size of the context (long-press) menus, on top of [TextSizeRow]'s size. Same slider and the
- * same commit-on-release as that row: no menu is open while this page is up, so live updates would
- * buy nothing, and committing once saves a prefs write per drag frame.
- */
+/** Text size of the context (long-press) menus, on top of [TextSizeRow]'s size. */
 @Composable
 private fun MenuTextSizeRow() {
     val context = LocalContext.current
     val saved by UiPreferences.menuTextSizeFlow().collectAsState()
+    ExtraTextSizeRow(
+        title = "Menu text size",
+        description = "Size of the text in long-press menus (Equip, Info, Drop…), on top of Text size.",
+        saved = saved,
+        range = MENU_TEXT_SIZE_RANGE,
+        // 90% to 150% in 5% steps.
+        steps = 11,
+        resetLabel = "Reset menu text size",
+        onCommit = { UiPreferences.setMenuTextSize(context, it) },
+        onReset = { UiPreferences.setMenuTextSize(context, MENU_TEXT_SIZE_DEFAULT) }
+    )
+}
+
+/** Text size of the tab pages, on top of [TextSizeRow]'s size. The bottom tab bar is outside it. */
+@Composable
+private fun PageTextSizeRow() {
+    val context = LocalContext.current
+    val saved by UiPreferences.pageTextSizeFlow().collectAsState()
+    ExtraTextSizeRow(
+        title = "Page text size",
+        description = "Size of the text on the Inventory, Magic, Map, Stats and Journal pages, on " +
+            "top of Text size. Very large sizes can cut off text in tight spots.",
+        saved = saved,
+        range = PAGE_TEXT_SIZE_RANGE,
+        // 85% to 140% in 5% steps.
+        steps = 10,
+        resetLabel = "Reset page text size",
+        onCommit = { UiPreferences.setPageTextSize(context, it) },
+        onReset = { UiPreferences.setPageTextSize(context, PAGE_TEXT_SIZE_DEFAULT) }
+    )
+}
+
+/**
+ * Slider row for [MenuTextSizeRow] and [PageTextSizeRow]. Looks like [TextSizeRow] and also saves
+ * only on release, since neither menus nor pages are visible while the options are open.
+ */
+@Composable
+private fun ExtraTextSizeRow(
+    title: String,
+    description: String,
+    saved: Float,
+    range: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    resetLabel: String,
+    onCommit: (Float) -> Unit,
+    onReset: () -> Unit
+) {
     var dragging by remember { mutableStateOf<Float?>(null) }
     val shown = dragging ?: saved
-    val ticker = remember { SliderTickThrottle(steps = MENU_TEXT_SIZE_SLIDER_STEPS + 1) }
+    val ticker = remember { SliderTickThrottle(steps = steps + 1) }
 
     Column(Modifier.fillMaxWidth().padding(vertical = 9.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "Menu text size", color = Bone, fontSize = 14.sp, fontFamily = MwBody,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                "${(shown * 100).roundToInt()}%",
-                color = BronzeLight, fontSize = 12.sp, fontFamily = MwData
-            )
+            Text(title, color = Bone, fontSize = 14.sp, fontFamily = MwBody, modifier = Modifier.weight(1f))
+            Text("${(shown * 100).roundToInt()}%", color = BronzeLight, fontSize = 12.sp, fontFamily = MwData)
         }
         Spacer(Modifier.height(2.dp))
-        Text(
-            "Size of the text in long-press menus (Equip, Info, Drop…), on top of Text size.",
-            color = BoneDim, fontSize = 11.sp, fontFamily = MwBody
-        )
+        Text(description, color = BoneDim, fontSize = 11.sp, fontFamily = MwBody)
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                "${(MENU_TEXT_SIZE_RANGE.start * 100).roundToInt()}%",
-                color = BoneDim, fontSize = 11.sp, fontFamily = MwData
-            )
+            Text("${(range.start * 100).roundToInt()}%", color = BoneDim, fontSize = 11.sp, fontFamily = MwData)
             Slider(
                 value = shown,
-                onValueChange = { ticker.onValue(it, MENU_TEXT_SIZE_RANGE); dragging = it },
+                onValueChange = { ticker.onValue(it, range); dragging = it },
                 onValueChangeFinished = {
-                    dragging?.let { UiPreferences.setMenuTextSize(context, it) }
+                    dragging?.let(onCommit)
                     dragging = null
                 },
-                valueRange = MENU_TEXT_SIZE_RANGE,
-                steps = MENU_TEXT_SIZE_SLIDER_STEPS,
+                valueRange = range,
+                steps = steps,
                 colors = SliderDefaults.colors(
                     thumbColor = BronzeLight,
                     activeTrackColor = BronzeLight,
@@ -22899,19 +23048,11 @@ private fun MenuTextSizeRow() {
                 ),
                 modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
             )
-            Text(
-                "${(MENU_TEXT_SIZE_RANGE.endInclusive * 100).roundToInt()}%",
-                color = BoneDim, fontSize = 11.sp, fontFamily = MwData
-            )
+            Text("${(range.endInclusive * 100).roundToInt()}%", color = BoneDim, fontSize = 11.sp, fontFamily = MwData)
         }
-        ScopedResetButton("Reset menu text size") {
-            UiPreferences.setMenuTextSize(context, MENU_TEXT_SIZE_DEFAULT)
-        }
+        ScopedResetButton(resetLabel, onReset)
     }
 }
-
-/** Interior notches on the Menu text size slider: 90% to 150% in 5% steps is 12 intervals, 11 notches. */
-private const val MENU_TEXT_SIZE_SLIDER_STEPS = 11
 
 @Composable
 private fun GameBrightnessRow() {

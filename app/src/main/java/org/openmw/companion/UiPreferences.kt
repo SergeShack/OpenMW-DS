@@ -783,12 +783,15 @@ const val TEXT_SIZE_DEFAULT = 1.0f
 val MENU_TEXT_SIZE_RANGE = 0.9f..1.5f
 const val MENU_TEXT_SIZE_DEFAULT = 1.25f
 
-/** Inventory tab card size, stored as the card grid's ROW COUNT. Each card scales uniformly with the
- *  height its row gets (see ItemCard), so fewer rows = proportionally larger tiles AND text: 3 rows is
- *  ~1/3 larger than the 4 every layout was designed at. Unlike the text size above this scales dp
- *  too, which is fine here because the grid scrolls horizontally — it costs items on screen, never
- *  clipping. 2 rows is not offered: the card is ~4x as wide as it is tall, so at that height barely
- *  more than one card would fit across the panel. */
+/** Extra text scale for the tab pages (Inventory, Magic, HUD, Stats, Journal), on top of the text
+ *  size above. TEXT_SIZE_RANGE is limited by the bottom tab labels, which this one doesn't touch,
+ *  so page text can go larger. Past ~1.4 the pages' own fixed-height rows start to crowd. */
+val PAGE_TEXT_SIZE_RANGE = 0.85f..1.4f
+const val PAGE_TEXT_SIZE_DEFAULT = 1.15f
+
+/** Inventory tab card size, stored as the card grid's row count. Cards scale with their row height
+ *  (see ItemCard), so 3 rows is ~1/3 larger than the normal 4. This scales dp too, which is fine
+ *  because the grid scrolls sideways. 2 rows is not offered: barely one card would fit across. */
 val INV_CARD_ROWS_RANGE = 3..4
 const val INV_CARD_ROWS_DEFAULT = 4
 
@@ -839,6 +842,7 @@ object UiPreferences {
     private const val VANILLA_FONT = "vanilla_font"
     private const val TEXT_SIZE = "text_size"
     private const val MENU_TEXT_SIZE = "menu_text_size"
+    private const val PAGE_TEXT_SIZE = "page_text_size"
     private const val MINIMAP_ZOOM = "minimap_zoom"
     private const val TOP_KEYBOARD_BUTTON = "top_keyboard_button"
     private const val TOP_QUICK_SLOTS_BUTTON = "top_quick_slots_button"
@@ -1034,6 +1038,9 @@ object UiPreferences {
 
     // Context-menu text scale, a multiplier on top of textSizeFlow (see MENU_TEXT_SIZE_RANGE).
     private val menuTextSizeFlow = MutableStateFlow(MENU_TEXT_SIZE_DEFAULT)
+
+    // Tab-page text scale, a multiplier on top of textSizeFlow (see PAGE_TEXT_SIZE_RANGE).
+    private val pageTextSizeFlow = MutableStateFlow(PAGE_TEXT_SIZE_DEFAULT)
 
     // The HUD minimap's pinch zoom, as a multiplier on its fixed crop (1.0 = the original view).
     private val minimapZoomFlow = MutableStateFlow(MINIMAP_ZOOM_DEFAULT)
@@ -1300,6 +1307,7 @@ object UiPreferences {
         vanillaFontFlow.value = p.getBoolean(VANILLA_FONT, true)
         textSizeFlow.value = p.getFloat(TEXT_SIZE, TEXT_SIZE_DEFAULT).coerceIn(TEXT_SIZE_RANGE)
         menuTextSizeFlow.value = p.getFloat(MENU_TEXT_SIZE, MENU_TEXT_SIZE_DEFAULT).coerceIn(MENU_TEXT_SIZE_RANGE)
+        pageTextSizeFlow.value = p.getFloat(PAGE_TEXT_SIZE, PAGE_TEXT_SIZE_DEFAULT).coerceIn(PAGE_TEXT_SIZE_RANGE)
         minimapZoomFlow.value = p.getFloat(MINIMAP_ZOOM, MINIMAP_ZOOM_DEFAULT).coerceIn(MINIMAP_ZOOM_RANGE)
         topKeyboardButtonFlow.value = p.getBoolean(TOP_KEYBOARD_BUTTON, false)
         topQuickSlotsButtonFlow.value = p.getBoolean(TOP_QUICK_SLOTS_BUTTON, false)
@@ -1810,6 +1818,16 @@ object UiPreferences {
         val v = scale.coerceIn(MENU_TEXT_SIZE_RANGE)
         menuTextSizeFlow.value = v
         editor(context).putFloat(MENU_TEXT_SIZE, v).apply()
+    }
+
+    /** Tab-page text scale, on top of the companion text size. */
+    fun pageTextSizeFlow(): StateFlow<Float> = pageTextSizeFlow.asStateFlow()
+
+    /** Set the tab-page text scale and persist. Clamped to [PAGE_TEXT_SIZE_RANGE]. */
+    fun setPageTextSize(context: Context, scale: Float) {
+        val v = scale.coerceIn(PAGE_TEXT_SIZE_RANGE)
+        pageTextSizeFlow.value = v
+        editor(context).putFloat(PAGE_TEXT_SIZE, v).apply()
     }
 
     /** The HUD minimap's zoom multiplier (1.0 = the original fixed view). */
