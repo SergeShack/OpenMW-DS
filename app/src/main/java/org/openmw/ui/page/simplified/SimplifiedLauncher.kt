@@ -3566,6 +3566,7 @@ private fun CustomScreensPanel() {
             }
         )
     }
+    var fullscreen by remember { mutableStateOf(DisplayRoles.customFullscreen(context)) }
     var identifying by remember { mutableStateOf(false) }
     var identifyResult by remember { mutableStateOf(IdentifyScreenActivity.lastResultText()) }
 
@@ -3626,8 +3627,26 @@ private fun CustomScreensPanel() {
         companion.takeIf { it != DisplayRoles.CUSTOM_NONE }?.let { c ->
             val target = screens.firstOrNull { sameScreen(it.descriptor, c) }
             if (target != null) {
+                // Only shown where it is a choice: without FLAG_PRESENTATION the companion already
+                // runs as its own Activity. See DisplayRoles.companionUsesActivity.
+                if (target.presentationFlag) {
+                    SettingRow(
+                        title = "Fullscreen second screen",
+                        subtitle = "Hides that screen's navigation buttons. The second screen then " +
+                            "runs as its own app window."
+                    ) {
+                        Switch(
+                            checked = fullscreen,
+                            onCheckedChange = {
+                                fullscreen = it
+                                DisplayRoles.onCustomFullscreenChanged(it)
+                                scope.launch { GameFilesPreferences.saveCustomCompanionFullscreen(context, it) }
+                            }
+                        )
+                    }
+                }
                 Text(
-                    text = if (target.presentationFlag) {
+                    text = if (target.presentationFlag && !fullscreen) {
                         "The second screen will be shown as an overlay window on ${target.name}."
                     } else {
                         "The second screen will run as its own app window on ${target.name}. You " +

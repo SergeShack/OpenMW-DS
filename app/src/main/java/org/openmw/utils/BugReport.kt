@@ -116,6 +116,7 @@ object BugReport {
                 val (g, c) = DisplayRoles.customChoiceDescriptors(context)
                 appendLine("Custom game choice: ${g ?: "(not chosen, main display)"}")
                 appendLine("Custom companion choice: ${c ?: "(not chosen, first other display)"}")
+                appendLine("Custom fullscreen second screen: ${DisplayRoles.customFullscreen(context)}")
             }
         }.onFailure { appendLine("Could not resolve roles: $it") }
 

@@ -133,6 +133,11 @@ object GameFilesPreferences {
     // be DisplayRoles.CUSTOM_NONE. Absent = not chosen yet; read ONLY by the Custom profile.
     val CUSTOM_GAME_DISPLAY_KEY = stringPreferencesKey("custom_game_display")
     val CUSTOM_COMPANION_DISPLAY_KEY = stringPreferencesKey("custom_companion_display")
+    // Custom only: run the companion as its own Activity even where a Presentation would work, so
+    // it can hide that screen's navigation bar. Absent = CUSTOM_COMPANION_FULLSCREEN_DEFAULT.
+    // See DisplayRoles.companionUsesActivity.
+    val CUSTOM_COMPANION_FULLSCREEN_KEY = booleanPreferencesKey("custom_companion_fullscreen")
+    const val CUSTOM_COMPANION_FULLSCREEN_DEFAULT = true
 
     // Render-resolution tier, stored as a TARGET HEIGHT in pixels (0 = Native).
     //
@@ -627,6 +632,13 @@ object GameFilesPreferences {
 
     fun loadCustomCompanionDisplay(context: Context): Flow<String?> =
         context.prefsData.map { it[CUSTOM_COMPANION_DISPLAY_KEY] }
+
+    suspend fun saveCustomCompanionFullscreen(context: Context, enabled: Boolean) {
+        context.dataStore.edit { it[CUSTOM_COMPANION_FULLSCREEN_KEY] = enabled }
+    }
+
+    fun loadCustomCompanionFullscreen(context: Context): Flow<Boolean> =
+        context.prefsData.map { it[CUSTOM_COMPANION_FULLSCREEN_KEY] ?: CUSTOM_COMPANION_FULLSCREEN_DEFAULT }
 
     /** Render-resolution tier as a target height in pixels; 0 = Native (no downscale). */
     fun loadResolutionTier(context: Context): Flow<Int> {

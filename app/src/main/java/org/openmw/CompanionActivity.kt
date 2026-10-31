@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -318,13 +319,44 @@ class CompanionActivity : ComponentActivity() {
             gravity = Gravity.TOP or Gravity.START
         }
         val view = View(this)
+        // Once the main window is non-focusable, this anchor is the display's focused window, and
+        // the system bars follow the focused window. So it asks for the same immersive mode, and
+        // asks again whenever the bars come back, like onCreate does for the main window.
+        view.setOnApplyWindowInsetsListener { v, insets ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+                insets.isVisible(WindowInsets.Type.systemBars())
+            ) hideBarsFor(v)
+            insets
+        }
         return runCatching { windowManager.addView(view, lp) }
             .onSuccess {
                 focusAnchorView = view
+                view.post { hideBarsFor(view) }
                 Log.d(TAG, "focus anchor added")
             }
             .onFailure { Log.e(TAG, "focus anchor addView failed", it) }
             .isSuccess
+    }
+
+    /** [applyImmersive] for a window other than the activity's own (the focus anchor). */
+    private fun hideBarsFor(view: View) {
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                view.windowInsetsController?.let {
+                    it.hide(WindowInsets.Type.systemBars())
+                    it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                }
+            }
+            @Suppress("DEPRECATION")
+            view.systemUiVisibility = (
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_FULLSCREEN
+                    or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                )
+        }
     }
 
     private fun removeFocusAnchor() {

@@ -91,6 +91,8 @@ object DisplayRoles {
     @Volatile
     private var cachedCustomCompanion: String? = null
     @Volatile
+    private var cachedCustomFullscreen = GameFilesPreferences.CUSTOM_COMPANION_FULLSCREEN_DEFAULT
+    @Volatile
     private var customPrimed = false
 
     /** Read the stored profile into the cache. Call early, from a coroutine. */
@@ -104,7 +106,21 @@ object DisplayRoles {
     private suspend fun primeCustom(context: Context) {
         cachedCustomGame = runCatching { GameFilesPreferences.loadCustomGameDisplay(context).first() }.getOrNull()
         cachedCustomCompanion = runCatching { GameFilesPreferences.loadCustomCompanionDisplay(context).first() }.getOrNull()
+        cachedCustomFullscreen = runCatching { GameFilesPreferences.loadCustomCompanionFullscreen(context).first() }
+            .getOrDefault(GameFilesPreferences.CUSTOM_COMPANION_FULLSCREEN_DEFAULT)
         customPrimed = true
+    }
+
+    /** Keep the Fullscreen second screen cache in step with the settings screen. */
+    fun onCustomFullscreenChanged(enabled: Boolean) {
+        cachedCustomFullscreen = enabled
+        Log.d(TAG, "custom fullscreen companion changed: $enabled")
+    }
+
+    /** The stored Custom "Fullscreen second screen" choice, for the settings screen. */
+    fun customFullscreen(context: Context): Boolean {
+        customChoices(context)  // primes the cache on a cold read
+        return cachedCustomFullscreen
     }
 
     /** Keep the Custom cache in step with the settings screen, like [onProfileChanged]. */
@@ -359,10 +375,16 @@ object DisplayRoles {
      * Presentation. **For every preset this is exactly [rolesSwapped]**, the test
      * `EngineActivity` and the splash used before Custom existed. Custom decides from the target
      * display instead: Android only allows a Presentation on a display with `FLAG_PRESENTATION`.
+     *
+     * Custom can also ask for the Activity where a Presentation would work ("Fullscreen second
+     * screen"). A Presentation can't hide that screen's navigation bar: the bar follows the
+     * display's focused window, and a Presentation never has focus (on the Retroid Pocket Duo Lite
+     * the app under it keeps 3-button navigation on screen). The Activity has its own focus
+     * anchor, which can hide it.
      */
     fun companionUsesActivity(context: Context): Boolean {
         if (!isCustom(context)) return rolesSwapped(context)
         val d = companionDisplay(context) ?: return false
-        return d.flags and Display.FLAG_PRESENTATION == 0
+        return d.flags and Display.FLAG_PRESENTATION == 0 || customFullscreen(context)
     }
 }
