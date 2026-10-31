@@ -1,0 +1,141 @@
+Warm up the casting VFX of every magic school right after a game loads (first-cast hitch fix).
+
+Measured with dsperf-first-cast-probe.patch on a Retroid Pocket Duo Lite: the first cast of a spell in a
+session spent ~9 ms on the CPU (casting VFX, cast sound, VFX_Hands all cached by preloadEffects), but
+~220 ms later one frame took 165 ms, 163 ms of it in render - the GPU driver compiling the VFX shader
+programs on first draw. A second cast of the same spell had no slow frame.
+
+World::preloadSpells (every 0.1 s) now notices a new player animation (a loaded game) and attaches every
+distinct casting model, plus VFX_Hands, to the player through the same Animation::addEffect call a real
+cast uses - same parents, same state, so the same programs - scaled to 1/1000 and with culling disabled
+on the effect subtrees (small feature culling would otherwise drop them). They are drawn once, which
+moves the compile into the post-load frames, and remove themselves when they finish playing. Particle
+sizes follow the scale (LOCAL_COORDINATES), so nothing is visible. Android-only, like the other patches.
+
+diff --git a/apps/openmw/mwworld/worldimp.cpp b/apps/openmw/mwworld/worldimp.cpp
+index a2985db..53ed7ad 100644
+--- a/apps/openmw/mwworld/worldimp.cpp
++++ b/apps/openmw/mwworld/worldimp.cpp
+@@ -1,6 +1,8 @@
+ #include "worldimp.hpp"
+ 
++#include <algorithm>
+ #include <charconv>
++#include <optional>
+ #include <vector>
+ 
+ #include <osg/ComputeBoundsVisitor>
+@@ -1609,8 +1611,113 @@ namespace MWWorld
+         }
+     }
+ 
++#ifdef __ANDROID__
++    namespace
++    {
++        // OpenMW-DS: the first time a casting VFX is drawn, the GPU driver compiles its shaders in that frame
++        // (~165 ms on a Retroid Pocket Duo Lite), so the first cast of each school froze the game. So once per
++        // loaded game every casting VFX and VFX_Hands is attached to the player like a real cast, at 1/1000
++        // scale with culling off: it is drawn (and compiled) right after the load but never seen. The effects
++        // are not looped, so they remove themselves when they finish.
++        constexpr std::string_view sDsWarmUpEffectId = "openmw-ds-cast-vfx-warmup";
++
++        const MWRender::Animation* sDsWarmedUpAnimation = nullptr;
++
++        // Small feature culling would drop the shrunk effect, so culling is turned off on all its nodes.
++        class DsDisableCullingVisitor : public osg::NodeVisitor
++        {
++        public:
++            DsDisableCullingVisitor()
++                : osg::NodeVisitor(TRAVERSE_ALL_CHILDREN)
++            {
++            }
++
++            void apply(osg::Node& node) override
++            {
++                node.setCullingActive(false);
++                traverse(node);
++            }
++        };
++
++        class DsFindWarmUpEffectsVisitor : public osg::NodeVisitor
++        {
++        public:
++            std::vector<osg::Group*> mEffects;
++
++            DsFindWarmUpEffectsVisitor()
++                : osg::NodeVisitor(TRAVERSE_ALL_CHILDREN)
++            {
++            }
++
++            void apply(osg::Group& group) override
++            {
++                auto* callback = dynamic_cast<MWRender::UpdateVfxCallback*>(group.getUpdateCallback());
++                if (callback && callback->mParams.mEffectId == sDsWarmUpEffectId)
++                    mEffects.push_back(&group);
++                else
++                    traverse(group);
++            }
++        };
++
++        void dsWarmUpCastVfx(MWRender::Animation& animation, const ESMStore& store)
++        {
++            osg::Group* objectRoot = animation.getObjectRoot();
++            if (!objectRoot || objectRoot->getNumParents() == 0)
++                return;
++
++            const auto modelOf = [&](const ESM::RefId& id) -> std::optional<VFS::Path::Normalized> {
++                const ESM::Static* stat = store.get<ESM::Static>().search(id);
++                if (!stat || stat->mModel.empty())
++                    return std::nullopt;
++                return Misc::ResourceHelpers::correctMeshPath(VFS::Path::Normalized(stat->mModel));
++            };
++
++            // Each casting model with the particle texture of the first effect that uses it, as a cast would.
++            std::vector<std::pair<VFS::Path::Normalized, std::string>> casts;
++            for (const ESM::MagicEffect& effect : store.get<ESM::MagicEffect>())
++            {
++                const std::optional<VFS::Path::Normalized> model
++                    = modelOf(effect.mCasting.empty() ? ESM::RefId::stringRefId("VFX_DefaultCast") : effect.mCasting);
++                if (!model)
++                    continue;
++                const bool known = std::any_of(
++                    casts.begin(), casts.end(), [&](const auto& cast) { return cast.first == *model; });
++                if (!known)
++                    casts.emplace_back(*model, effect.mParticle);
++            }
++            const std::optional<VFS::Path::Normalized> hands = modelOf(ESM::RefId::stringRefId("VFX_Hands"));
++            const std::string_view handBone = animation.getNode("Bip01 L Hand") ? "Bip01 L Hand" : "";
++
++            const osg::Matrix shrink = osg::Matrix::scale(0.001f, 0.001f, 0.001f);
++            for (const auto& [model, texture] : casts)
++            {
++                animation.addEffect(model.value(), sDsWarmUpEffectId, false, {}, texture, true, true, shrink);
++                if (hands)
++                    animation.addEffect(hands->value(), sDsWarmUpEffectId, false, handBone, texture, true, true, shrink);
++            }
++
++            DsFindWarmUpEffectsVisitor finder;
++            objectRoot->getParent(0)->accept(finder);
++            DsDisableCullingVisitor noCulling;
++            for (osg::Group* effect : finder.mEffects)
++                effect->accept(noCulling);
++
++            Log(Debug::Info) << "OpenMW-DS: warming up " << casts.size() << " casting VFX (" << finder.mEffects.size()
++                             << " effect nodes)";
++        }
++    }
++#endif
++
+     void World::preloadSpells()
+     {
++#ifdef __ANDROID__
++        if (MWRender::Animation* playerAnimation = mRendering->getAnimation(getPlayerPtr());
++            playerAnimation && playerAnimation != sDsWarmedUpAnimation)
++        {
++            sDsWarmedUpAnimation = playerAnimation;
++            dsWarmUpCastVfx(*playerAnimation, mStore);
++        }
++#endif
+         const ESM::RefId& selectedSpell = MWBase::Environment::get().getWindowManager()->getSelectedSpell();
+         if (!selectedSpell.empty())
+         {
