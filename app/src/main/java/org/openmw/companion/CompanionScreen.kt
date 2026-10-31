@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13326,7 +13327,7 @@ fun BarterTopOverlay() {
         requestQty(item.displayName(), item.count, "Select") { n -> borrow(item, n) }
     }
 
-    // Controller focus (SPLIT = two 3-row icon grids → rows = 3). X (Offer) + the gold slider are
+    // Controller focus (SPLIT = two icon grids, rows = Barter Size). X (Offer) + the gold slider are
     // owned by the bottom controls window (BarterControlsOnly, its own collector) because the gold-
     // offset state lives there — passing no-ops here avoids a top/bottom desync.
     // Per-column sort state (Default / Weight / Value — see BARTER_SORTS).
@@ -13342,10 +13343,11 @@ fun BarterTopOverlay() {
     // Classic mode only — the shelf layout runs its own nav (ShelfDualPanel). Offer/slider stay
     // owned by the bottom controls window either way.
     val shelfMode = UiPreferences.inventoryLayoutFlow().collectAsState().value == InventoryLayout.SHELF
+    val gridRows by UiPreferences.barterGridRowsFlow().collectAsState()
     val focus = if (shelfMode) null else rememberBarterNavFocus(
         visiblePlayer = visiblePlayer,
         visibleVendor = visibleVendor,
-        rows = 3,
+        rows = gridRows,
         onToggle = ::toggle,
         onOffer = {},
         onSlider = {},
@@ -13408,6 +13410,7 @@ fun BarterTopOverlay() {
                 onToggle = ::toggle,
                 focusedIndex = if (focus!!.side == 0) focus.index else -1,
                 sort = playerSort,
+                rows = gridRows,
                 modifier = Modifier.weight(1f).fillMaxHeight().splitColumnBox()
             )
             Spacer(Modifier.width(BARTER_SPLIT_COLUMN_GAP))
@@ -13421,6 +13424,7 @@ fun BarterTopOverlay() {
                 onToggle = ::toggle,
                 focusedIndex = if (focus!!.side == 1) focus.index else -1,
                 sort = vendorSort,
+                rows = gridRows,
                 modifier = Modifier.weight(1f).fillMaxHeight().splitColumnBox()
             )
         }
@@ -13473,7 +13477,7 @@ fun BarterTopOverlay() {
     }
 }
 
-/** One side of the SPLIT barter grids — header, per-side category tabs, 3-row icon grid. */
+/** One side of the SPLIT barter grids — header, per-side category tabs, [rows]-row icon grid. */
 @Composable
 private fun BarterGridColumn(
     header: AnnotatedString,
@@ -13486,6 +13490,9 @@ private fun BarterGridColumn(
     /** This column's sort — per-column, owned by the parent so the same state feeds the focus list.
      *  See the matching note on [LootGridColumn]. Default/Weight/Value (BARTER_SORTS). */
     sort: InvSortState,
+    /** Barter Size as a row count (3 = Normal, 2 = Large). Must match the rows given to
+     *  rememberBarterNavFocus, or D-pad focus lands on the wrong cell. */
+    rows: Int = BARTER_GRID_ROWS_DEFAULT,
     modifier: Modifier = Modifier
 ) {
     Column(modifier) {
@@ -13530,23 +13537,33 @@ private fun BarterGridColumn(
             WindowedFocusScroll(gridState, focusedIndex, visible.size, visible)
             // Right stick left/right scrolls this horizontal grid while it's the focused side.
             ScrollByNav(gridState, active = focusedIndex >= 0, horizontal = true)
-            LazyHorizontalGrid(
-                // 3 rows / tight spacing — matching the looting overlay. Column-major fill, so item
-                // index i is at grid row i%3, column i/3 — MUST match rememberBarterNavFocus (rows = 3).
-                state = gridState,
-                rows = GridCells.Fixed(3),
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                gridItemsIndexed(visible) { i, item ->
-                    BarterGridCell(
-                        item = item,
-                        isPlayerSide = isPlayerSide,
-                        iconBitmap = rememberItemIcon(item.icon),
-                        focused = i == focusedIndex,
-                        onToggle = onToggle
-                    )
+            BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+                // Cells are designed for 3 rows. With fewer rows each cell is scaled up by the
+                // extra height (2 rows ≈ 1.5x), so Normal looks the same as before.
+                val gap = 4.dp
+                val designCell = (maxHeight - gap * 2) / 3
+                val cell = (maxHeight - gap * (rows - 1)) / rows
+                val cellScale = if (constraints.hasBoundedHeight && designCell > 0.dp)
+                    (cell / designCell).coerceAtLeast(1f) else 1f
+                LazyHorizontalGrid(
+                    // Tight spacing, matching the looting overlay. Column-major fill: item i is at
+                    // row i % rows, column i / rows, the same as rememberBarterNavFocus.
+                    state = gridState,
+                    rows = GridCells.Fixed(rows),
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.spacedBy(gap),
+                    verticalArrangement = Arrangement.spacedBy(gap)
+                ) {
+                    gridItemsIndexed(visible) { i, item ->
+                        BarterGridCell(
+                            item = item,
+                            isPlayerSide = isPlayerSide,
+                            iconBitmap = rememberItemIcon(item.icon),
+                            focused = i == focusedIndex,
+                            scale = cellScale,
+                            onToggle = onToggle
+                        )
+                    }
                 }
             }
             HorizontalGridScrollbar(gridState, Modifier.padding(top = 4.dp))
@@ -13566,6 +13583,8 @@ private fun BarterGridCell(
     isPlayerSide: Boolean,
     iconBitmap: ImageBitmap? = null,
     focused: Boolean = false,
+    /** Scale for the whole cell (1 = Normal Barter Size, see BarterGridColumn). */
+    scale: Float = 1f,
     onToggle: (BarterItem) -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -13574,93 +13593,103 @@ private fun BarterGridCell(
     }
     val selected = item.isSelected
     val label = item.displayName()
+    // Scales the whole cell (dp and sp) through LocalDensity, like ItemCard. The long-press menu
+    // below stays outside it, so it uses Menu text size like other menus.
+    val base = LocalDensity.current
 
     Box(modifier = Modifier.onGloballyPositioned { ItemInfoPopupState.reportAnchor(item.id, it.boundsInRoot()) }) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .width(54.dp)
-                // Controller focus: a bronze ring + faint fill around the WHOLE cell (icon + label +
-                // price). SELECTED is an inner-icon BronzeLight border + SlotWorn icon fill, so this
-                // outer-cell ring reads as a distinct "cursor here" marker even on a selected cell.
-                .then(
-                    if (focused) Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(BronzeLight.copy(alpha = 0.15f))
-                        .border(2.dp, BronzeLight, RoundedCornerShape(4.dp))
-                    else Modifier
-                )
-                .combinedClickable(
-                    onClick = { onToggle(item) },
-                    onLongClick = { menuOpen = true; DropdownState.open() }
-                )
-                .padding(2.dp)
-        ) {
-            // Worn (player-side, equipped) gets the same 2dp BronzeLight icon border the looting grid
-            // uses — a highlight around the icon, not a backdrop tint. Selected (staged into the offer)
-            // uses that same bright border PLUS the SlotWorn fill + count badge, so the two still read
-            // distinctly (worn = border only; selected = border + fill + badge).
-            val highlightIcon = selected || (isPlayerSide && item.worn)
-            Box(
+        CompositionLocalProvider(LocalDensity provides Density(base.density * scale, base.fontScale)) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .size(SPLIT_CELL_ICON)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(if (selected) SlotWorn else SlotBg)
-                    .border(
-                        BorderStroke(if (highlightIcon) 2.dp else 1.dp, if (highlightIcon) BronzeLight else BronzeDark),
-                        RoundedCornerShape(3.dp)
+                    .width(54.dp)
+                    // Controller focus: a bronze ring + faint fill around the WHOLE cell (icon + label +
+                    // price). SELECTED is an inner-icon BronzeLight border + SlotWorn icon fill, so this
+                    // outer-cell ring reads as a distinct "cursor here" marker even on a selected cell.
+                    .then(
+                        if (focused) Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(BronzeLight.copy(alpha = 0.15f))
+                            .border(2.dp, BronzeLight, RoundedCornerShape(4.dp))
+                        else Modifier
                     )
+                    .combinedClickable(
+                        onClick = { onToggle(item) },
+                        onLongClick = { menuOpen = true; DropdownState.open() }
+                    )
+                    .padding(2.dp)
             ) {
-                EnchantBackdrop(item.enchant != null)
-                if (iconBitmap != null) {
-                    Image(
-                        bitmap = iconBitmap,
-                        contentDescription = null,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize().padding(3.dp)
-                    )
+                // Worn (player-side, equipped) gets the same 2dp BronzeLight icon border the looting grid
+                // uses — a highlight around the icon, not a backdrop tint. Selected (staged into the offer)
+                // uses that same bright border PLUS the SlotWorn fill + count badge, so the two still read
+                // distinctly (worn = border only; selected = border + fill + badge).
+                val highlightIcon = selected || (isPlayerSide && item.worn)
+                Box(
+                    modifier = Modifier
+                        // The row height is fixed, and icon + two-line name + price can be a bit
+                        // taller, which cut off the price. With weight the icon is measured last
+                        // and shrinks a little instead.
+                        .weight(1f, fill = false)
+                        .sizeIn(maxWidth = SPLIT_CELL_ICON, maxHeight = SPLIT_CELL_ICON)
+                        .aspectRatio(1f, matchHeightConstraintsFirst = true)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(if (selected) SlotWorn else SlotBg)
+                        .border(
+                            BorderStroke(if (highlightIcon) 2.dp else 1.dp, if (highlightIcon) BronzeLight else BronzeDark),
+                            RoundedCornerShape(3.dp)
+                        )
+                ) {
+                    EnchantBackdrop(item.enchant != null)
+                    if (iconBitmap != null) {
+                        Image(
+                            bitmap = iconBitmap,
+                            contentDescription = null,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize().padding(3.dp)
+                        )
+                    }
+                    // Selected-count badge (bottom-right) when > 1.
+                    if (selected && item.selectedCount > 1) {
+                        Text(
+                            "×${item.selectedCount}",
+                            color = BronzeLight, fontSize = 9.sp,
+                            fontFamily = MwData, fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .background(Color(0xCC0E0B07))
+                                .padding(horizontal = 2.dp)
+                        )
+                    } else if (!selected && item.count > 1) {
+                        Text(
+                            "×${item.count}",
+                            color = BoneBright, fontSize = 9.sp,
+                            fontFamily = MwData, fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .background(Color(0xCC0E0B07))
+                                .padding(horizontal = 2.dp)
+                        )
+                    }
                 }
-                // Selected-count badge (bottom-right) when > 1.
-                if (selected && item.selectedCount > 1) {
-                    Text(
-                        "×${item.selectedCount}",
-                        color = BronzeLight, fontSize = 9.sp,
-                        fontFamily = MwData, fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .background(Color(0xCC0E0B07))
-                            .padding(horizontal = 2.dp)
-                    )
-                } else if (!selected && item.count > 1) {
-                    Text(
-                        "×${item.count}",
-                        color = BoneBright, fontSize = 9.sp,
-                        fontFamily = MwData, fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .background(Color(0xCC0E0B07))
-                            .padding(horizontal = 2.dp)
-                    )
-                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    label,
+                    // BoneMuted, not Bone — the app-wide default for an un-highlighted item name
+                    // (LootGridCell, LootRow, the inventory tab's rows and cards all use it).
+                    color = if (selected) BoneBright else BoneMuted,
+                    fontSize = 8.sp, fontFamily = MwBody,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    lineHeight = 9.sp,
+                    modifier = Modifier.width(54.dp)
+                )
+                // Per-unit barter price.
+                Text(
+                    "${item.value}g",
+                    color = BoneDim, fontSize = 8.sp, fontFamily = MwData,
+                    maxLines = 1
+                )
             }
-            Spacer(Modifier.height(2.dp))
-            Text(
-                label,
-                // BoneMuted, not Bone — the app-wide default for an un-highlighted item name
-                // (LootGridCell, LootRow, the inventory tab's rows and cards all use it).
-                color = if (selected) BoneBright else BoneMuted,
-                fontSize = 8.sp, fontFamily = MwBody,
-                textAlign = TextAlign.Center,
-                maxLines = 2, overflow = TextOverflow.Ellipsis,
-                lineHeight = 9.sp,
-                modifier = Modifier.width(54.dp)
-            )
-            // Per-unit barter price.
-            Text(
-                "${item.value}g",
-                color = BoneDim, fontSize = 8.sp, fontFamily = MwData,
-                maxLines = 1
-            )
         }
 
         CompanionDropdownMenu(
@@ -21464,6 +21493,7 @@ private fun OptionsSubPage(
                     item { OptionsSubLabel("DS overlays on the top screen") }
                     item { TopPanelOpacityRow() }
                     item { ConversationWindowRow() }
+                    item { BarterSizeRow() }
                 }
 
                 // BOTTOM DISPLAY SETTINGS: how the companion screen itself looks.
@@ -22284,6 +22314,41 @@ private fun InventoryCardSizeRow() {
                 active = rows == 3,
                 enabled = cards
             ) { UiPreferences.setInvCardRows(context, 3) }
+        }
+    }
+}
+
+// Barter grid size on the top screen, as the row count: Normal = 3 rows, Large = 2 rows (bigger
+// icons, names and prices, fewer items on screen). Classic layout only, so the pills are greyed
+// while Shelf is selected.
+@Composable
+private fun BarterSizeRow() {
+    val context = LocalContext.current
+    val rows by UiPreferences.barterGridRowsFlow().collectAsState()
+    val layout by UiPreferences.inventoryLayoutFlow().collectAsState()
+    val classic = layout == InventoryLayout.CLASSIC
+
+    Column(Modifier.fillMaxWidth().padding(vertical = 9.dp)) {
+        Text("Barter Size", color = Bone, fontSize = 14.sp, fontFamily = MwBody)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "Large shows bigger items in the barter window, with fewer on screen at once.",
+            color = BoneDim, fontSize = 11.sp, fontFamily = MwBody, lineHeight = 14.sp
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OptionPill(
+                Modifier.weight(1f),
+                label = "Normal",
+                active = rows == 3,
+                enabled = classic
+            ) { UiPreferences.setBarterGridRows(context, 3) }
+            OptionPill(
+                Modifier.weight(1f),
+                label = "Large",
+                active = rows == 2,
+                enabled = classic
+            ) { UiPreferences.setBarterGridRows(context, 2) }
         }
     }
 }

@@ -795,6 +795,12 @@ const val PAGE_TEXT_SIZE_DEFAULT = 1.15f
 val INV_CARD_ROWS_RANGE = 3..4
 const val INV_CARD_ROWS_DEFAULT = 4
 
+/** Barter grid size on the top screen (SPLIT barter), stored as the row count like the card size
+ *  above. Cells scale with their row height (see BarterGridCell), so 2 rows is ~1.5x the 3-row
+ *  size. 1 row is not offered: too few items would fit. */
+val BARTER_GRID_ROWS_RANGE = 2..3
+const val BARTER_GRID_ROWS_DEFAULT = 2
+
 /** HUD minimap pinch zoom, a multiplier on the minimap's fixed crop (`MINIMAP_CROP_FRACTION`) (1.0 = unchanged).
  *
  *  FLOOR 0.25 shows one whole cell across the panel's short side. Further out would run past the
@@ -819,6 +825,7 @@ object UiPreferences {
     private const val HIDE_EQUIPPED_BAR = "hide_equipped_bar"
     private const val SHOW_EQUIPPED_IN_LIST = "show_equipped_in_list"
     private const val INV_CARD_ROWS = "inventory_card_rows"
+    private const val BARTER_GRID_ROWS = "barter_grid_rows"
     private const val ADAPTIVE_DIMMING = "adaptive_dimming"
     // The two ends of the adaptive-dimming ramp, expressed as SCREEN BRIGHTNESS (1f = untouched,
     // 0f = black) rather than overlay opacity, because that is what the options rows show the
@@ -1077,6 +1084,9 @@ object UiPreferences {
     // Row count of the Inventory tab's card grid — the player's card size (fewer rows = bigger cards).
     private val invCardRowsFlow = MutableStateFlow(INV_CARD_ROWS_DEFAULT)
 
+    // Row count of the SPLIT barter icon grids — the player's barter size (fewer rows = bigger cells).
+    private val barterGridRowsFlow = MutableStateFlow(BARTER_GRID_ROWS_DEFAULT)
+
     // Where the looting / bartering service UIs are drawn (BOTTOM / SPLIT / TOP). Default SPLIT
     // (icon grid on top, controls on the bottom). TOP is pending — the menu greys that pill.
     private val lootingLocationFlow = MutableStateFlow(ScreenLocation.SPLIT).rememberDefault()
@@ -1268,6 +1278,7 @@ object UiPreferences {
         hideEquippedBarFlow.value = p.getBoolean(HIDE_EQUIPPED_BAR, true)
         showEquippedInListFlow.value = p.getBoolean(SHOW_EQUIPPED_IN_LIST, false)
         invCardRowsFlow.value = p.getInt(INV_CARD_ROWS, INV_CARD_ROWS_DEFAULT).coerceIn(INV_CARD_ROWS_RANGE)
+        barterGridRowsFlow.value = p.getInt(BARTER_GRID_ROWS, BARTER_GRID_ROWS_DEFAULT).coerceIn(BARTER_GRID_ROWS_RANGE)
         adaptiveDimmingFlow.value = p.getBoolean(ADAPTIVE_DIMMING, ADAPTIVE_DIMMING_DEFAULT)
         // Clamped on read as well as on write (same reasoning as topPanelOpacity below): a stored
         // value from a corrupt prefs file, or from a build whose ranges differed, must never be able
@@ -1920,6 +1931,16 @@ object UiPreferences {
         val clamped = rows.coerceIn(INV_CARD_ROWS_RANGE)
         invCardRowsFlow.value = clamped
         editor(context).putInt(INV_CARD_ROWS, clamped).apply()
+    }
+
+    /** Row count of the SPLIT barter icon grids (fewer rows = larger cells). */
+    fun barterGridRowsFlow(): StateFlow<Int> = barterGridRowsFlow.asStateFlow()
+
+    /** Set the SPLIT barter grids' row count (clamped to [BARTER_GRID_ROWS_RANGE]) and persist. */
+    fun setBarterGridRows(context: Context, rows: Int) {
+        val clamped = rows.coerceIn(BARTER_GRID_ROWS_RANGE)
+        barterGridRowsFlow.value = clamped
+        editor(context).putInt(BARTER_GRID_ROWS, clamped).apply()
     }
 
     /** Where the conversation UI is drawn (BOTTOM / SPLIT / TOP). */
