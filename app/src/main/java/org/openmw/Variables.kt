@@ -40,7 +40,7 @@ class MyApp : Application() {
         app = this
 
         // Set up global paths
-        // "OpenMW-DS-DuoLite", or "OpenMW-DS-DuoLite-mod" for the side-by-side build (see build.gradle.kts).
+        // "OpenMW-DS-DuoLite" (see build.gradle.kts).
         Constants.USER_FILE_STORAGE = Environment.getExternalStorageDirectory().toString() + "/" + BuildConfig.STORAGE_DIR
         Constants.SECOND_USER_FILE_STORAGE = applicationContext.getExternalFilesDir(null)?.absolutePath ?: ""
         Constants.USER_CONFIG = "${Constants.USER_FILE_STORAGE}/config"

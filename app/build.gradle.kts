@@ -2,8 +2,6 @@ import com.android.build.gradle.tasks.MergeSourceSetFolders
 import org.gradle.kotlin.dsl.coreLibraryDesugaring
 import java.util.Properties
 import java.util.Random
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.io.FileInputStream
 
 plugins {
@@ -19,11 +17,6 @@ val keystorePropertiesFile = rootProject.file("release-keystore.properties")
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
-
-// Side-by-side "mod" build: `-PdsMod=true` (or dsMod=true in ~/.gradle/gradle.properties) uses its
-// own package id, launcher label and storage folder, so it installs next to the normal build and
-// keeps its own saves and config. Off by default.
-val dsMod = (findProperty("dsMod") as String?)?.toBoolean() == true
 
 // This fork (github.com/SergeShack/OpenMW-DS). Its own id and storage folder, so it installs next to
 // the official OpenMW-DS (org.openmw.ds, /OpenMW-DS) without sharing saves or config.
@@ -111,12 +104,9 @@ android {
     }
 
     defaultConfig {
-        applicationId = if (dsMod) "$forkAppId.mod" else forkAppId
-        manifestPlaceholders["appLabel"] = if (dsMod) "OpenMW-DS Duo Lite Mod" else "@string/app_name"
+        applicationId = forkAppId
         // Folder under /storage/emulated/0 that holds saves, config, mods and resources.
-        buildConfigField("String", "STORAGE_DIR", "\"${if (dsMod) "$forkStorageDir-mod" else forkStorageDir}\"")
-        // The update check on launch would offer the normal release, which is a different app.
-        buildConfigField("boolean", "UPDATE_CHECK_ON_LAUNCH", "${!dsMod}")
+        buildConfigField("String", "STORAGE_DIR", "\"$forkStorageDir\"")
         minSdk = 26
 
         //noinspection OldTargetApi
@@ -133,17 +123,6 @@ android {
         // file — it also drives versionCode above. Stored WITHOUT a `v` prefix; display
         // contexts add `v` at render time.
         buildConfigField("String", "RELEASE_VERSION", "\"$releaseVersion\"")
-
-        // Mod builds only: the launcher also shows the build time, with "+" for uncommitted changes,
-        // since the git hash can't tell two test builds apart. Empty for official builds, so their
-        // BuildConfig doesn't change (and force a recompile) on every build.
-        val buildStamp = if (dsMod) {
-            val dirty = providers.exec {
-                commandLine("git", "status", "--porcelain", "--untracked-files=no")
-            }.standardOutput.asText.get().isNotBlank()
-            SimpleDateFormat("yyyy-MM-dd HH:mm").format(Date()) + if (dirty) " +" else ""
-        } else ""
-        buildConfigField("String", "BUILD_STAMP", "\"$buildStamp\"")
 
         ndk {
             //noinspection ChromeOsAbiSupport
