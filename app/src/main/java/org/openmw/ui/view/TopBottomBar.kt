@@ -345,7 +345,7 @@ suspend fun attemptLaunchGame(
  * simplified launcher's settings screen runs exactly this, rather than a second implementation
  * that could drift from it.
  *
- * **The tuned performance defaults SURVIVE a reset, and not by accident:** all five live in
+ * **The tuned performance defaults SURVIVE a reset, and not by accident:** all eight live in
  * `settings.fallback.cfg`, which is the file being copied here, so a reset lands on them rather
  * than on the engine's defaults. `applyTunedPerformanceSettings()` is NOT re-run and must not be
  * relied on for this — it is version-stamped and would have already fired, so a reset that depended

@@ -2691,7 +2691,7 @@ private const val FPS_POLL_MS = 200L
  *  to track a change as it happens; the graph is what carries the long view. */
 private const val FPS_AVG_WINDOW_MS = 500f
 
-/** Reference lines on the graph, in milliseconds: our shipped 60fps cap and the 30fps floor. */
+/** Reference lines on the graph, in milliseconds: the 60fps budget and our shipped 30fps cap. */
 private const val FPS_MS_60 = 1000f / 60f
 private const val FPS_MS_30 = 1000f / 30f
 
@@ -2713,7 +2713,7 @@ private val FpsBad = Color(0xFFC75C5C)
  * **The graph plots WORK time, not the delivered frame interval, and that is the whole point.**
  * `Misc::FrameRateLimiter::limit()` overwrites its own reported duration with the frame cap exactly
  * whenever a frame finishes early, so anything derived from the engine's own `frametime` reads a
- * flat 16.667ms at our shipped `framerate limit = 60` and can never show headroom. Work time is
+ * flat 33.333ms at our shipped `framerate limit = 30` and can never show headroom. Work time is
  * measured before that sleep, so it shows how close each frame came to missing the cap. It is also
  * a SUPERSET of the delivered series: once the cap is actually being missed the two are equal, so
  * every spike a delivered-interval graph would show is still here.

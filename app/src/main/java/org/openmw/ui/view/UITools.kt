@@ -618,8 +618,10 @@ fun seedConsoleWindowSize() {
  * v1 (Sep 1 2026): `small feature culling pixel size = 8.0`, `preload num threads = 3`.
  * v2 (Sep 9 2026): `[Navigator] min update interval ms = 1000`, `write to navmeshdb = true`,
  *     `[Water] reflection detail = 1`.
+ * v3 (Nov 1 2026): `[Video] framerate limit = 30`, `[Camera] viewing distance = 3500`,
+ *     `[Terrain] object paging min size = 0.03`.
  */
-const val TUNED_PERF_SETTINGS_VERSION = 2
+const val TUNED_PERF_SETTINGS_VERSION = 3
 
 /**
  * Force this build's measured performance defaults into the user's `settings.cfg`.
@@ -692,6 +694,24 @@ const val TUNED_PERF_SETTINGS_VERSION = 2
  *   (`std::clamp(detail, mInterior ? 2 : 0, 5)`). Water had never been profiled in this project;
  *   Narsis showed none of this because it is inland, which is why the two test areas disagreed.
  *
+ * The v3 values were measured on the Retroid Pocket Duo Lite (Adreno 610, big cores at 2.0 GHz),
+ * which is a much weaker device than the one above, standing still in Balmora at night from one
+ * fixed save, Performance mode on:
+ * - `[Video] framerate limit = 30` (was 60). Outdoors in a town this device cannot reach 60: the
+ *   OSG draw thread sits at 96-97% of a core (simpleperf: ~38% OSG state/draw, ~34% Adreno driver,
+ *   ~18% gl4es, all per-draw-call cost) and frame WORK time is 25-28 ms. With vsync every frame is
+ *   then shown for 16.7 or 33.3 ms, so a 60 cap delivered an uneven 30-38 fps with frames
+ *   alternating between the two. 30 is the same average, evenly paced, and leaves the GPU and
+ *   draw thread idle part of each frame, which matters here: in Standard mode the GPU was
+ *   thermally capped at 600 of 950 MHz and ran 97% busy. Interiors lose 60 fps; that is the trade.
+ * - `[Camera] viewing distance = 3500` (was 7373): 31.7 -> 34.0 fps at the 60 cap, frames over
+ *   50 ms 5 -> 2 per 20 s. Small, near the noise, but the direction is plausible: OpenMW has no
+ *   occlusion culling, so in a town every house behind the visible facades is drawn too. Most of
+ *   the cost is inside 3500 anyway, which is why lowering it further is not worth the pop-in.
+ * - `[Terrain] object paging min size = 0.03` (was 0.01, the engine default). Not isolated
+ *   against 0.01; it is the value the device was tuned at, and 0.05 measured no gain over it
+ *   (30.4 vs 31.7 fps), so going higher only costs distant detail.
+ *
  * Deliberately NOT included: `[Cells] prediction time = 3` measured as noise (26.5 -> 25.4 ms/s,
  * inside route variance) and did not fix what it was aimed at, so shipping it would put an
  * unjustified value in front of every user; `[Terrain] lod factor = 0.5` is a real +9.3% but raises
@@ -708,6 +728,9 @@ fun applyTunedPerformanceSettings() {
     setSettingInSection(lines, "[Navigator]", "min update interval ms", "1000")
     setSettingInSection(lines, "[Navigator]", "write to navmeshdb", "true")
     setSettingInSection(lines, "[Water]", "reflection detail", "1")
+    setSettingInSection(lines, "[Video]", "framerate limit", "30")
+    setSettingInSection(lines, "[Camera]", "viewing distance", "3500")
+    setSettingInSection(lines, "[Terrain]", "object paging min size", "0.03")
 
     if (lines != original) {
         file.writeText(lines.joinToString("\n"))
