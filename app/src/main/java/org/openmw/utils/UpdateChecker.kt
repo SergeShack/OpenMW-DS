@@ -52,7 +52,7 @@ object UpdateChecker {
      * confirming with a throwaway prerelease before relying on it.
      */
     const val RELEASES_LATEST_URL =
-        "https://api.github.com/repos/Josh-Daniels/OpenMW-DS/releases/latest"
+        "https://api.github.com/repos/SergeShack/OpenMW-DS/releases/latest"
 
     /** GitHub rejects API requests with no User-Agent (403), so this header is mandatory. */
     private val USER_AGENT = "OpenMW-DS-Updater/${BuildConfig.RELEASE_VERSION}"

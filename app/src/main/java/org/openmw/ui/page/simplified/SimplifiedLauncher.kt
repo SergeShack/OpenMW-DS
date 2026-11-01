@@ -671,7 +671,7 @@ private val UpdateAccent = Color(0xFFEDA95B)
  *  bare page is the fallback when no tag is known. Deliberately NOT the API URL in UpdateChecker
  *  (that returns JSON) and NOT `/releases/latest` (a redirect that would show whatever is newest
  *  rather than the release we actually told the user about). */
-private const val RELEASES_PAGE_URL = "https://github.com/Josh-Daniels/OpenMW-DS/releases"
+private const val RELEASES_PAGE_URL = "https://github.com/SergeShack/OpenMW-DS/releases"
 
 /**
  * The update being offered, or null when there is nothing to tell the user about.
