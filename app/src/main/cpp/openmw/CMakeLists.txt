@@ -432,6 +432,7 @@ ExternalProject_Add(NG-GL4ES
 	COMMAND sed -i -e "s/3.22.1/3.19.6/g" <SOURCE_DIR>/3rdparty/SPIRV-Tools/CMakeLists.txt
 	COMMAND sed -i -e "s/VERSION_GREATER_EQUAL/VERSION_LESS/g" <SOURCE_DIR>/3rdparty/SPIRV-Tools/CMakeLists.txt
 	COMMAND sed -i -e "s/CMAKE_CXX_STANDARD 23/CMAKE_CXX_STANDARD 17/g" <SOURCE_DIR>/CMakeLists.txt
+	COMMAND patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/openmw/patches/gl4es/shader-conversion-cache.patch || true
 
 	CONFIGURE_COMMAND ${wrapper_command} cmake <SOURCE_DIR>
 	${COMMON_CMAKE_ARGS}

@@ -149,6 +149,7 @@ import org.openmw.utils.GameFilesPreferences.readAngle
 import org.openmw.utils.GameFilesPreferences.readSPIRV
 import org.openmw.utils.DisplayRoles
 import org.openmw.utils.topScreenLaunchOptions
+import java.io.File
 import kotlin.math.roundToInt
 
 @Suppress("DEPRECATION")
@@ -913,6 +914,13 @@ class EngineActivity : SDLActivity() {
             Os.setenv("OSG_VERTEX_BUFFER_HINT", "VBO", true)
             Os.setenv("OSG_GL_TEXTURE_STORAGE", "OFF", true)
             Os.setenv("LIBGL_INSTANCING", "1", true)
+
+            // gl4es keeps converted shaders here, so the next runs don't convert them again.
+            // Android empties this folder when the app is updated.
+            val shaderCache = File(context.codeCacheDir, "gl4es-shaders")
+            if (shaderCache.isDirectory || shaderCache.mkdirs()) {
+                Os.setenv("LIBGL_SHADERCACHE_DIR", shaderCache.absolutePath, true)
+            }
 
             Os.setenv("DETHRACE_ROOT_DIR", "${Constants.USER_FILE_STORAGE}/dethrace/", true)
 
