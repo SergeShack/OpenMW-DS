@@ -3,6 +3,7 @@ package org.openmw.companion
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.util.Log
+import java.util.concurrent.Executors
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,6 +46,10 @@ object GameStateRepository {
     private val _interiorMapBitmaps = MutableStateFlow<Map<Pair<Int, Int>, InteriorSegment>>(emptyMap())
     private const val MAX_INTERIOR_SEGMENTS = 25
     val interiorMapBitmaps: StateFlow<Map<Pair<Int, Int>, InteriorSegment>> = _interiorMapBitmaps.asStateFlow()
+
+    // Map segments are turned into bitmaps here, off the render thread. One thread keeps them in
+    // arrival order, which the interior (0,0) reset below relies on.
+    private val mapExecutor = Executors.newSingleThreadExecutor { r -> Thread(r, "CompanionMap") }
 
     // In-game Hide UI state (OpenMW's mHudEnabled), pushed from native via
     // EngineActivity.onHudVisibilityChanged whenever the player toggles Hide UI.
@@ -859,10 +864,24 @@ object GameStateRepository {
 
     /**
      * Called from JNI (render thread) when a map segment has been rendered.
-     * Flips the image vertically (OpenGL origin is bottom-left) and stores
-     * the resulting bitmap for the MapPanel to display.
+     * Hands the pixels to [mapExecutor] and returns at once: the conversion below took about
+     * 7 ms per segment on the render thread, and a cell change outdoors renders 3 to 5 segments
+     * in the same frame, which the game then waited for.
      */
     fun onMapTexture(
+        width: Int, height: Int, segX: Int, segY: Int, isInterior: Int,
+        boundsMinX: Float, boundsMinY: Float, angle: Float, centerX: Float, centerY: Float, rgba: ByteArray
+    ) {
+        mapExecutor.execute {
+            storeMapTexture(width, height, segX, segY, isInterior, boundsMinX, boundsMinY, angle, centerX, centerY, rgba)
+        }
+    }
+
+    /**
+     * Flips the image vertically (OpenGL origin is bottom-left) and stores
+     * the resulting bitmap for the MapPanel to display. Runs on [mapExecutor].
+     */
+    private fun storeMapTexture(
         width: Int, height: Int, segX: Int, segY: Int, isInterior: Int,
         boundsMinX: Float, boundsMinY: Float, angle: Float, centerX: Float, centerY: Float, rgba: ByteArray
     ) {
