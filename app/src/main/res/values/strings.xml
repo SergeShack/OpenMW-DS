@@ -185,7 +185,7 @@
     <string name="launcher_resolution_900p">900p</string>
     <string name="launcher_resolution_720p">720p</string>
     <string name="ini_managed_by_resolution">Set by the Resolution option, near the bottom of Settings under Device. Anything typed here is replaced the next time the launcher starts.</string>
-    <string name="ini_hint_water_reflection">Recommended: 1. Measured on this device in Bal Foyen, 35 fps at 2 and 49 at 1, a 40 percent gain, while still reflecting terrain and sky. 0 is faster again but reflects only the sky, which looks wrong. Interiors are not affected.</string>
+    <string name="ini_hint_water_reflection">Recommended: 0. On the Retroid Pocket Duo Lite in Balmora, 1 left 15 percent of frames uneven at the 30 fps cap and 0 cut that to 7 percent, reflecting only the sky. Interiors are not affected.</string>
     <string name="launcher_device_retroid">Retroid Dual Screen (Experimental)</string>
     <string name="launcher_device_single">Single Screen Device</string>
     <string name="launcher_device_custom">Custom (Experimental)</string>

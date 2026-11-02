@@ -620,8 +620,9 @@ fun seedConsoleWindowSize() {
  *     `[Water] reflection detail = 1`.
  * v3 (Nov 1 2026): `[Video] framerate limit = 30`, `[Camera] viewing distance = 3500`,
  *     `[Terrain] object paging min size = 0.03`.
+ * v4 (Nov 2 2026): `[Water] reflection detail = 0`.
  */
-const val TUNED_PERF_SETTINGS_VERSION = 3
+const val TUNED_PERF_SETTINGS_VERSION = 4
 
 /**
  * Force this build's measured performance defaults into the user's `settings.cfg`.
@@ -686,7 +687,8 @@ const val TUNED_PERF_SETTINGS_VERSION = 3
  *   set (windows, streetlights, flora) that the Aug 31 work identified as the draw-call problem.
  *   MEASURED standing still, one spot, one facing, Bal Foyen: **35 fps at 2, 49 at 1 (+40%), 53 at
  *   0 (+51%)** - so tier 1 keeps 78% of the win while still reflecting terrain and sky, which is
- *   what a player actually notices on open water. Tier 0 is sky-only and looks wrong.
+ *   what a player actually notices on open water. Tier 0 is sky-only and looks wrong. (Superseded by
+ *   v4, see below: on the Duo Lite tier 1 still cost too much, and sky-only was chosen there.)
  *   **The saving does NOT show up as reduced CPU** and looking for that will mislead: the OSG draw
  *   thread is SATURATED (~100% of one core, and only ever one, since a GL context is bound to a
  *   single thread), so it burns the same cycles either way - 23.38 Gcyc at tier 2 vs 23.42 at tier
@@ -712,6 +714,16 @@ const val TUNED_PERF_SETTINGS_VERSION = 3
  *   against 0.01; it is the value the device was tuned at, and 0.05 measured no gain over it
  *   (30.4 vs 31.7 fps), so going higher only costs distant detail.
  *
+ * The v4 value, same device, save and mode, at the 30 cap, so it shows as pacing rather than fps:
+ * - `[Water] reflection detail = 0` (was 1). At 1, 15% of frames slipped a vsync (a 16.7 + 50 ms
+ *   pair). Frames shown for exactly two vsyncs: **85% at 1, 93% at 0, 96% with `shader = false`**;
+ *   draw thread 75% -> 65% -> 62% of a core. GPU busy barely moves at 0 (67% -> 65%, against 52%
+ *   with the shader off), so where the GPU is the limit, as in Standard mode, 0 should help little
+ *   (not measured there); `shader = false` is left to the player because plain water is a much
+ *   larger visual loss. Not a limiter-clock problem: locking frames to the vsync grid with
+ *   EGL_ANDROID_presentation_time was tried and changed nothing, as frames came ready around their
+ *   present time however far ahead it was set.
+ *
  * Deliberately NOT included: `[Cells] prediction time = 3` measured as noise (26.5 -> 25.4 ms/s,
  * inside route variance) and did not fix what it was aimed at, so shipping it would put an
  * unjustified value in front of every user; `[Terrain] lod factor = 0.5` is a real +9.3% but raises
@@ -727,7 +739,7 @@ fun applyTunedPerformanceSettings() {
     setSettingInSection(lines, "[Cells]", "preload num threads", "3")
     setSettingInSection(lines, "[Navigator]", "min update interval ms", "1000")
     setSettingInSection(lines, "[Navigator]", "write to navmeshdb", "true")
-    setSettingInSection(lines, "[Water]", "reflection detail", "1")
+    setSettingInSection(lines, "[Water]", "reflection detail", "0")
     setSettingInSection(lines, "[Video]", "framerate limit", "30")
     setSettingInSection(lines, "[Camera]", "viewing distance", "3500")
     setSettingInSection(lines, "[Terrain]", "object paging min size", "0.03")
