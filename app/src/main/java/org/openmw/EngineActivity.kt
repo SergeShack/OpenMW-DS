@@ -464,6 +464,18 @@ class EngineActivity : SDLActivity() {
             Log.e(TAG, "initAlpha3: ", it)
         }
 
+        // gl4es keeps converted shaders here, so the next runs don't convert them again.
+        // Android empties this folder when the app is updated. Set here and not with the other
+        // variables: those run from the constructor, before the activity has a context.
+        runCatching {
+            val shaderCache = File(codeCacheDir, "gl4es-shaders")
+            if (shaderCache.isDirectory || shaderCache.mkdirs()) {
+                Os.setenv("LIBGL_SHADERCACHE_DIR", shaderCache.absolutePath, true)
+            }
+        }.onFailure {
+            Log.e(TAG, "shader cache dir: ", it)
+        }
+
         // Pin the render size BEFORE super.onCreate(), which is where SDLActivity builds the
         // SDLSurface — and SDLSurface's CONSTRUCTOR is what reads these statics and calls
         // getHolder().setFixedSize(). Set them any later and the surface has already been sized.
@@ -914,13 +926,6 @@ class EngineActivity : SDLActivity() {
             Os.setenv("OSG_VERTEX_BUFFER_HINT", "VBO", true)
             Os.setenv("OSG_GL_TEXTURE_STORAGE", "OFF", true)
             Os.setenv("LIBGL_INSTANCING", "1", true)
-
-            // gl4es keeps converted shaders here, so the next runs don't convert them again.
-            // Android empties this folder when the app is updated.
-            val shaderCache = File(context.codeCacheDir, "gl4es-shaders")
-            if (shaderCache.isDirectory || shaderCache.mkdirs()) {
-                Os.setenv("LIBGL_SHADERCACHE_DIR", shaderCache.absolutePath, true)
-            }
 
             Os.setenv("DETHRACE_ROOT_DIR", "${Constants.USER_FILE_STORAGE}/dethrace/", true)
 
