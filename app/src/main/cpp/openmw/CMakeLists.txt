@@ -39,9 +39,9 @@ set(BULLET_HASH SHA256=baa642c906576d4d98d041d0acb80d85dd6eff6e3c16a009b1abf1ccd
 set(MYGUI_VERSION 3.4.3)
 set(MYGUI_HASH SHA256=d1d5f294670ae71f7200ed4b30859018281d8cfd45d6a38d18b97a4aba604c42)
 
-# https://github.com/sisah2/ng_gl4es/releases
-set(GL4ES_VERSION f7a8370852579d6a11154178929a02e0cf60d574)
-set(GL4ES_HASH SHA256=b565e717c7d192e936bda25f3cb90ad8db398af56414ec08294b6716574c1a6d)
+# https://github.com/sisah2/Ng-gl4es, branch Openmw3. Pinned to the commit the device has been running
+# (the libng_gl4es.so formerly kept in backup-libs was built from it); the patches below apply on top.
+set(GL4ES_VERSION 1d217f53d54085792b961120e1059b446c4d5db2)
 
 # https://github.com/openscenegraph/OpenSceneGraph/releases
 set(OSG_VERSION 8aa8d91747ff414ab0de19aae1e0dbd739acea2c)
@@ -422,7 +422,7 @@ ExternalProject_Add(bullet
 
 ExternalProject_Add(NG-GL4ES
 	GIT_REPOSITORY https://github.com/sisah2/Ng-gl4es
-	GIT_TAG Openmw3
+	GIT_TAG ${GL4ES_VERSION}
 	GIT_SUBMODULES_RECURSE ON
 	DOWNLOAD_DIR ${download_dir}
 

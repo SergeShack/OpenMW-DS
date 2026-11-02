@@ -375,10 +375,13 @@ grep -n "<your new symbol>" "$SRC/<path/to/file>"
 
 ## Native library pinning
 
-Five native libraries (`libbsatool.so`, `libSDL2.so`, `libng_gl4es.so`, `libcollada-dom2.5-dp.so`, `libopenal.so`) are
+Four native libraries (`libbsatool.so`, `libSDL2.so`, `libcollada-dom2.5-dp.so`, `libopenal.so`) are
 pinned to known-working versions in `app/src/main/backup-libs/`. The build system automatically restores these after
 CMake builds them, since fresh macOS builds of these specific libraries produce binaries incompatible with the device.
 This happens automatically, so you don't need to do anything manually.
+
+`libng_gl4es.so` used to be pinned the same way. It is now built from source at the commit that binary came from
+(`GL4ES_VERSION` in `app/src/main/cpp/openmw/CMakeLists.txt`), so the patches in `patches/gl4es/` reach the APK.
 
 If you are building inside the project's Docker/Fedora environment (see `Dockerfile`), the pinning is less necessary as
 the Linux toolchain produces compatible binaries.
