@@ -1,0 +1,12 @@
+--- a/src/gl/fpe.c
++++ b/src/gl/fpe.c
+@@ -245,6 +245,9 @@ void APIENTRY_GL4ES fpe_ReleventState(fpe_state_t* dest, fpe_state_t* src, int f
+             dest->texture[i].texmat = 0;
+             dest->texture[i].texadjust = 0;
+             dest->texture[i].textype = 0;
++            // the custom copy of a GLSL program only adds clip planes and alpha test, so the
++            // texture format must not make one (it made a duplicate of nearly every program)
++            dest->texture[i].texformat = 0;
+         }
+         dest->colorsum = 0;
+         dest->normalize = 0;
