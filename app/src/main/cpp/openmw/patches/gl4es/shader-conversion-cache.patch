@@ -11,7 +11,7 @@
  
  // #define DEBUG
  #ifdef DEBUG
-@@ -666,6 +669,184 @@ static char* replace_version_to_es(const char* text, int esversion) {
+@@ -666,6 +669,185 @@
      return strdup(text);
  }
  
@@ -147,6 +147,7 @@
 +    glshader->source = strdup(source);
 +    glshader->converted = converted ? strdup(converted) : NULL;
 +    free(data);
++    InitVertexAttribNames();
 +    return 1;
 +}
 +
@@ -196,7 +197,7 @@
  void set_es_version();
  void APIENTRY_GL4ES gl4es_glShaderSource(GLuint shader, GLsizei count, const GLchar* const* string,
                                           const GLint* length) {
-@@ -705,6 +886,17 @@ void APIENTRY_GL4ES gl4es_glShaderSource(GLuint shader, GLsizei count, const GLc
+@@ -705,6 +887,17 @@
      }
      LOAD_GLES2(glShaderSource);
      if (gles_glShaderSource) {
@@ -214,7 +215,7 @@
          // adapt shader if needed (i.e. not an es2 context and shader is not #version 100)
          int isFPEShader = (strstr(glshader->source, fpeshader_signature) != NULL) ? 1 : 0;
          bool isLegacy = IsLegacyGLSLVersion(glshader->source);
-@@ -792,7 +984,12 @@ void APIENTRY_GL4ES gl4es_glShaderSource(GLuint shader, GLsizei count, const GLc
+@@ -792,7 +985,12 @@
              }
              DBG(SHUT_LOGD("\n[INFO] [Shader] Converted Shader source: \n%s", glshader->converted))
          }
@@ -227,3 +228,33 @@
          GLchar* finalSource = (glshader->converted) ? glshader->converted : glshader->source;
          char* tempSource = NULL;
          if (globals4es.es >= 3 && globals4es.esversion >= 300 && glshader->is_converted_essl_320) {
+--- a/src/gl/shaderconv.c
++++ b/src/gl/shaderconv.c
+@@ -382,6 +382,17 @@
+ char gl_VA[MAX_VATTRIB][32] = {0};
+ char gl4es_VA[MAX_VATTRIB][32] = {0};
+ 
++// Fills the generic vertex attribute names above. The converters below do it on their first run, but
++// a shader taken from the converted shader cache never runs them, and hasBuiltinAttrib needs the
++// names at link: left empty, every attribute index matched and got bound to an empty name.
++void InitVertexAttribNames() {
++    if (gl_VA[0][0] != '\0') return;
++    for (int i = 0; i < MAX_VATTRIB; ++i) {
++        sprintf(gl_VA[i], "%s%d", gl_VertexAttrib, i);
++        sprintf(gl4es_VA[i], "%s%d", gl4es_VertexAttrib, i);
++    }
++}
++
+ char* ConvertShaderBuiltInVariableOnly(const char* pEntry, int isVertex, shaderconv_need_t* need,
+                                        int doInsertDefinitions) {
+     int tmpsize = strlen(pEntry) * 2 + 500;
+--- a/src/gl/shaderconv.h
++++ b/src/gl/shaderconv.h
+@@ -8,6 +8,7 @@
+ char* ConvertShader(const char* pBuffer, int isVertex, shaderconv_need_t* need, int forwardPort);
+ char* ConvertShaderSimple(const char* pBuffer, int isVertex, shaderconv_need_t* need, int forwardPort);
+ 
++void InitVertexAttribNames();
+ int isBuiltinAttrib(const char* name);
+ int isBuiltinMatrix(const char* name);
+ 
