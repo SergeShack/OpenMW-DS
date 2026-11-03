@@ -4079,6 +4079,20 @@ end
 
 -- ===== Handlers =====
 
+-- The 0.2s exports, run one group per frame over the frames after the tick fires. All of them
+-- in a single frame took ~17 ms on the Duo Lite (40-60 ms at worst), longer than the render it
+-- runs beside, so the main thread waited on Lua every 0.2s. Inventory and character detail are
+-- the two heaviest (~5 and ~4 ms) and sit in different groups. The order is the old one, cut
+-- into pieces, and each export still runs once per tick.
+local SLOW_GROUPS = {
+    { exportSpells, exportSpellChances, exportSelectedSpell },
+    { exportInventory, exportEquipment, exportAmmo, exportEquippedCharge },
+    { exportActiveEffects, exportCharacter, exportCharacterDetail },
+    { exportTarget, exportPlayerStatus, exportDoorMarkers, exportNightWeight, exportWeather, exportDevState },
+}
+local slowGroup = 0
+local journalDue = false
+
 local function onUpdate(dt)
     statsTimer = statsTimer + dt
     if statsTimer >= STATS_INTERVAL then
@@ -4086,28 +4100,26 @@ local function onUpdate(dt)
         exportStats()
     end
     slowTimer = slowTimer + dt
-    if slowTimer >= SLOW_INTERVAL then
+    -- Not restarted mid-way: below ~20 fps the tick would come round again before the last
+    -- group had run, and those exports would never run at all.
+    if slowTimer >= SLOW_INTERVAL and slowGroup == 0 then
         slowTimer = 0
-        exportSpells()
-        exportSpellChances()
-        exportSelectedSpell()
-        exportInventory()
-        exportEquipment()
-        exportAmmo()
-        exportEquippedCharge()
-        exportActiveEffects()
-        exportCharacter()
-        exportCharacterDetail()
-        exportTarget()
-        exportPlayerStatus()
-        exportDoorMarkers()
-        exportNightWeight()
-        exportWeather()
-        exportDevState()
+        slowGroup = 1
+    end
+    local ranGroup = false
+    if slowGroup > 0 then
+        for _, fn in ipairs(SLOW_GROUPS[slowGroup]) do fn() end
+        slowGroup = slowGroup < #SLOW_GROUPS and slowGroup + 1 or 0
+        ranGroup = true
     end
     journalTimer = journalTimer + dt
     if journalTimer >= JOURNAL_INTERVAL then
         journalTimer = 0
+        journalDue = true
+    end
+    -- Waits for a frame with no slow group: getQuests() alone is 6-18 ms.
+    if journalDue and not ranGroup then
+        journalDue = false
         exportJournal()
         -- Rides the journal tick rather than the 0.2s slow one: the quest list changes about as
         -- often as the journal does, and both are change-detected, so an unchanged tick costs one
