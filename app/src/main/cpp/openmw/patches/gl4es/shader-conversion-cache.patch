@@ -11,7 +11,7 @@
  
  // #define DEBUG
  #ifdef DEBUG
-@@ -666,6 +669,169 @@ static char* replace_version_to_es(const char* text, int esversion) {
+@@ -666,6 +669,184 @@ static char* replace_version_to_es(const char* text, int esversion) {
      return strdup(text);
  }
  
@@ -178,10 +178,25 @@
 +    if (!ok || rename(tmp, path) != 0) remove(tmp);
 +}
 +
++// The first conversion in a process also builds glslang's tables of built-in functions, about
++// 350 ms. With a warm cache that first conversion can come in the middle of play, so one small
++// shader is converted at the first glShaderSource instead (the game is still starting then).
++// All converted shaders are #version 460 by the time they reach glslang, so that is the version
++// the tables are built for.
++static void shadercache_warm_up_glslang() {
++    static int done = 0;
++    if (done) return;
++    done = 1;
++    int return_code = 0;
++    char* result = GLSLtoGLSLES_c("#version 460\nvoid main() { gl_Position = vec4(0.0); }\n", GL_VERTEX_SHADER,
++                                  globals4es.esversion, 460, &return_code);
++    free(result);
++}
++
  void set_es_version();
  void APIENTRY_GL4ES gl4es_glShaderSource(GLuint shader, GLsizei count, const GLchar* const* string,
                                           const GLint* length) {
-@@ -705,6 +871,16 @@ void APIENTRY_GL4ES gl4es_glShaderSource(GLuint shader, GLsizei count, const GLc
+@@ -705,6 +886,17 @@ void APIENTRY_GL4ES gl4es_glShaderSource(GLuint shader, GLsizei count, const GLc
      }
      LOAD_GLES2(glShaderSource);
      if (gles_glShaderSource) {
@@ -190,6 +205,7 @@
 +        char* cache_original = NULL;
 +        int cache_first_uniform = glshader->uniforms_declarations_count;
 +        if (shadercache_dir()) {
++            shadercache_warm_up_glslang();
 +            shadercache_make_key(glshader, &cache_key);
 +            shadercache_path(&cache_key, glshader->source, cache_path, sizeof(cache_path));
 +            if (shadercache_load(glshader, &cache_key, cache_path)) goto converted;
@@ -198,7 +214,7 @@
          // adapt shader if needed (i.e. not an es2 context and shader is not #version 100)
          int isFPEShader = (strstr(glshader->source, fpeshader_signature) != NULL) ? 1 : 0;
          bool isLegacy = IsLegacyGLSLVersion(glshader->source);
-@@ -792,7 +968,12 @@ void APIENTRY_GL4ES gl4es_glShaderSource(GLuint shader, GLsizei count, const GLc
+@@ -792,7 +984,12 @@ void APIENTRY_GL4ES gl4es_glShaderSource(GLuint shader, GLsizei count, const GLc
              }
              DBG(SHUT_LOGD("\n[INFO] [Shader] Converted Shader source: \n%s", glshader->converted))
          }
