@@ -1,0 +1,55 @@
+Leave activators, doors and containers out of active grid object paging chunks (cell change hitch fix).
+
+With "object paging active grid" on, the terrain preload builds the paging chunks for the next grid in
+the background before the player crosses into it. But activators, doors and containers are animated:
+when their cell is loaded, Scene::addObject hands them to the mechanics, World::getAnimation finds
+them paged, takes them out of paging and blacklists them, and the blacklist drops every active grid
+chunk around them. So the chunks the preload had just built for the new cells were thrown away and
+built again on the main thread (the focus ray or the cull reach them first), each time a cell was
+entered for the first time in a session. Measured on a Retroid Pocket Duo Lite with the DSPerf probe
+and simpleperf: about 140 ms of a 260 ms frame on a west step, all of it ObjectPaging::createChunk.
+
+These three types never stay in an active grid chunk, so they are now left out of those chunks from
+the start, and blacklisting one of them no longer drops chunks. Distant chunks keep them as before.
+
+diff --git a/apps/openmw/mwrender/objectpaging.cpp b/apps/openmw/mwrender/objectpaging.cpp
+index 400b03b..891aa22 100644
+--- a/apps/openmw/mwrender/objectpaging.cpp
++++ b/apps/openmw/mwrender/objectpaging.cpp
+@@ -74,6 +74,15 @@ namespace MWRender
+             }
+         }
+ 
++        // Activators, doors and containers are animated: when their cell enters the active grid the
++        // scene hands them to the mechanics, and World::getAnimation takes them out of paging and
++        // blacklists them. So they never stay in an active grid chunk, and leaving them out from the
++        // start keeps the chunks the terrain preload builds for the next grid from being dropped.
++        bool unpagedInActiveGrid(int type)
++        {
++            return type == ESM::REC_ACTI || type == ESM::REC_DOOR || type == ESM::REC_CONT;
++        }
++
+         template <typename Record>
+         std::string_view getEsm4Model(const Record& record)
+         {
+@@ -686,6 +695,10 @@ namespace MWRender
+             }
+         }
+ 
++        if (activeGrid)
++            std::erase_if(
++                refs, [&](const auto& ref) { return unpagedInActiveGrid(store.findStatic(ref.second.mRefId)); });
++
+         const osg::Vec2f minBound = (center - osg::Vec2f(size / 2.f, size / 2.f));
+         const osg::Vec2f maxBound = (center + osg::Vec2f(size / 2.f, size / 2.f));
+         const osg::Vec2i floorMinBound(
+@@ -1056,7 +1069,8 @@ namespace MWRender
+ 
+     bool ObjectPaging::blacklistObject(int type, ESM::RefNum refnum, const osg::Vec3f& pos, const osg::Vec2i& cell)
+     {
+-        if (!typeFilter(type, false))
++        // the blacklist only applies to active grid chunks, and these are never in one
++        if (!typeFilter(type, false) || unpagedInActiveGrid(type))
+             return false;
+ 
+         {
