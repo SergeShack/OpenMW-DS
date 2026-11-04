@@ -6,6 +6,9 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
+import android.view.InputDevice
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -17,6 +20,8 @@ import androidx.compose.runtime.getValue
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.libsdl.app.SDLActivity
+import org.libsdl.app.SDLControllerManager
 import org.openmw.companion.CompanionScreen
 
 
@@ -150,6 +155,14 @@ class CompanionActivity : ComponentActivity() {
             dropFocusabilityOnceFocused()
         }
     }
+
+    // While this window has focus (coming up, or if focusability could not be dropped) the
+    // controller is delivered here. Relay it to the game, like the focus anchor does.
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+        forwardKeyToGame(event) || super.dispatchKeyEvent(event)
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
+        forwardMotionToGame(event) || super.dispatchGenericMotionEvent(event)
 
     /**
      * Whether `FLAG_NOT_FOCUSABLE` is actually present on the LIVE window attributes, plus the
@@ -294,11 +307,22 @@ class CompanionActivity : ComponentActivity() {
      * `EngineActivity.showPauseOverlay` already uses successfully on this display. Being a panel
      * it also sits ABOVE the main window in z-order, which is what lets it take focus from it.
      *
-     * **This does not make the game focusable at boot, and is not meant to.** While display 0 is
-     * the focused display the controller talks to this anchor, which swallows it — the same state
-     * 1.1.0 shipped, covered by `SPLASH_NOTICE_SWAPPED_CONTROLS` ("Tap the game screen to enable
-     * controls."). What it removes is the ANR, and what [dropFocusabilityOnceFocused] removes is
-     * the tap-to-steal. After that one tap the arrangement is stable for the session.
+     * **This does not make the game focusable at boot, and is not meant to.** While this display
+     * is the focused display the controller talks to this anchor. It used to swallow it — the
+     * state 1.1.0 shipped, covered by `SPLASH_NOTICE_SWAPPED_CONTROLS` ("Tap the game screen to
+     * enable controls."). What it removes is the ANR, and what [dropFocusabilityOnceFocused]
+     * removes is the tap-to-steal.
+     *
+     * **The anchor relays the controller to the game** ([forwardKeyToGame], [forwardMotionToGame]).
+     * Reported on the Retroid Pocket Duo Lite with Cocoon as the home app (Nov 4 2026), on the
+     * Custom profile's Fullscreen second screen: touching the bottom screen lost the controller
+     * until the top screen was touched. Confirmed fixed on device with Cocoon and with the Retroid
+     * launcher. A Presentation has no focused app, so when its display takes focus WindowManager
+     * falls back to the game's display; this activity is the focused app of its display, so the
+     * anchor keeps that display focused for as long as it has it. Whatever puts it on top (the
+     * launch, a tap, a focusable popup, the vendor), the keys now reach SDL through this window.
+     * SDL drops controller events while the game window is unfocused unless
+     * `SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS` is set; `EngineActivity.setEnvironmentVariables` sets it.
      *
      * @return true if the anchor is in place; the caller MUST NOT drop focusability otherwise.
      */
@@ -318,7 +342,13 @@ class CompanionActivity : ComponentActivity() {
             this.token = token
             gravity = Gravity.TOP or Gravity.START
         }
-        val view = View(this)
+        val view = object : View(this) {
+            override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+                forwardKeyToGame(event) || super.dispatchKeyEvent(event)
+
+            override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
+                forwardMotionToGame(event) || super.dispatchGenericMotionEvent(event)
+        }
         // Once the main window is non-focusable, this anchor is the display's focused window, and
         // the system bars follow the focused window. So it asks for the same immersive mode, and
         // asks again whenever the bars come back, like onCreate does for the main window.
@@ -422,6 +452,26 @@ class CompanionActivity : ComponentActivity() {
     companion object {
 
         private const val TAG = "CompanionActivity"
+
+        /**
+         * Hand a controller key that reached a companion window to SDL, the way the game's own
+         * `SDLSurface` would. Only controller devices: a back gesture or the volume keys on this
+         * display are left to the system. False means the event was not taken.
+         */
+        private fun forwardKeyToGame(event: KeyEvent): Boolean {
+            if (SDLActivity.mBrokenLibraries) return false
+            return runCatching {
+                SDLControllerManager.isDeviceSDLJoystick(event.deviceId) &&
+                    SDLActivity.handleKeyEvent(null, event.keyCode, event, null)
+            }.getOrDefault(false)
+        }
+
+        /** The analog sticks and triggers half of [forwardKeyToGame]. */
+        private fun forwardMotionToGame(event: MotionEvent): Boolean {
+            if (SDLActivity.mBrokenLibraries) return false
+            if (event.source and InputDevice.SOURCE_JOYSTICK != InputDevice.SOURCE_JOYSTICK) return false
+            return runCatching { SDLControllerManager.handleJoystickMotionEvent(event) }.getOrDefault(false)
+        }
 
         /**
          * The live instance, so `EngineActivity` can reach this window's `WindowManager` for the

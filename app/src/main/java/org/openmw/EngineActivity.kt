@@ -901,6 +901,10 @@ class EngineActivity : SDLActivity() {
             Os.setenv("OPENMW_GLES_VERSION", "32", true)
             Os.setenv("LIBGL_ES", "3", true)
 
+            // The companion's focus anchor relays the controller while it holds focus, and SDL
+            // ignores joystick events while the game window is unfocused. See CompanionActivity.
+            Os.setenv("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "1", true)
+
             Os.setenv("UQM_CONFIG_DIR", "${Constants.USER_FILE_STORAGE}/uqm", true)
 
             if ((UIStateManager.tempCodeGroup) != "UQM") {
