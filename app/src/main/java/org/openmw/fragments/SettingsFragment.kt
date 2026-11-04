@@ -343,5 +343,53 @@ private fun updateUserConfig(savedPath: String, gameFiles: GameFiles) {
                 writer.newLine()
             }
         }
+    } else {
+        repointUserGameFolder(esmFile, replacementStringData, "$savedPath/Data Files")
     }
 }
+
+/**
+ * Points the game folder line of a user cfg that has a load order at the folder just selected,
+ * and leaves every other line as it is.
+ *
+ * Without this the user cfg kept the old folder while [updateMainConfig] moved the internal one
+ * to the new folder, so the engine loaded both Data Files folders, and archives came from
+ * whichever was registered last.
+ *
+ * A game folder line is an enabled `data=` line whose folder holds Morrowind.esm, or that already
+ * names the new folder. A mod with its own "Data Files" folder has no Morrowind.esm, so it is
+ * never touched. The first game folder line becomes the new folder and any later one is dropped.
+ * A folder that is not on the device (an unmounted card) does not count and is left alone.
+ */
+private fun repointUserGameFolder(cfgFile: File, newDataLine: String, newFolder: String) {
+    if (!cfgFile.exists()) return
+    val lines = cfgFile.readLines()
+    var replaced = false
+    val result = lines.mapNotNull { line ->
+        val folder = userDataFolder(line) ?: return@mapNotNull line
+        val isGameFolder = sameFolder(folder, newFolder) || holdsMorrowindEsm(folder)
+        when {
+            !isGameFolder -> line
+            replaced -> null
+            else -> {
+                replaced = true
+                newDataLine
+            }
+        }
+    }
+    if (result != lines) cfgFile.writeText(result.joinToString("\n") + "\n")
+}
+
+/** The folder of an enabled `data=` line, or null for any other line. Quotes are removed. */
+private fun userDataFolder(line: String): String? {
+    val value = Regex("""^data\s*=\s*(.*)$""").find(line.trim())?.groupValues?.get(1)?.trim()
+        ?: return null
+    val unquoted = if (value.startsWith("\"")) value.drop(1).substringBefore("\"") else value
+    return unquoted.ifEmpty { null }
+}
+
+private fun sameFolder(a: String, b: String) =
+    a.trimEnd('/', '\\').equals(b.trimEnd('/', '\\'), ignoreCase = true)
+
+private fun holdsMorrowindEsm(folder: String): Boolean =
+    File(folder).listFiles()?.any { it.isFile && it.name.equals("Morrowind.esm", ignoreCase = true) } == true
