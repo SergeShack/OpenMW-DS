@@ -134,8 +134,10 @@ else()
     set(ICU_HOST_ENV "")
 endif()
 
-set(GLOBAL_CFLAGS "-w -fPIC -O3 -flto=thin")
-set(GLOBAL_CXXFLAGS "-w -fPIC -O3 -frtti -fexceptions -flto=thin")
+# The NDK toolchain adds a full -g. Line tables are enough for crash stacks and profiles (function
+# names and lines), and they make libopenmw.so and its link much smaller.
+set(GLOBAL_CFLAGS "-w -fPIC -O3 -flto=thin -gline-tables-only")
+set(GLOBAL_CXXFLAGS "-w -fPIC -O3 -frtti -fexceptions -flto=thin -gline-tables-only")
 if(APPLE)
     set(GLOBAL_LDFLAGS "-w -fPIC -flto=thin -fuse-ld=lld -L${CMAKE_BINARY_DIR}/prefix/lib")
 else()
