@@ -126,9 +126,12 @@ find_program(CCACHE_FOUND ccache)
 if(CCACHE_FOUND)
 	message (STATUS "CCACHE found and is being used.")
     set(CC_WRAPPER "ccache ")
+    # The host ICU build does not go through the wrapper script, so it gets ccache here.
+    set(ICU_HOST_ENV ${CMAKE_COMMAND} -E env CC=ccache\ gcc CXX=ccache\ g++)
 else()
 	message (STATUS "CCACHE not found.")
     set(CC_WRAPPER "")
+    set(ICU_HOST_ENV "")
 endif()
 
 set(GLOBAL_CFLAGS "-w -fPIC -O3 -flto=thin")
@@ -255,7 +258,7 @@ ExternalProject_Add(libicu-host
 	LOG_BUILD 1
 	LOG_INSTALL 1
 
-	CONFIGURE_COMMAND <SOURCE_DIR>/icu4c/source/configure
+	CONFIGURE_COMMAND ${ICU_HOST_ENV} <SOURCE_DIR>/icu4c/source/configure
     --enable-static
     --disable-shared
     --disable-tests
@@ -351,7 +354,7 @@ ExternalProject_Add(ffmpeg
 	--target-os=android
 	--enable-cross-compile
 	--cross-prefix=llvm-
-	--cc=${host}${ANDROID_API}-clang
+	--cc=${CC_WRAPPER}${host}${ANDROID_API}-clang
 	--arch=${ARCH}
 	--cpu=${FFMPEG_CPU}
 	--prefix=${prefix}
@@ -491,8 +494,8 @@ set(LUAJIT_MAKE_FLAGS
     	CFLAGS=
     	TARGET_CFLAGS=${GLOBAL_CFLAGS}
     	CROSS=llvm-
-    	STATIC_CC=${host}${ANDROID_API}-clang
-    	DYNAMIC_CC=${host}${ANDROID_API}-clang\ -fPIC
+    	STATIC_CC=${CC_WRAPPER}${host}${ANDROID_API}-clang
+    	DYNAMIC_CC=${CC_WRAPPER}${host}${ANDROID_API}-clang\ -fPIC
     	TARGET_LD=${host}${ANDROID_API}-clang
     	TARGET_SYS=Linux
     	PREFIX=${prefix}
