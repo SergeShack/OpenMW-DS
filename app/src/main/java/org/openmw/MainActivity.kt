@@ -123,15 +123,19 @@ class MainActivity : ComponentActivity() {
         Log.w(TAG, "Launched on display $currentDisplayId; relaunching on the top screen")
 
         // Copy the original intent so a system-delivered action/extras survive the bounce.
-        // NEW_TASK|CLEAR_TASK is what actually moves us: a task keeps its display, so
-        // reusing the existing one would land us right back on the wrong screen.
+        // NEW_TASK|MULTIPLE_TASK starts a fresh task on the top screen, and the one Android made
+        // on this display is removed. It was NEW_TASK|CLEAR_TASK, which reuses this task and has
+        // WindowManager move it across displays while its first activity is still starting. On
+        // the Retroid Pocket Duo Lite that move does not finish (Nov 4 2026, launching from
+        // Cocoon on the bottom screen): WindowManager reports display 0, but the window stays on
+        // the bottom panel and the top panel is left black.
         val corrected = Intent(intent ?: Intent(this, MainActivity::class.java)).apply {
             setClass(this@MainActivity, MainActivity::class.java)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK
             putExtra(EXTRA_DISPLAY_CORRECTED, true)
         }
         startActivity(corrected, topScreenLaunchOptions())
-        finish()
+        finishAndRemoveTask()
         return true
     }
 
