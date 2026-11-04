@@ -1,0 +1,33 @@
+--- a/apps/openmw/engine.cpp
++++ b/apps/openmw/engine.cpp
+@@ -358,6 +358,12 @@ bool OMW::Engine::frame(unsigned frameNumber, float frametime)
+     return true;
+ }
+ 
++#ifdef __ANDROID__
++// Defined in androidmain.cpp. Tells the JNI calls that come in on Java threads whether the
++// Environment exists, see "Engine lifetime" there.
++extern "C" void companionSetEngineAlive(bool alive);
++#endif
++
+ OMW::Engine::Engine(Files::ConfigurationManager& configurationManager)
+     : mWindow(nullptr)
+     , mEncoding(ToUTF8::WINDOWS_1252)
+@@ -394,10 +400,17 @@ OMW::Engine::Engine(Files::ConfigurationManager& configurationManager)
+             throw std::runtime_error("Could not initialize SDL! " + std::string(SDL_GetError()));
+         }
+     }
++#ifdef __ANDROID__
++    companionSetEngineAlive(true);
++#endif
+ }
+ 
+ OMW::Engine::~Engine()
+ {
++#ifdef __ANDROID__
++    // First, before anything is reset. Waits for a JNI call that is already inside.
++    companionSetEngineAlive(false);
++#endif
+     if (mScreenCaptureOperation != nullptr)
+     {
+         mScreenCaptureOperation->stop();

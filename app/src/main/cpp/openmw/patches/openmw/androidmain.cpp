@@ -36,6 +36,7 @@ int stderr = 0; // Hack: fix linker error
 #include <cstdlib>
 #include <deque>
 #include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <vector>
 
@@ -44,6 +45,24 @@ int stderr = 0; // Hack: fix linker error
  *******************************************************************************/
 
 #include <jni.h>
+
+// --- Engine lifetime ---------------------------------------------------------
+// MWBase::Environment only exists while an OMW::Engine does. JNI calls that come in on Java
+// threads (icon export, touch, surface changes) must not use it outside that time, or
+// Environment::get() reads through a null pointer. That is how the app crashed when the engine
+// stopped on a startup error: ~Engine had run, and the companion still asked for icons while the
+// error dialog was up. companion-engine-alive.patch sets the flag at the end of the Engine
+// constructor and clears it first thing in ~Engine. Clearing takes the lock exclusively, so a
+// call that is already inside finishes before anything is torn down. Calls made on the engine
+// thread itself do not need this.
+static std::shared_mutex g_engineLifeMutex;
+static bool g_engineAlive = false;
+
+extern "C" void companionSetEngineAlive(bool alive)
+{
+    std::unique_lock lock(g_engineLifeMutex);
+    g_engineAlive = alive;
+}
 
 // --- In-process companion log sink -------------------------------------------
 // Intercepts COMPANION_* lines written by the Lua mod and delivers them to
@@ -1238,6 +1257,10 @@ Java_org_openmw_EngineActivity_setCompanionTouchClick(JNIEnv* /*env*/, jclass /*
 extern "C" JNIEXPORT jboolean JNICALL
 Java_org_libsdl_app_SDLActivity_companionTouchClickActive(JNIEnv* /*env*/, jclass /*cls*/)
 {
+    // Called on the Android UI thread, see Engine lifetime at the top.
+    std::shared_lock engineLock(g_engineLifeMutex);
+    if (!g_engineAlive)
+        return JNI_FALSE;
     return (companionTouchClick() && companionIsGuiMode()) ? JNI_TRUE : JNI_FALSE;
 }
 // Per-element native HUD visibility bridges (companion-hud-elements.patch reads these in
@@ -1400,6 +1423,11 @@ extern "C" JNIEXPORT void JNICALL
 Java_org_openmw_EngineActivity_exportIconToPng(
     JNIEnv* env, jclass /*cls*/, jstring jIconPath, jstring jOutputPath)
 {
+    // Called on a Kotlin IO thread, see Engine lifetime at the top.
+    std::shared_lock engineLock(g_engineLifeMutex);
+    if (!g_engineAlive)
+        return;
+
     Resource::ResourceSystem* rs = MWBase::Environment::get().getResourceSystem();
     if (!rs) {
         Log(Debug::Error) << "exportIconToPng: ResourceSystem not available";
@@ -1601,6 +1629,11 @@ public:
 
 extern "C" void Java_org_libsdl_app_SDLActivity_omwSurfaceDestroyed(JNIEnv* env, jclass cls, jobject obj)
 {
+    // Called on the Android UI thread, see Engine lifetime at the top. g_viewer alone is not
+    // enough: when the engine stops on an error, go() never reaches g_viewer.release().
+    std::shared_lock engineLock(g_engineLifeMutex);
+    if (!g_engineAlive)
+        return;
     if (!g_viewer)
         return;
 
@@ -1615,6 +1648,10 @@ extern "C" void Java_org_libsdl_app_SDLActivity_omwSurfaceDestroyed(JNIEnv* env,
 
 extern "C" void Java_org_libsdl_app_SDLActivity_omwSurfaceRecreated(JNIEnv* env, jclass cls, jobject obj)
 {
+    // Same as omwSurfaceDestroyed above.
+    std::shared_lock engineLock(g_engineLifeMutex);
+    if (!g_engineAlive)
+        return;
     if (!g_viewer)
         return;
 
