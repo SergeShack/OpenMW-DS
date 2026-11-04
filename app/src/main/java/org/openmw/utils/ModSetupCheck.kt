@@ -19,7 +19,10 @@ import java.io.RandomAccessFile
  *   to produce, see [ModAssistantViewModel.modPathSelection];
  * - a plugin whose master is missing, disabled, or loads AFTER it: ESMReader's "asks for parent
  *   file ... but it is not available or has been loaded in the wrong order";
- * - a `fallback-archive=` whose file is in no data folder: the archive registration throws.
+ * - a `fallback-archive=` whose file is in no data folder: the archive registration throws. This
+ *   covers the internal file's base game archives too, which have no fix button;
+ * - no `fallback=` lines in the internal file once a game folder is set: the first fallback value
+ *   the engine reads throws "unknown fallback name".
  *
  * WARNINGs (a data folder that is not on the device, the same folder registered twice, two
  * different `Data Files` folders at once) do not stop the game but cost load time or load files the
@@ -211,6 +214,35 @@ object ModSetupCheck {
                     Fix.RemoveArchive(line.value),
                 )
             }
+        }
+        // The base game's archives are registered in the INTERNAL file, which no fix here writes,
+        // so there is no button: the archive has to be in the game folder. One the user file also
+        // registers was reported just above.
+        val userArchives = user.filter { it.enabled && it.key == "fallback-archive" }.map { it.value.lowercase() }.toSet()
+        for (line in internal.filter { it.enabled && it.key == "fallback-archive" }) {
+            val name = line.value.lowercase()
+            if (name !in onDisk && name !in userArchives) {
+                findings += Finding(
+                    Severity.ERROR,
+                    "Archive ${line.value} is not in any data folder. The game will not start. " +
+                        "Check that your game's Data Files folder is complete.",
+                )
+            }
+        }
+
+        // ---- Morrowind.ini values ----
+        // Selecting the game files converts Morrowind.ini into fallback= lines in the internal file.
+        // Without them the engine stops at "unknown fallback name". Only checked once a game folder
+        // is set, so a fresh install that has not picked one yet is not flagged.
+        val gameFolderSet = internal.any {
+            it.enabled && it.key == "data" && unquotePath(it.value).endsWith("Data Files", ignoreCase = true)
+        }
+        if (gameFolderSet && internal.none { it.enabled && it.key == "fallback" }) {
+            findings += Finding(
+                Severity.ERROR,
+                "The settings from Morrowind.ini are missing. The game will not start. Select your " +
+                    "game files again to restore them.",
+            )
         }
 
         // ---- Content and groundcover ----
