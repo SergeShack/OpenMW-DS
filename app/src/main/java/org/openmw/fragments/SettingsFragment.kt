@@ -248,6 +248,9 @@ private fun isMorrowindDataLine(line: String): Boolean {
     return value.trimEnd('/', '\\').endsWith("Data Files", ignoreCase = true)
 }
 
+/** The key of a `fallback=Key,value` line. */
+private fun fallbackKey(line: String): String = line.removePrefix("fallback=").substringBefore(",")
+
 private fun updateMainConfig(savedPath: String, gameFiles: GameFiles, convertedData: String) {
     val cfgFile = File(Constants.OPENMW_CFG)
     val replacementStringData = """data="${savedPath}/Data Files""""
@@ -282,8 +285,21 @@ private fun updateMainConfig(savedPath: String, gameFiles: GameFiles, convertedD
         }
     }
 
+    // The Morrowind.ini values (`fallback=Key,value`) are merged by key. A key from the new ini
+    // replaces the old line with that key, and old keys the new ini does not have are kept, so a
+    // cut-short ini can never leave the engine without a value ("unknown fallback name"). The new
+    // block goes where the first replaced line was. This used to be skipped whenever any line
+    // contained "fallback", which `fallback-archive=` lines always do, so lines once lost never
+    // came back.
+    val newFallbackLines = convertedData.lines().filter { it.startsWith("fallback=") }
+    val newFallbackKeys = newFallbackLines.map { fallbackKey(it) }.toSet()
+    fun isReplacedFallback(line: String) = line.startsWith("fallback=") && fallbackKey(line) in newFallbackKeys
+    val firstReplaced = modifiedLines.indexOfFirst { isReplacedFallback(it) }
+    val keptLines = modifiedLines.filterNot { isReplacedFallback(it) }.toMutableList()
+    if (firstReplaced >= 0) keptLines.addAll(firstReplaced, newFallbackLines)
+
     val finalContent = buildString {
-        modifiedLines.forEach { appendLine(it) }
+        keptLines.forEach { appendLine(it) }
 
         // Append game-specific settings if not already present
         gameFiles.bsaFallbackLines.forEach { line ->
@@ -292,9 +308,9 @@ private fun updateMainConfig(savedPath: String, gameFiles: GameFiles, convertedD
 
         if (!modifiedLines.contains(vfsPathLine)) appendLine(vfsPathLine)
 
-        if (convertedData.isNotBlank() && !modifiedLines.any { it.contains(convertedData.substringBefore("=")) }) {
-            appendLine(convertedData)
-        }
+        // No old line had any of the new keys (first selection, or the lines were lost): the block
+        // goes here, as it always has.
+        if (firstReplaced < 0) newFallbackLines.forEach { appendLine(it) }
 
         if (!modifiedLines.contains(overridePathLine)) appendLine(overridePathLine)
 
