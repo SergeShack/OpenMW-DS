@@ -621,8 +621,9 @@ fun seedConsoleWindowSize() {
  * v3 (Nov 1 2026): `[Video] framerate limit = 30`, `[Camera] viewing distance = 3500`,
  *     `[Terrain] object paging min size = 0.03`.
  * v4 (Nov 2 2026): `[Water] reflection detail = 0`.
+ * v5 (Nov 4 2026): `[Cells] target framerate = 30`.
  */
-const val TUNED_PERF_SETTINGS_VERSION = 4
+const val TUNED_PERF_SETTINGS_VERSION = 5
 
 /**
  * Force this build's measured performance defaults into the user's `settings.cfg`.
@@ -741,6 +742,9 @@ fun applyTunedPerformanceSettings() {
     setSettingInSection(lines, "[Navigator]", "write to navmeshdb", "true")
     setSettingInSection(lines, "[Water]", "reflection detail", "0")
     setSettingInSection(lines, "[Video]", "framerate limit", "30")
+    // The engine gives the background compile of preloaded meshes half of what is left of a frame at
+    // this rate (1 ms at least). At the default 60 nothing is ever left under the 30 fps cap above.
+    setSettingInSection(lines, "[Cells]", "target framerate", "30")
     setSettingInSection(lines, "[Camera]", "viewing distance", "3500")
     setSettingInSection(lines, "[Terrain]", "object paging min size", "0.03")
 

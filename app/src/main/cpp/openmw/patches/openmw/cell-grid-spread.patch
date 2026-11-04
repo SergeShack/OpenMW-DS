@@ -1,0 +1,178 @@
+Spread the cell loads and unloads of a grid change over the following frames (cell change hitch fix).
+
+When the player walks across a cell border outdoors, Scene::changeCellGrid unloads the row of cells
+that left the grid and loads the new row (3 cells, 5 on a diagonal), all in one frame. Measured on a
+Retroid Pocket Duo Lite with the DSPerf probe and simpleperf: about 55 ms of that frame on a west
+step, spread over hundreds of objects (insertCell 34 ms, unloadCell 11 ms), with no single part
+worth fixing on its own. The frame after it pays the first draw of all the new objects at once.
+
+A grid change asked for by walking (Scene::update) now only does the grid itself in its frame
+(navigator bounds, terrain and paging active grid, paged refs). The new cells are then loaded one
+per frame, nearest first, and the old ones unloaded one per frame after that. All of these cells are
+a cell or more away from the player when this happens, past the viewing distance. A second grid
+change works out what is left against its own grid; teleports, loading a game and changes to an
+interior still load everything at once as before, and drop whatever was waiting.
+
+diff --git a/apps/openmw/mwworld/scene.cpp b/apps/openmw/mwworld/scene.cpp
+index 316c1b9..af1ec77 100644
+--- a/apps/openmw/mwworld/scene.cpp
++++ b/apps/openmw/mwworld/scene.cpp
+@@ -352,14 +352,48 @@ namespace MWWorld
+         if (mChangeCellGridRequest.has_value())
+         {
+             changeCellGrid(mChangeCellGridRequest->mPosition, mChangeCellGridRequest->mCellIndex,
+-                mChangeCellGridRequest->mChangeEvent);
++                mChangeCellGridRequest->mChangeEvent, true);
+             mChangeCellGridRequest.reset();
+         }
++        else
++            processPendingCellChange();
+ 
+         mPreloader->updateCache(mRendering.getReferenceTime());
+         preloadCells(duration);
+     }
+ 
++    void Scene::processPendingCellChange()
++    {
++        if (mPendingCellLoads.empty() && mPendingCellUnloads.empty())
++            return;
++
++        const osg::Vec3f pos = mWorld.getPlayerPtr().getRefData().getPosition().asVec3();
++        auto navigatorUpdateGuard = mNavigator.makeUpdateGuard();
++
++        if (!mPendingCellLoads.empty())
++        {
++            const ESM::ExteriorCellLocation index = mPendingCellLoads.front();
++            mPendingCellLoads.erase(mPendingCellLoads.begin());
++            if (!isCellInCollection(index, mActiveCells))
++                loadCell(mWorld.getWorldModel().getExterior(index), nullptr, mPendingCellRespawn, pos,
++                    navigatorUpdateGuard.get());
++        }
++        else
++        {
++            CellStore* cell = mPendingCellUnloads.front();
++            mPendingCellUnloads.erase(mPendingCellUnloads.begin());
++            unloadCell(cell, navigatorUpdateGuard.get());
++        }
++
++        mNavigator.update(pos, navigatorUpdateGuard.get());
++    }
++
++    void Scene::clearPendingCellChange()
++    {
++        mPendingCellLoads.clear();
++        mPendingCellUnloads.clear();
++    }
++
+     void Scene::unloadCell(CellStore* cell, const DetourNavigator::UpdateGuard* navigatorUpdateGuard)
+     {
+         if (mActiveCells.find(cell) == mActiveCells.end())
+@@ -531,6 +565,7 @@ namespace MWWorld
+ 
+     void Scene::clear()
+     {
++        clearPendingCellChange();
+         auto navigatorUpdateGuard = mNavigator.makeUpdateGuard();
+         for (auto iter = mActiveCells.begin(); iter != mActiveCells.end();)
+         {
+@@ -612,7 +647,8 @@ namespace MWWorld
+             ESM::ExteriorCellLocation(cell.x(), cell.y(), mCurrentCell->getCell()->getWorldSpace()), changeEvent };
+     }
+ 
+-    void Scene::changeCellGrid(const osg::Vec3f& pos, ESM::ExteriorCellLocation playerCellIndex, bool changeEvent)
++    void Scene::changeCellGrid(
++        const osg::Vec3f& pos, ESM::ExteriorCellLocation playerCellIndex, bool changeEvent, bool spread)
+     {
+         const int halfGridSize
+             = isEsm4Ext(playerCellIndex.mWorldspace) ? Constants::ESM4CellGridRadius : Constants::CellGridRadius;
+@@ -620,6 +656,9 @@ namespace MWWorld
+         const int playerCellX = playerCellIndex.mX;
+         const int playerCellY = playerCellIndex.mY;
+ 
++        // Whatever an earlier spread change left is worked out again against the new grid below.
++        clearPendingCellChange();
++
+         for (auto iter = mActiveCells.begin(); iter != mActiveCells.end();)
+         {
+             auto* cell = *iter++;
+@@ -628,7 +667,12 @@ namespace MWWorld
+                 const auto dx = std::abs(playerCellX - cell->getCell()->getGridX());
+                 const auto dy = std::abs(playerCellY - cell->getCell()->getGridY());
+                 if (dx > halfGridSize || dy > halfGridSize)
+-                    unloadCell(cell, navigatorUpdateGuard.get());
++                {
++                    if (spread)
++                        mPendingCellUnloads.push_back(cell);
++                    else
++                        unloadCell(cell, navigatorUpdateGuard.get());
++                }
+             }
+             else
+                 unloadCell(cell, navigatorUpdateGuard.get());
+@@ -669,17 +713,24 @@ namespace MWWorld
+             cellsPositionsToLoad.emplace_back(x, y);
+         });
+ 
+-        Loading::Listener* loadingListener = MWBase::Environment::get().getWindowManager()->getLoadingScreen();
++        Loading::Listener* loadingListener
++            = spread ? nullptr : MWBase::Environment::get().getWindowManager()->getLoadingScreen();
+         Loading::ScopedLoad load(loadingListener);
+-        loadingListener->setLabel("#{OMWEngine:LoadingExterior}");
+-        loadingListener->setProgressRange(refsToLoad);
++        if (loadingListener != nullptr)
++        {
++            loadingListener->setLabel("#{OMWEngine:LoadingExterior}");
++            loadingListener->setProgressRange(refsToLoad);
++        }
+ 
+         sortCellsToLoad(playerCellX, playerCellY, cellsPositionsToLoad);
+ 
++        mPendingCellRespawn = changeEvent;
+         for (const auto& [x, y] : cellsPositionsToLoad)
+         {
+             ESM::ExteriorCellLocation indexToLoad = { x, y, playerCellIndex.mWorldspace };
+-            if (!isCellInCollection(indexToLoad, mActiveCells))
++            if (spread)
++                mPendingCellLoads.push_back(indexToLoad);
++            else if (!isCellInCollection(indexToLoad, mActiveCells))
+             {
+                 CellStore& cell = mWorld.getWorldModel().getExterior(indexToLoad);
+                 loadCell(cell, loadingListener, changeEvent, pos, navigatorUpdateGuard.get());
+@@ -952,6 +1003,7 @@ namespace MWWorld
+ 
+         Log(Debug::Info) << "Changing to interior";
+ 
++        clearPendingCellChange();
+         auto navigatorUpdateGuard = mNavigator.makeUpdateGuard();
+ 
+         // unload
+diff --git a/apps/openmw/mwworld/scene.hpp b/apps/openmw/mwworld/scene.hpp
+index 2e81325..fe9d8ef 100644
+--- a/apps/openmw/mwworld/scene.hpp
++++ b/apps/openmw/mwworld/scene.hpp
+@@ -114,13 +114,24 @@ namespace MWWorld
+ 
+         std::optional<ChangeCellGridRequest> mChangeCellGridRequest;
+ 
++        // OpenMW-DS: a grid change while walking loads the new cells and unloads the old ones one per frame
++        // in the frames after it (nearest first, loads before unloads). All of them are a cell or more from
++        // the player, past the viewing distance.
++        std::vector<ESM::ExteriorCellLocation> mPendingCellLoads;
++        std::vector<CellStore*> mPendingCellUnloads;
++        bool mPendingCellRespawn = false;
++
++        void processPendingCellChange();
++        void clearPendingCellChange();
++
+         void insertCell(CellStore& cell, Loading::Listener* loadingListener,
+             const DetourNavigator::UpdateGuard* navigatorUpdateGuard);
+ 
+         osg::Vec2i mCurrentGridCenter;
+ 
+         // Load and unload cells as necessary to create a cell grid with "X" and "Y" in the center
+-        void changeCellGrid(const osg::Vec3f& pos, ESM::ExteriorCellLocation playerCellIndex, bool changeEvent = true);
++        void changeCellGrid(const osg::Vec3f& pos, ESM::ExteriorCellLocation playerCellIndex, bool changeEvent = true,
++            bool spread = false);
+ 
+         void requestChangeCellGrid(const osg::Vec3f& position, const osg::Vec2i& cell, bool changeEvent = true);
+ 
