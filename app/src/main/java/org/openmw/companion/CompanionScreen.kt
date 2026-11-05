@@ -5666,10 +5666,45 @@ private fun encumbranceColor(enc: Dynamic): Color = when {
 private fun playerPackHeader(enc: Dynamic): AnnotatedString =
     buildAnnotatedString {
         append("You ")
+        append(packWeight(enc))
+    }
+
+/** "145/200kg" tinted by load ([encumbranceColor]). The SPLIT grid columns show it on its own
+ *  after "You", in the smaller data font, because there the header shares its line with the sort
+ *  chips: as one ellipsized string the max weight was the part that got cut off. */
+private fun packWeight(enc: Dynamic): AnnotatedString =
+    buildAnnotatedString {
         withStyle(SpanStyle(color = encumbranceColor(enc))) {
             append("${dynValue(enc)}kg")
         }
     }
+
+/** Header row of a SPLIT grid column: [header] in the display font, then [headerRight] if any,
+ *  then the column's sort chips. [header] is the part that ellipsizes; [headerRight] (the
+ *  player's weight) is never shortened. */
+@Composable
+private fun GridColumnHeader(
+    header: AnnotatedString,
+    headerRight: AnnotatedString?,
+    chips: @Composable () -> Unit
+) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            header,
+            color = BronzeLight, fontSize = 14.sp,
+            fontFamily = MwDisplay, fontWeight = FontWeight.Bold,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = headerRight == null)
+        )
+        if (headerRight != null) {
+            Spacer(Modifier.width(6.dp))
+            Text(headerRight, color = Bone, fontSize = 12.sp, fontFamily = MwData, maxLines = 1, softWrap = false)
+            Spacer(Modifier.weight(1f))
+        }
+        Spacer(Modifier.width(6.dp))
+        chips()
+    }
+}
 
 /** Right-aligned header info for a player SHELF panel: "123g  145/200kg", gold on BronzeLight and
  *  the weight tinted by load ([encumbranceColor]). Shared by looting AND barter (both show the
@@ -6252,7 +6287,8 @@ fun LootingTopOverlay() {
         ) {
             // LEFT: player.
             LootGridColumn(
-                header = playerPackHeader(liveEncumbrance),
+                header = AnnotatedString("You"),
+                headerRight = packWeight(liveEncumbrance),
                 items = playerItems,
                 isPlayerSide = true,
                 isWorn = { isWorn(it) },
@@ -6327,6 +6363,8 @@ fun LootingTopOverlay() {
 @Composable
 private fun LootGridColumn(
     header: AnnotatedString,
+    /** Shown after [header] and never shortened; see [GridColumnHeader]. */
+    headerRight: AnnotatedString? = null,
     items: List<InventoryItem>,
     isPlayerSide: Boolean,
     isWorn: (InventoryItem) -> Boolean,
@@ -6351,17 +6389,7 @@ private fun LootGridColumn(
     Column(modifier) {
         // Header + this column's sort chips on one line. The chips are `compact` because every dp
         // spent here comes out of the item grid below (see SPLIT_PANEL_HEIGHT_FRACTION).
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                header,
-                color = BronzeLight, fontSize = 14.sp,
-                fontFamily = MwDisplay, fontWeight = FontWeight.Bold,
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(Modifier.width(6.dp))
-            SortChipRow(sort, compact = true)
-        }
+        GridColumnHeader(header, headerRight) { SortChipRow(sort, compact = true) }
         Spacer(Modifier.height(4.dp))
         val presentCats = remember(items) { items.map { it.category }.toSet() }
         val tabs = remember(presentCats) { INV_CATEGORIES.filter { grp -> grp.cats.any { it in presentCats } } }
@@ -13429,7 +13457,8 @@ fun BarterTopOverlay() {
             BarterGridColumn(
                 // Same "You <weight>kg" header the looting columns use — see playerPackHeader for
                 // why it is "You" rather than the character name, and why gold is not repeated here.
-                header = playerPackHeader(playerEnc),
+                header = AnnotatedString("You"),
+                headerRight = packWeight(playerEnc),
                 items = playerCol,
                 isPlayerSide = true,
                 selectedCategory = playerCat,
@@ -13508,6 +13537,8 @@ fun BarterTopOverlay() {
 @Composable
 private fun BarterGridColumn(
     header: AnnotatedString,
+    /** Shown after [header] and never shortened; see [GridColumnHeader]. */
+    headerRight: AnnotatedString? = null,
     items: List<BarterItem>,
     isPlayerSide: Boolean,
     selectedCategory: String?,
@@ -13524,17 +13555,7 @@ private fun BarterGridColumn(
 ) {
     Column(modifier) {
         // Header + this column's sort chips on one line (compact — see LootGridColumn).
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                header,
-                color = BronzeLight, fontSize = 14.sp,
-                fontFamily = MwDisplay, fontWeight = FontWeight.Bold,
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(Modifier.width(6.dp))
-            SortChipRow(sort, BARTER_SORTS, compact = true)
-        }
+        GridColumnHeader(header, headerRight) { SortChipRow(sort, BARTER_SORTS, compact = true) }
         Spacer(Modifier.height(4.dp))
         val presentCats = remember(items) { items.map { it.category }.toSet() }
         val tabs = remember(presentCats) { BARTER_CATEGORIES.filter { it.cat in presentCats } }
@@ -14156,7 +14177,10 @@ private fun TopStatBar(state: GameState, modifier: Modifier = Modifier) {
             .clip(RoundedCornerShape(3.dp))
             .background(FloatStone)
             .border(2.dp, Bronze, RoundedCornerShape(3.dp))
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            // 6dp, not 10: the Effects column (label + dot counts) is the tallest child and at the
+            // default text size it was cut at the bottom. The stat columns are centred, so they
+            // do not move.
+            .padding(horizontal = 14.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -14183,7 +14207,7 @@ private fun TopStatBar(state: GameState, modifier: Modifier = Modifier) {
                     color = BronzeLight, fontSize = 12.sp,
                     fontFamily = MwDisplay, fontWeight = FontWeight.Bold
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(2.dp))
                 EffectsSummary(state.activeEffects)
             }
         }
