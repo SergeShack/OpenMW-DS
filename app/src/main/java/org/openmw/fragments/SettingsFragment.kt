@@ -251,6 +251,42 @@ private fun isMorrowindDataLine(line: String): Boolean {
 /** The key of a `fallback=Key,value` line. */
 private fun fallbackKey(line: String): String = line.removePrefix("fallback=").substringBefore(",")
 
+/**
+ * The game's main font, by the name the engine looks it up under (`FontLoader::loadFonts`).
+ *
+ * Morrowind.ini names its own bitmap font there, `magic_cards_regular`. A bitmap font keeps the
+ * size baked into its .fnt file, so `[GUI] font size` does nothing to it: only the line height
+ * follows the setting (`FontLoader::overrideLineHeight`). MysticCards is OpenMW's TrueType copy of
+ * that font, shipped in `resources/vfs/fonts`, and it takes its size from the setting. Tried on the
+ * Duo Lite on Nov 5 2026: with the bitmap font, `font size = 18` changed nothing on screen; with
+ * MysticCards the tooltips on the top screen became readable.
+ *
+ * A player who wants the original font back puts `fallback=Fonts_Font_0,magic_cards_regular` in
+ * the user openmw.cfg. The engine reads that file after this one, and for a repeated fallback key
+ * the last value wins (`components/fallback/validate.cpp`).
+ */
+private const val GAME_FONT_KEY = "Fonts_Font_0"
+private const val GAME_FONT_LINE = "fallback=$GAME_FONT_KEY,MysticCards"
+
+private fun withGameFont(line: String): String =
+    if (line.startsWith("fallback=") && fallbackKey(line) == GAME_FONT_KEY) GAME_FONT_LINE else line
+
+/**
+ * Point the main font at MysticCards in the internal openmw.cfg ([GAME_FONT_LINE]).
+ *
+ * Runs on every launcher start, before the engine is started. [updateMainConfig] does the same for
+ * a new Morrowind.ini import, but it only runs on a folder selection, so installs that imported the
+ * ini before this change would otherwise keep the bitmap font. Only an existing line is changed:
+ * without one the ini has not been imported yet, and [updateMainConfig] writes it then.
+ */
+fun useTrueTypeGameFont() {
+    val cfgFile = File(Constants.OPENMW_CFG)
+    if (!cfgFile.exists()) return
+    val original = cfgFile.readLines()
+    val lines = original.map(::withGameFont)
+    if (lines != original) cfgFile.writeText(lines.joinToString("\n") + "\n")
+}
+
 private fun updateMainConfig(savedPath: String, gameFiles: GameFiles, convertedData: String) {
     val cfgFile = File(Constants.OPENMW_CFG)
     val replacementStringData = """data="${savedPath}/Data Files""""
@@ -291,7 +327,8 @@ private fun updateMainConfig(savedPath: String, gameFiles: GameFiles, convertedD
     // block goes where the first replaced line was. This used to be skipped whenever any line
     // contained "fallback", which `fallback-archive=` lines always do, so lines once lost never
     // came back.
-    val newFallbackLines = convertedData.lines().filter { it.startsWith("fallback=") }
+    // The ini's font line is replaced on the way in, see GAME_FONT_LINE.
+    val newFallbackLines = convertedData.lines().filter { it.startsWith("fallback=") }.map(::withGameFont)
     val newFallbackKeys = newFallbackLines.map { fallbackKey(it) }.toSet()
     fun isReplacedFallback(line: String) = line.startsWith("fallback=") && fallbackKey(line) in newFallbackKeys
     val firstReplaced = modifiedLines.indexOfFirst { isReplacedFallback(it) }

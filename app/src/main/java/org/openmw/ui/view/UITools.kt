@@ -627,8 +627,12 @@ fun seedConsoleWindowSize() {
  *     `[Terrain] object paging min size = 0.03`.
  * v4 (Nov 2 2026): `[Water] reflection detail = 0`.
  * v5 (Nov 4 2026): `[Cells] target framerate = 30`.
+ * v6 (Nov 5 2026): `[GUI] font size = 18`. Not a performance value; it rides this pass because it
+ *     has the same problem (installs in the field never see `settings.fallback.cfg` again) and must
+ *     stay the player's to change. It only has an effect with the TrueType game font, see
+ *     `useTrueTypeGameFont`.
  */
-const val TUNED_PERF_SETTINGS_VERSION = 5
+const val TUNED_PERF_SETTINGS_VERSION = 6
 
 /**
  * Force this build's measured performance defaults into the user's `settings.cfg`.
@@ -752,6 +756,8 @@ fun applyTunedPerformanceSettings() {
     setSettingInSection(lines, "[Cells]", "target framerate", "30")
     setSettingInSection(lines, "[Camera]", "viewing distance", "3500")
     setSettingInSection(lines, "[Terrain]", "object paging min size", "0.03")
+    // The engine's maximum (12..18). Larger tooltips and menu text on the top screen.
+    setSettingInSection(lines, "[GUI]", "font size", "18")
 
     if (lines != original) {
         file.writeText(lines.joinToString("\n"))

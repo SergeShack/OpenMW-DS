@@ -33,6 +33,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.openmw.fragments.useTrueTypeGameFont
 import org.openmw.modDownloader.ModDatabase
 import org.openmw.modDownloader.ModListManager
 import org.openmw.ui.controls.UIStateManager
@@ -181,6 +182,9 @@ class MainActivity : ComponentActivity() {
                 // this app overwriting a resolution the player chose; this one never overwrites
                 // anything (see seedConsoleWindowSize).
                 seedConsoleWindowSize()
+                // The internal openmw.cfg, not settings.cfg, and owned by the app, so every launch.
+                // Without it the `[GUI] font size` pushed below does nothing; see GAME_FONT_LINE.
+                useTrueTypeGameFont()
                 // Push this build's measured performance defaults ONCE per version. Must run here,
                 // before the engine is ever started: settings.cfg is read at engine startup and
                 // rewritten from memory on a clean exit, so a write made while the game is running
