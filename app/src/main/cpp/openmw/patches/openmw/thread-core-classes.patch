@@ -1,0 +1,168 @@
+OpenMW-DS: background threads on the little cores, the Lua worker on the big ones.
+
+On Android the scheduler places threads by load, not priority. The idle priority navmesh
+thread took a big core while building tiles, and the Lua worker, idle most of each frame, was
+put on a little core; a frame with more Lua work then ran there at half speed and the main
+thread waited for it (frames of 40-55 ms while walking).
+
+diff -ruN a/apps/openmw/mwlua/worker.cpp b/apps/openmw/mwlua/worker.cpp
+--- a/apps/openmw/mwlua/worker.cpp
++++ b/apps/openmw/mwlua/worker.cpp
+@@ -5,6 +5,7 @@
+ #include "apps/openmw/profile.hpp"
+ 
+ #include <components/debug/debuglog.hpp>
++#include <components/misc/thread.hpp>
+ #include <components/settings/values.hpp>
+ 
+ #include <cassert>
+@@ -73,6 +74,9 @@
+ 
+     void Worker::run() noexcept
+     {
++        // OpenMW-DS: the main thread waits for this one every frame; on a little core a frame
++        // with more Lua work (garbage collection, the companion's exports) took twice as long.
++        Misc::setCurrentThreadBigCores();
+         while (true)
+         {
+             std::unique_lock<std::mutex> lk(mMutex);
+diff -ruN a/components/detournavigator/asyncnavmeshupdater.cpp b/components/detournavigator/asyncnavmeshupdater.cpp
+--- a/components/detournavigator/asyncnavmeshupdater.cpp
++++ b/components/detournavigator/asyncnavmeshupdater.cpp
+@@ -452,6 +452,9 @@
+     {
+         Log(Debug::Debug) << "Start process navigator jobs by thread=" << std::this_thread::get_id();
+         Misc::setCurrentThreadIdlePriority();
++        // OpenMW-DS: tiles are built in the background while walking, tens of ms each; on a big
++        // core that pushed the Lua worker to a little core and the main thread waited for it.
++        Misc::setCurrentThreadLittleCores();
+         while (!mShouldStop)
+         {
+             if (JobIt job = getNextJob(); job != mJobs.end())
+diff -ruN a/components/misc/thread.cpp b/components/misc/thread.cpp
+--- a/components/misc/thread.cpp
++++ b/components/misc/thread.cpp
+@@ -2,13 +2,18 @@
+ 
+ #include <components/debug/debuglog.hpp>
+ 
++#include <algorithm>
+ #include <cstring>
++#include <string>
+ #include <thread>
+ 
+ #ifdef __linux__
+ 
++#include <fstream>
+ #include <pthread.h>
+ #include <sched.h>
++#include <unistd.h>
++#include <vector>
+ 
+ namespace Misc
+ {
+@@ -22,6 +27,56 @@
+             Log(Debug::Warning) << "Failed to set idle priority for thread=" << std::this_thread::get_id() << ": "
+                                 << std::generic_category().message(errno);
+     }
++
++    namespace
++    {
++        // On Android the scheduler picks a core by load, not by priority: an idle priority thread
++        // doing long work still takes a big core, and a thread that is mostly waiting is put on a
++        // little core, where a long frame of its work then takes twice as long. The cores with the
++        // lowest cpu_capacity are the little ones. The affinity is left alone when the capacities
++        // cannot be read or all cores are the same.
++        void setCurrentThreadCores([[maybe_unused]] bool little)
++        {
++#ifdef __ANDROID__
++            const long count = sysconf(_SC_NPROCESSORS_CONF);
++            std::vector<long> capacity;
++            for (long i = 0; i < count && i < CPU_SETSIZE; ++i)
++            {
++                std::ifstream file("/sys/devices/system/cpu/cpu" + std::to_string(i) + "/cpu_capacity");
++                long value = 0;
++                if (!(file >> value) || value <= 0)
++                    return;
++                capacity.push_back(value);
++            }
++            if (capacity.empty())
++                return;
++            const long lowest = *std::min_element(capacity.begin(), capacity.end());
++            if (lowest == *std::max_element(capacity.begin(), capacity.end()))
++                return;
++            cpu_set_t set;
++            CPU_ZERO(&set);
++            for (std::size_t i = 0; i < capacity.size(); ++i)
++                if ((capacity[i] == lowest) == little)
++                    CPU_SET(i, &set);
++            const char* kind = little ? "little" : "big";
++            if (sched_setaffinity(0, sizeof(set), &set) == 0)
++                Log(Debug::Verbose) << "Using the " << kind << " cores for thread=" << std::this_thread::get_id();
++            else
++                Log(Debug::Warning) << "Failed to use the " << kind << " cores for thread="
++                                    << std::this_thread::get_id() << ": " << std::generic_category().message(errno);
++#endif
++        }
++    }
++
++    void setCurrentThreadLittleCores()
++    {
++        setCurrentThreadCores(true);
++    }
++
++    void setCurrentThreadBigCores()
++    {
++        setCurrentThreadCores(false);
++    }
+ }
+ 
+ #elif defined(WIN32)
+@@ -38,6 +93,10 @@
+             Log(Debug::Warning) << "Failed to set idle priority for thread=" << std::this_thread::get_id() << ": "
+                                 << GetLastError();
+     }
++
++    void setCurrentThreadLittleCores() {}
++
++    void setCurrentThreadBigCores() {}
+ }
+ 
+ #elif defined(__FreeBSD__)
+@@ -58,6 +117,10 @@
+             Log(Debug::Warning) << "Failed to set idle priority for thread=" << std::this_thread::get_id() << ": "
+                                 << std::generic_category().message(errno);
+     }
++
++    void setCurrentThreadLittleCores() {}
++
++    void setCurrentThreadBigCores() {}
+ }
+ 
+ #else
+@@ -68,6 +131,10 @@
+     {
+         Log(Debug::Warning) << "Idle thread priority is not supported on this system";
+     }
++
++    void setCurrentThreadLittleCores() {}
++
++    void setCurrentThreadBigCores() {}
+ }
+ 
+ #endif
+diff -ruN a/components/misc/thread.hpp b/components/misc/thread.hpp
+--- a/components/misc/thread.hpp
++++ b/components/misc/thread.hpp
+@@ -4,6 +4,11 @@
+ namespace Misc
+ {
+     void setCurrentThreadIdlePriority();
++
++    // OpenMW-DS: keep the current thread on the slowest cores of a big.LITTLE CPU, or off them.
++    // Android only; they do nothing elsewhere or when all cores are the same.
++    void setCurrentThreadLittleCores();
++    void setCurrentThreadBigCores();
+ }
+ 
+ #endif
