@@ -1,0 +1,24 @@
+--- a/components/shader/shadervisitor.cpp
++++ b/components/shader/shadervisitor.cpp
+@@ -842,6 +842,21 @@
+         const ShaderRequirements& reqs = mRequirements.back();
+         createProgram(reqs);
+ 
++#ifdef __ANDROID__
++        // OpenMW-DS: particle systems are drawn without OpenMW's shaders, through gl4es's fixed-function
++        // emulation, which is what Morrowind's effects were made for (texture times colour, vertex lighting, fog).
++        // Particles are many large blended quads, so the fragment shader runs many times per pixel: on a Retroid
++        // Pocket Duo Lite, combat blood 60 units from the camera gave 76-100 ms frames with the objects shader
++        // and ~40 ms (as without blood) without it. The empty program replaces the one createProgram just set.
++        if (dynamic_cast<osgParticle::ParticleSystem*>(&drawable))
++        {
++            static const osg::ref_ptr<osg::Program> sDsFixedFunctionProgram = new osg::Program;
++            osg::StateSet* stateSet = drawable.getStateSet();
++            if (stateSet && stateSet->getAttribute(osg::StateAttribute::PROGRAM))
++                stateSet->setAttributeAndModes(sDsFixedFunctionProgram, osg::StateAttribute::ON);
++        }
++#endif
++
+         if (auto rig = dynamic_cast<SceneUtil::RigGeometry*>(&drawable))
+         {
+             osg::ref_ptr<osg::Geometry> sourceGeometry = rig->getSourceGeometry();
