@@ -101,6 +101,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.util.Log
@@ -133,12 +134,16 @@ data class LogEntry(
 )
 
 object LogRepository {
+    // Every sound played is logged (EngineActivity.SoundWatcher), several a second while walking,
+    // so only the newest entries are kept; the list used to grow for the whole session.
+    private const val MAX_ENTRIES = 300
+
     private val _logs = MutableStateFlow<List<LogEntry>>(emptyList())
     val logs: StateFlow<List<LogEntry>> get() = _logs
 
     fun addLog(message: String, textSize: Int = 12, textColor: Color = Color.White) {
         val logEntry = LogEntry(message, textSize, textColor)
-        _logs.value += logEntry
+        _logs.update { (it + logEntry).takeLast(MAX_ENTRIES) }
     }
 }
 

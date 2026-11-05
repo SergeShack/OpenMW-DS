@@ -1574,9 +1574,46 @@ extern "C" JNIEXPORT jstring JNICALL Java_org_openmw_EngineActivity_getCompanion
     return env->NewStringUTF(snapshot.c_str());
 }
 
+// The names of the sounds started since the last call, one per line, oldest first; null when none.
+// One caller (EngineActivity.SoundWatcher), so the serial seen last is kept here.
+// NewStringUTF aborts the app on bytes that are not valid (modified) UTF-8, so anything else
+// (stray bytes, 4-byte sequences) is passed on as '?'.
 extern "C" JNIEXPORT jstring JNICALL Java_org_openmw_EngineActivity_getLastResourceName(JNIEnv* env, jobject thiz)
 {
-    return env->NewStringUTF(MWSound::g_lastResourceName.c_str());
+    static std::atomic<std::uint64_t> seen{ 0 };
+    std::string names;
+    const std::uint64_t serial = MWSound::g_lastResourceName.takeSince(seen.load(), names);
+    if (serial == seen.load())
+        return nullptr;
+    seen.store(serial);
+
+    std::string text;
+    text.reserve(names.size());
+    for (std::size_t i = 0; i < names.size();)
+    {
+        const auto c = static_cast<unsigned char>(names[i]);
+        std::size_t len = 0;
+        if (c >= 0x01 && c < 0x80)
+            len = 1;
+        else if (c >= 0xc2 && c < 0xe0)
+            len = 2;
+        else if (c >= 0xe0 && c < 0xf0)
+            len = 3;
+        bool ok = len > 0 && i + len <= names.size();
+        for (std::size_t k = 1; ok && k < len; ++k)
+            ok = (static_cast<unsigned char>(names[i + k]) & 0xc0) == 0x80;
+        if (ok)
+        {
+            text.append(names, i, len);
+            i += len;
+        }
+        else
+        {
+            text += '?';
+            ++i;
+        }
+    }
+    return env->NewStringUTF(text.c_str());
 }
 
 extern "C" int Java_org_libsdl_app_SDLActivity_getMouseX(JNIEnv* env, jclass cls, jobject obj)

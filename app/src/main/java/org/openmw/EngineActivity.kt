@@ -82,7 +82,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -220,7 +219,8 @@ class EngineActivity : SDLActivity() {
     // Bartering is routed to SPLIT (game_ui_bartering == DS).
     private var barterTopView: View? = null
 
-    external fun getLastResourceName(): String
+    /** Sounds started since the last call, one per line; null when none (androidmain.cpp). */
+    external fun getLastResourceName(): String?
     external fun initAlpha3()
     private external fun installCompanionSink()
 
@@ -990,6 +990,7 @@ class EngineActivity : SDLActivity() {
 
     companion object {
         private const val TAG = "OpenMW-Launcher"
+        private const val SOUND_POLL_MS = 50L
 
         var resolutionX = 0
         var resolutionY = 0
@@ -1187,19 +1188,17 @@ class EngineActivity : SDLActivity() {
         }?.value
     }
 
+    // Hands every sound the engine starts to onSound (rumble patterns, sound log). Polls every
+    // SOUND_POLL_MS instead of on every frame: withFrameNanos asked Compose for a frame on every
+    // vsync for the whole session, which woke the main thread 60 times a second.
+    // getLastResourceName returns all names since the last poll, so none is missed.
     @Composable
     fun SoundWatcher(onSound: (String) -> Unit) {
-        var last by remember { mutableStateOf("") }
-
         LaunchedEffect(Unit) {
             while (true) {
-                withFrameNanos {
-                    val name = getLastResourceName()
-                    if (name.isNotEmpty() && name != last) {
-                        last = name
-                        onSound(name)
-                    }
-                }
+                delay(SOUND_POLL_MS)
+                val names = getLastResourceName() ?: continue
+                names.split('\n').forEach { if (it.isNotEmpty()) onSound(it) }
             }
         }
     }

@@ -14,13 +14,59 @@ new file mode 100644
 index 0000000000..e85a7ed5c9
 --- /dev/null
 +++ b/apps/openmw/mwsound/soundbridge.hpp
-@@ -0,0 +1,7 @@
+@@ -0,0 +1,53 @@
 +#pragma once
++#include <array>
++#include <cstdint>
++#include <mutex>
 +#include <string>
++#include <string_view>
 +
 +namespace MWSound
 +{
-+    extern std::string g_lastResourceName;
++    // OpenMW-DS: names of the sounds played lately, for the rumble patterns and the sound log
++    // (EngineActivity.SoundWatcher, through getLastResourceName in androidmain.cpp). Written from
++    // the engine's threads on every sound and read from the Java side, so it is kept under a lock;
++    // it used to be a plain std::string, and a read during an assignment handed torn bytes to
++    // NewStringUTF, which aborts the app. The last few names are kept so a poll sees every sound
++    // played since the one before, not only the last.
++    class RecentSoundNames
++    {
++    public:
++        static constexpr std::size_t sSize = 16;
++
++        RecentSoundNames& operator=(std::string_view name)
++        {
++            std::lock_guard lock(mMutex);
++            ++mSerial;
++            mNames[mSerial % sSize] = name;
++            return *this;
++        }
++
++        // Appends the names played after `seen` (at most sSize, oldest first, each followed by a
++        // newline) to `out` and returns the serial of the newest one.
++        std::uint64_t takeSince(std::uint64_t seen, std::string& out) const
++        {
++            std::lock_guard lock(mMutex);
++            std::uint64_t first = seen + 1;
++            if (mSerial >= sSize && first < mSerial - sSize + 1)
++                first = mSerial - sSize + 1;
++            for (std::uint64_t i = first; i <= mSerial; ++i)
++            {
++                out += mNames[i % sSize];
++                out += '\n';
++            }
++            return mSerial;
++        }
++
++    private:
++        mutable std::mutex mMutex;
++        std::array<std::string, sSize> mNames;
++        std::uint64_t mSerial = 0;
++    };
++
++    // Assigned with `g_lastResourceName = name` wherever a sound starts (soundmanagerimp.cpp).
++    extern RecentSoundNames g_lastResourceName;
 +}
 diff --git a/apps/openmw/mwsound/soundmanagerimp.cpp b/apps/openmw/mwsound/soundmanagerimp.cpp
 index 8471dbe0be..b28f94b676 100644
@@ -45,7 +91,7 @@ index 8471dbe0be..b28f94b676 100644
  
  namespace MWSound
  {
-+    std::string g_lastResourceName;
++    RecentSoundNames g_lastResourceName;
      namespace
      {
          constexpr float sMinUpdateInterval = 1.0f / 30.0f;
