@@ -1,0 +1,29 @@
+--- a/apps/openmw/mwgui/quickkeysmenu.cpp
++++ b/apps/openmw/mwgui/quickkeysmenu.cpp
+@@ -83,6 +83,7 @@
+         {
+             mControllerButtons.mA = "#{Interface:Select}";
+             mControllerButtons.mB = "#{Interface:OK}";
++            mControllerButtons.mR1 = "#{sUse}";
+         }
+     }
+ 
+@@ -552,6 +553,18 @@
+             onQuickKeyButtonClicked(mKey[mControllerFocus].button);
+         if (arg.button == SDL_CONTROLLER_BUTTON_B)
+             onOkButtonClicked(mOkButton);
++        else if (arg.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
++        {
++            // OpenMW-DS: R1 uses the highlighted slot and closes the menu, like the 1-0 keys on a
++            // keyboard. A controller has no other way to use a quick key.
++            if (mKey[mControllerFocus].type != ESM::QuickKeys::Type::Unassigned)
++            {
++                const int index = mKey[mControllerFocus].index;
++                onOkButtonClicked(mOkButton);
++                activateQuickKey(index);
++            }
++            return true;
++        }
+         else if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_UP || arg.button == SDL_CONTROLLER_BUTTON_DPAD_DOWN)
+             mControllerFocus = (mControllerFocus + 5) % 10;
+         else if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_LEFT)
