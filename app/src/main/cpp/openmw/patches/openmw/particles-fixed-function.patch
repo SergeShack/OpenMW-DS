@@ -1,6 +1,6 @@
 --- a/components/shader/shadervisitor.cpp
 +++ b/components/shader/shadervisitor.cpp
-@@ -842,6 +842,21 @@
+@@ -842,6 +842,31 @@
          const ShaderRequirements& reqs = mRequirements.back();
          createProgram(reqs);
  
@@ -15,7 +15,17 @@
 +            static const osg::ref_ptr<osg::Program> sDsFixedFunctionProgram = new osg::Program;
 +            osg::StateSet* stateSet = drawable.getStateSet();
 +            if (stateSet && stateSet->getAttribute(osg::StateAttribute::PROGRAM))
++            {
 +                stateSet->setAttributeAndModes(sDsFixedFunctionProgram, osg::StateAttribute::ON);
++                // createProgram moved the alpha test into the shader and switched the fixed-function one off.
++                // Without it the faint, dark parts of effect textures (dwemer steam) are blended in as well.
++                if (reqs.mAlphaFunc != GL_ALWAYS)
++                {
++                    stateSet->setAttribute(new osg::AlphaFunc(
++                        static_cast<osg::AlphaFunc::ComparisonFunction>(reqs.mAlphaFunc), reqs.mAlphaRef));
++                    stateSet->setMode(GL_ALPHA_TEST, osg::StateAttribute::ON | osg::StateAttribute::PROTECTED);
++                }
++            }
 +        }
 +#endif
 +
