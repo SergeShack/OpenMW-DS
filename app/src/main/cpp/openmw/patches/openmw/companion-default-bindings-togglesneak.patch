@@ -1,6 +1,77 @@
 --- a/apps/openmw/mwinput/bindingsmanager.cpp
 +++ b/apps/openmw/mwinput/bindingsmanager.cpp
-@@ -365,24 +365,32 @@
+@@ -1,6 +1,7 @@
+ #include "bindingsmanager.hpp"
+ 
+ #include <filesystem>
++#include <fstream>
+ 
+ #include <MyGUI_EditBox.h>
+ 
+@@ -46,6 +47,53 @@
+                 sFakeDeviceId, inputBinder->getJoystickButtonBinding(control, sFakeDeviceId, ICS::Control::INCREASE));
+     }
+ 
++    // COMPANION (OpenMW-DS): Use moved from Right Trigger to Right Shoulder and Quick Save the other way.
++    // A bindings file saved by an older build still has the old pair, and defaults never replace an
++    // existing binding, so swap them once. Only when both are exactly the old defaults, so a layout the
++    // player picked is left alone. A marker file next to the bindings makes sure this runs only once.
++    // Returns true when the bindings changed and should be saved.
++    static bool swapOldUseAndQuickSave(
++        ICS::InputControlSystem* inputBinder, const std::filesystem::path& userFile, bool userFileExists)
++    {
++        const std::filesystem::path marker = userFile.parent_path() / "input_v3_use_r1.done";
++        std::error_code ec;
++        if (std::filesystem::exists(marker, ec))
++            return false;
++
++        bool swapped = false;
++        if (userFileExists)
++        {
++            ICS::Control* use = inputBinder->getChannel(A_Use)->getAttachedControls().front().control;
++            ICS::Control* save = inputBinder->getChannel(A_QuickSave)->getAttachedControls().front().control;
++            if (inputBinder->getJoystickAxisBinding(use, sFakeDeviceId, ICS::Control::INCREASE)
++                    == SDL_CONTROLLER_AXIS_TRIGGERRIGHT
++                && inputBinder->getJoystickButtonBinding(use, sFakeDeviceId, ICS::Control::INCREASE)
++                    == ICS_MAX_DEVICE_BUTTONS
++                && inputBinder->getJoystickButtonBinding(save, sFakeDeviceId, ICS::Control::INCREASE)
++                    == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER
++                && inputBinder->getJoystickAxisBinding(save, sFakeDeviceId, ICS::Control::INCREASE)
++                    == ICS::InputControlSystem::UNASSIGNED)
++            {
++                clearAllControllerBindings(inputBinder, use);
++                clearAllControllerBindings(inputBinder, save);
++                use->setValue(0.0f);
++                use->setInitialValue(0.0f);
++                inputBinder->addJoystickButtonBinding(
++                    use, sFakeDeviceId, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, ICS::Control::INCREASE);
++                save->setValue(0.5f); // axis bindings must start at 0.5
++                save->setInitialValue(0.5f);
++                inputBinder->addJoystickAxisBinding(
++                    save, sFakeDeviceId, SDL_CONTROLLER_AXIS_TRIGGERRIGHT, ICS::Control::INCREASE);
++                Log(Debug::Info) << "Moved Use to Right Shoulder and Quick Save to Right Trigger";
++                swapped = true;
++            }
++        }
++
++        std::ofstream out(marker);
++        out << 1;
++        return swapped;
++    }
++
+     class InputControlSystem : public ICS::InputControlSystem
+     {
+     public:
+@@ -182,6 +230,8 @@
+ 
+         loadKeyDefaults();
+         loadControllerDefaults();
++        if (swapOldUseAndQuickSave(mInputBinder.get(), mUserFile, userFileExists))
++            saveBindings();
+ 
+         for (int i = 0; i < A_Last; ++i)
+         {
+@@ -365,24 +415,32 @@
          std::map<int, int> defaultButtonBindings;
  
          defaultButtonBindings[A_Activate] = SDL_CONTROLLER_BUTTON_A;
