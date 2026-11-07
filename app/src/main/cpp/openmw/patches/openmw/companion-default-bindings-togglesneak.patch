@@ -1,15 +1,16 @@
 --- a/apps/openmw/mwinput/bindingsmanager.cpp
 +++ b/apps/openmw/mwinput/bindingsmanager.cpp
-@@ -365,17 +365,24 @@
+@@ -365,24 +365,32 @@
          std::map<int, int> defaultButtonBindings;
  
          defaultButtonBindings[A_Activate] = SDL_CONTROLLER_BUTTON_A;
 -        defaultButtonBindings[A_ToggleWeapon] = SDL_CONTROLLER_BUTTON_X;
 -        defaultButtonBindings[A_ToggleSpell] = SDL_CONTROLLER_BUTTON_Y;
 +        // COMPANION (OpenMW-DS): controller defaults tuned for the AYN Thor layout. Ready Weapon/Magic
-+        // swapped to Y/X; Inventory on D-Pad Up; Rest on Back; Quick Save on Right Shoulder; camera
-+        // zoom on D-Pad Right/Left; Jump on B (B was freed when Inventory moved to D-Pad Up, and vanilla
-+        // had no controller default for Jump). Journal stays on Left Shoulder (already the desired button).
++        // swapped to Y/X; Inventory on D-Pad Up; Rest on Back; Use on Right Shoulder and Quick Save on
++        // Right Trigger (on handhelds whose triggers sit in line with the shoulders, R2 is a reach);
++        // camera zoom on D-Pad Right/Left; Jump on B (B was freed when Inventory moved to D-Pad Up, and
++        // vanilla had no controller default for Jump). Journal stays on Left Shoulder.
 +        defaultButtonBindings[A_Jump] = SDL_CONTROLLER_BUTTON_B;
 +        defaultButtonBindings[A_ToggleWeapon] = SDL_CONTROLLER_BUTTON_Y;
 +        defaultButtonBindings[A_ToggleSpell] = SDL_CONTROLLER_BUTTON_X;
@@ -24,12 +25,35 @@
 +        defaultButtonBindings[A_Inventory] = SDL_CONTROLLER_BUTTON_DPAD_UP;
          defaultButtonBindings[A_GameMenu] = SDL_CONTROLLER_BUTTON_START;
 -        defaultButtonBindings[A_QuickSave] = SDL_CONTROLLER_BUTTON_GUIDE;
-+        defaultButtonBindings[A_QuickSave] = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
++        defaultButtonBindings[A_Use] = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
 +        defaultButtonBindings[A_ZoomIn] = SDL_CONTROLLER_BUTTON_DPAD_RIGHT;
 +        defaultButtonBindings[A_ZoomOut] = SDL_CONTROLLER_BUTTON_DPAD_LEFT;
  
          std::map<int, int> defaultAxisBindings;
          defaultAxisBindings[A_MoveForwardBackward] = SDL_CONTROLLER_AXIS_LEFTY;
+         defaultAxisBindings[A_MoveLeftRight] = SDL_CONTROLLER_AXIS_LEFTX;
+         defaultAxisBindings[A_LookUpDown] = SDL_CONTROLLER_AXIS_RIGHTY;
+         defaultAxisBindings[A_LookLeftRight] = SDL_CONTROLLER_AXIS_RIGHTX;
+-        defaultAxisBindings[A_Use] = SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
++        defaultAxisBindings[A_QuickSave] = SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
+         defaultAxisBindings[A_Jump] = SDL_CONTROLLER_AXIS_TRIGGERLEFT;
+ 
+         for (int i = 0; i < A_Last; i++)
+--- a/files/data/scripts/omw/input/actionbindings.lua
++++ b/files/data/scripts/omw/input/actionbindings.lua
+@@ -86,7 +86,11 @@
+ input.bindAction('Use', async:callback(function()
+     -- The value "0.6" shouldn't exceed the triggering threshold in BindingsManager::actionValueChanged.
+     -- TODO: Move more logic from BindingsManager to Lua and consider to make this threshold configurable.
+-    return input.isActionPressed(input.ACTION.Use) or input.getAxisValue(input.CONTROLLER_AXIS.TriggerRight) >= 0.6
++    -- OpenMW-DS: read the Use action's own channel instead of the raw right trigger, so a trigger that
++    -- was rebound to another action no longer attacks as well. Action axes are numbered after the six
++    -- SDL axes (TriggerRight is the last of them); an axis-bound Use reads 0..1 like the raw trigger.
++    return input.isActionPressed(input.ACTION.Use)
++        or input.getAxisValue(input.CONTROLLER_AXIS.TriggerRight + 1 + input.ACTION.Use) >= 0.6
+ end), {})
+ 
+ bindMovement('MoveBackward', input.ACTION.MoveBackward, input.CONTROLLER_AXIS.MoveForwardBackward, 1)
 --- a/files/data/scripts/omw/input/settings.lua
 +++ b/files/data/scripts/omw/input/settings.lua
 @@ -33,7 +33,7 @@
