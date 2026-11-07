@@ -191,10 +191,9 @@ class MainActivity : ComponentActivity() {
                 // is silently discarded. Unlike the resolution pin above this is NOT
                 // authoritative every launch, because the simplified launcher ships the whole
                 // settings.cfg editor and the player must be able to keep their own values.
-                if (GameFilesPreferences.readTunedPerfSettingsVersion(this@MainActivity)
-                    < TUNED_PERF_SETTINGS_VERSION
-                ) {
-                    applyTunedPerformanceSettings()
+                val tunedVersion = GameFilesPreferences.readTunedPerfSettingsVersion(this@MainActivity)
+                if (tunedVersion < TUNED_PERF_SETTINGS_VERSION) {
+                    applyTunedPerformanceSettings(tunedVersion)
                     GameFilesPreferences.setTunedPerfSettingsVersion(
                         this@MainActivity, TUNED_PERF_SETTINGS_VERSION
                     )

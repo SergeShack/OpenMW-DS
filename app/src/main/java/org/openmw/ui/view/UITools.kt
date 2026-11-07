@@ -631,8 +631,11 @@ fun seedConsoleWindowSize() {
  *     has the same problem (installs in the field never see `settings.fallback.cfg` again) and must
  *     stay the player's to change. It only has an effect with the TrueType game font, see
  *     `useTrueTypeGameFont`.
+ * v7 (Nov 7 2026): `[Camera] viewing distance = 4500`. An install already at v6 only gets this one
+ *     change, and only while the distance is still the v3 value 3500, so nothing the player set is
+ *     reverted. Older installs get the full list as before.
  */
-const val TUNED_PERF_SETTINGS_VERSION = 6
+const val TUNED_PERF_SETTINGS_VERSION = 7
 
 /**
  * Force this build's measured performance defaults into the user's `settings.cfg`.
@@ -734,17 +737,36 @@ const val TUNED_PERF_SETTINGS_VERSION = 6
  *   EGL_ANDROID_presentation_time was tried and changed nothing, as frames came ready around their
  *   present time however far ahead it was set.
  *
+ * The v7 value, same device in Performance mode at the 30 cap, walking a fixed route from Balmora
+ * through the Ascadian Isles (`docs/viewing-distance.md` on `dsperf-probe`):
+ * - `[Camera] viewing distance = 4500` (was 3500). Same as 3500 within run-to-run noise, also over
+ *   18 min on a warm device. 5500 and 6600 still hold 33 ms frames on most of the route but show
+ *   2-3x as many stalls of 60 ms or more on screen, and in the open Ascadian Isles the frame no
+ *   longer fits; 8000 misses it there in every run.
+ *
  * Deliberately NOT included: `[Cells] prediction time = 3` measured as noise (26.5 -> 25.4 ms/s,
  * inside route variance) and did not fix what it was aimed at, so shipping it would put an
  * unjustified value in front of every user; `[Terrain] lod factor = 0.5` is a real +9.3% but raises
  * walking spikes 28%, and was rejected on smoothness grounds.
  */
-fun applyTunedPerformanceSettings() {
+fun applyTunedPerformanceSettings(appliedVersion: Int) {
     val file = File(Constants.SETTINGS_FILE)
     if (!file.exists()) return
 
     val original = file.readLines()
     val lines = original.toMutableList()
+    if (appliedVersion == 6) {
+        // v7 changed only the viewing distance. Raise it where it is still the old default and leave
+        // every other value as the player has it.
+        if (getSettingInSection(lines, "[Camera]", "viewing distance") == "3500") {
+            setSettingInSection(lines, "[Camera]", "viewing distance", "4500")
+        }
+        if (lines != original) {
+            file.writeText(lines.joinToString("\n"))
+            Log.d("UITools", "Raised viewing distance to 4500 (tuned defaults v$TUNED_PERF_SETTINGS_VERSION)")
+        }
+        return
+    }
     setSettingInSection(lines, "[Camera]", "small feature culling pixel size", "8.0")
     setSettingInSection(lines, "[Cells]", "preload num threads", "3")
     setSettingInSection(lines, "[Navigator]", "min update interval ms", "1000")
@@ -754,7 +776,7 @@ fun applyTunedPerformanceSettings() {
     // The engine gives the background compile of preloaded meshes half of what is left of a frame at
     // this rate (1 ms at least). At the default 60 nothing is ever left under the 30 fps cap above.
     setSettingInSection(lines, "[Cells]", "target framerate", "30")
-    setSettingInSection(lines, "[Camera]", "viewing distance", "3500")
+    setSettingInSection(lines, "[Camera]", "viewing distance", "4500")
     setSettingInSection(lines, "[Terrain]", "object paging min size", "0.03")
     // The engine's maximum (12..18). Larger tooltips and menu text on the top screen.
     setSettingInSection(lines, "[GUI]", "font size", "18")
@@ -804,6 +826,25 @@ private fun setSettingInSection(
         i++
     }
     lines.add(sectionStart + 1, "$key = $value")
+}
+
+/**
+ * Value of `key` inside [section] of a settings.cfg line list, or null if it is not there. Matches
+ * keys the same way as [setSettingInSection].
+ */
+private fun getSettingInSection(lines: List<String>, section: String, key: String): String? {
+    val sectionStart = lines.indexOfFirst { it.trim().equals(section, ignoreCase = true) }
+    if (sectionStart < 0) return null
+    for (i in sectionStart + 1 until lines.size) {
+        val trimmed = lines[i].trim()
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) break
+        if (!trimmed.startsWith("#") &&
+            trimmed.substringBefore('=', "").trim().equals(key, ignoreCase = true)
+        ) {
+            return trimmed.substringAfter('=').trim()
+        }
+    }
+    return null
 }
 
 /**
