@@ -71,7 +71,7 @@
  
          for (int i = 0; i < A_Last; ++i)
          {
-@@ -365,24 +415,32 @@
+@@ -365,25 +415,33 @@
          std::map<int, int> defaultButtonBindings;
  
          defaultButtonBindings[A_Activate] = SDL_CONTROLLER_BUTTON_A;
@@ -80,8 +80,8 @@
 +        // COMPANION (OpenMW-DS): controller defaults tuned for the AYN Thor layout. Ready Weapon/Magic
 +        // swapped to Y/X; Inventory on D-Pad Up; Rest on Back; Use on Right Shoulder and Quick Save on
 +        // Right Trigger (on handhelds whose triggers sit in line with the shoulders, R2 is a reach);
-+        // camera zoom on D-Pad Right/Left; Jump on B (B was freed when Inventory moved to D-Pad Up, and
-+        // vanilla had no controller default for Jump). Journal stays on Left Shoulder.
++        // camera zoom on D-Pad Right/Left; Jump on B (B was freed when Inventory moved to D-Pad Up), so
++        // Left Trigger opens the quick keys menu instead. Journal stays on Left Shoulder.
 +        defaultButtonBindings[A_Jump] = SDL_CONTROLLER_BUTTON_B;
 +        defaultButtonBindings[A_ToggleWeapon] = SDL_CONTROLLER_BUTTON_Y;
 +        defaultButtonBindings[A_ToggleSpell] = SDL_CONTROLLER_BUTTON_X;
@@ -106,10 +106,12 @@
          defaultAxisBindings[A_LookUpDown] = SDL_CONTROLLER_AXIS_RIGHTY;
          defaultAxisBindings[A_LookLeftRight] = SDL_CONTROLLER_AXIS_RIGHTX;
 -        defaultAxisBindings[A_Use] = SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
+-        defaultAxisBindings[A_Jump] = SDL_CONTROLLER_AXIS_TRIGGERLEFT;
 +        defaultAxisBindings[A_QuickSave] = SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
-         defaultAxisBindings[A_Jump] = SDL_CONTROLLER_AXIS_TRIGGERLEFT;
++        defaultAxisBindings[A_QuickKeysMenu] = SDL_CONTROLLER_AXIS_TRIGGERLEFT;
  
          for (int i = 0; i < A_Last; i++)
+         {
 --- a/files/data/scripts/omw/input/actionbindings.lua
 +++ b/files/data/scripts/omw/input/actionbindings.lua
 @@ -86,7 +86,11 @@
