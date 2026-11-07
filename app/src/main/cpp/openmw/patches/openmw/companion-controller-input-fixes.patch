@@ -24,7 +24,7 @@ Kotlin: none. Native-only, no new externs. Verify markers: sWasGuiMode / leftGui
 "FIX 3b" + sDlgScrollAccum (FIX 3b).
 --- a/apps/openmw/mwinput/controllermanager.cpp
 +++ b/apps/openmw/mwinput/controllermanager.cpp
-@@ -177,14 +177,21 @@
+@@ -177,17 +177,27 @@
      void ControllerManager::update(float dt)
      {
  #ifdef __ANDROID__
@@ -44,7 +44,7 @@ Kotlin: none. Native-only, no new externs. Verify markers: sWasGuiMode / leftGui
 +        // looking after the menu closes. Reset on the GUI->gameplay transition (covers vanilla menus,
 +        // containers and the pause screen, not just DS overlays), OR when Kotlin explicitly asks
 +        // (companionConsumeResetAxes, a DS overlay closed — kept for the DS overlay->overlay case where
-+        // GUI mode never drops). Inject a neutral (value 0 -> ICS percent ~0.5) event for all four axes;
++        // GUI mode never drops). Inject a neutral (value 0 -> ICS percent ~0.5) event for the sticks and triggers;
 +        // deviceID 1 matches the SDL pump and the sFakeDeviceId the axis bindings are registered under.
 +        static bool sWasGuiMode = false;
 +        const bool guiModeNow = MWBase::Environment::get().getWindowManager()->isGuiMode();
@@ -52,8 +52,16 @@ Kotlin: none. Native-only, no new externs. Verify markers: sWasGuiMode / leftGui
 +        sWasGuiMode = guiModeNow;
 +        if (leftGuiMode || companionConsumeResetAxes())
          {
-             static const SDL_GameControllerAxis kResetAxes[] = { SDL_CONTROLLER_AXIS_LEFTX,
-                 SDL_CONTROLLER_AXIS_LEFTY, SDL_CONTROLLER_AXIS_RIGHTX, SDL_CONTROLLER_AXIS_RIGHTY };
+-            static const SDL_GameControllerAxis kResetAxes[] = { SDL_CONTROLLER_AXIS_LEFTX,
+-                SDL_CONTROLLER_AXIS_LEFTY, SDL_CONTROLLER_AXIS_RIGHTX, SDL_CONTROLLER_AXIS_RIGHTY };
++            // The triggers too: L2 opens the quick keys menu, and with its release lost the next press
++            // after closing the menu did nothing.
++            static const SDL_GameControllerAxis kResetAxes[] = { SDL_CONTROLLER_AXIS_LEFTX,
++                SDL_CONTROLLER_AXIS_LEFTY, SDL_CONTROLLER_AXIS_RIGHTX, SDL_CONTROLLER_AXIS_RIGHTY,
++                SDL_CONTROLLER_AXIS_TRIGGERLEFT, SDL_CONTROLLER_AXIS_TRIGGERRIGHT };
+             for (SDL_GameControllerAxis axis : kResetAxes)
+             {
+                 SDL_ControllerAxisEvent ev{};
 @@ -236,6 +243,48 @@
                  }
              }
