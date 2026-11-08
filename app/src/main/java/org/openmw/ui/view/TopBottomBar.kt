@@ -69,6 +69,7 @@ import org.openmw.utils.GameFilesPreferences
 import org.openmw.utils.GameFilesPreferences.readCodeGroup
 import org.openmw.utils.MToast
 import org.openmw.utils.UserManageAssets
+import org.openmw.utils.applyBookSize
 import org.openmw.utils.startGame
 import org.openmw.utils.stringRes
 import java.io.File
@@ -314,6 +315,9 @@ suspend fun attemptLaunchGame(
                     withContext(Dispatchers.Default) {
                         UserManageAssets(context).resourcePrepare()
                     }
+                    // The Book size override is a copy of the engine's layers file, so redo it
+                    // after the resources are refreshed or it keeps the old file after an update.
+                    context.applyBookSize()
                     onCopyingChanged(false) // Copying complete
                     editMode = false
                     isAppLoggingEnabled = false
@@ -327,6 +331,7 @@ suspend fun attemptLaunchGame(
             withContext(Dispatchers.Default) {
                 UserManageAssets(context).resourcePrepare()
             }
+            context.applyBookSize()
             onCopyingChanged(false) // Copying complete
 
             isAppLoggingEnabled = false

@@ -1,0 +1,26 @@
+diff -ru a/files/data/mygui/openmw_layers.xml b/files/data/mygui/openmw_layers.xml
+--- a/files/data/mygui/openmw_layers.xml
++++ b/files/data/mygui/openmw_layers.xml
+@@ -19,6 +19,11 @@
+     <Layer name="LoadingScreen" overlapped="false" pick="true"/>
+     <Layer name="Debug" overlapped="true" pick="true"/>
+     <Layer name="Console" overlapped="true" pick="true"/>
++    <!-- OpenMW-DS: the quick keys menu, drawn 1.5x larger. On a 960 x 540 canvas the scale is
++         960 / 640 = 540 / 360 = 1.5. It sits below Modal so its assign dialogs open on top. -->
++    <Layer name="QuickKeys" type="ScalingLayer" pick="true">
++        <Property key="Size" value="640 360"/>
++    </Layer>
+     <Layer name="Modal" overlapped="true" pick="true"/>
+     <Layer name="Popup" overlapped="true" pick="true"/>
+     <Layer name="Notification" overlapped="false" pick="false"/>
+diff -ru a/files/data/mygui/openmw_quickkeys_menu.layout b/files/data/mygui/openmw_quickkeys_menu.layout
+--- a/files/data/mygui/openmw_quickkeys_menu.layout
++++ b/files/data/mygui/openmw_quickkeys_menu.layout
+@@ -1,6 +1,6 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <MyGUI type="Layout">
+-    <Widget type="Window" skin="MW_Dialog" position="0 0 380 224" layer="Modal" align="Center" name="_Main">
++    <Widget type="Window" skin="MW_Dialog" position="0 0 380 224" layer="QuickKeys" align="Center" name="_Main">
+ 
+         <Widget type="TextBox" skin="SandText" position="8 7 356 18">
+             <Property key="Caption" value="#{sQuickMenuTitle}"/>
