@@ -7,7 +7,7 @@
 +#ifdef __ANDROID__
 +            // OpenMW-DS: interiors use the setting like exteriors do. Upstream raises it to at least 2 indoors,
 +            // so the reflection draws every static of the cell a second time each frame while the cell has
-+            // water, even when the water is out of view. In a dwemer ruin that is nearly all of its geometry.
++            // water, even when the water is out of view.
 +            // At 0 the reflection holds nothing indoors (no sky there) and the water looks darker.
 +            reflectionDetail = std::clamp(reflectionDetail, 0, 5);
 +#else

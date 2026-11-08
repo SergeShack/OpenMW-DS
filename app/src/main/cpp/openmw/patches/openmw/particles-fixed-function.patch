@@ -18,7 +18,7 @@
 +            {
 +                stateSet->setAttributeAndModes(sDsFixedFunctionProgram, osg::StateAttribute::ON);
 +                // createProgram moved the alpha test into the shader and switched the fixed-function one off.
-+                // Without it the faint, dark parts of effect textures (dwemer steam) are blended in as well.
++                // Without it the faint, dark parts of effect textures are blended in as well.
 +                if (reqs.mAlphaFunc != GL_ALWAYS)
 +                {
 +                    stateSet->setAttribute(new osg::AlphaFunc(
