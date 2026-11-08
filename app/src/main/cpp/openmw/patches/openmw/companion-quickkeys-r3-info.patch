@@ -1,0 +1,126 @@
+--- a/apps/openmw/mwgui/quickkeysmenu.cpp
++++ b/apps/openmw/mwgui/quickkeysmenu.cpp
+@@ -22,6 +22,7 @@
+ #include "../mwworld/player.hpp"
+ 
+ #include "../mwbase/environment.hpp"
++#include "../mwbase/inputmanager.hpp"
+ #include "../mwbase/mechanicsmanager.hpp"
+ #include "../mwbase/windowmanager.hpp"
+ #include "../mwbase/world.hpp"
+@@ -37,6 +38,22 @@
+ 
+ namespace MWGui
+ {
++    namespace
++    {
++        // OpenMW-DS: the slot tooltip is shown only after R3, whatever the controller tooltip setting
++        // says. There is one quick keys menu, so a file-level flag is enough.
++        bool sSlotTooltip = false;
++
++        // Keep the hidden cursor on the highlighted slot so its tooltip shows, the same way the
++        // inventory does it.
++        void showSlotTooltip(MyGUI::Widget* slot)
++        {
++            MWBase::Environment::get().getWindowManager()->setControllerTooltipVisible(sSlotTooltip);
++            if (sSlotTooltip)
++                MWBase::Environment::get().getInputManager()->warpMouseToWidget(slot);
++        }
++    }
++
+     // OpenMW-DS: a snapshot of the 10 quick slots for the Single Screen quick slot bar, rebuilt on
+     // the engine thread whenever a slot changes and copied out by the UI thread on demand
+     // (companionQuickKeysSnapshot, read by androidmain.cpp's getCompanionQuickKeys JNI). PULLED
+@@ -84,6 +101,7 @@
+             mControllerButtons.mA = "#{Interface:Select}";
+             mControllerButtons.mB = "#{Interface:OK}";
+             mControllerButtons.mR1 = "#{sUse}";
++            mControllerButtons.mR3 = "#{Interface:Info}";
+         }
+     }
+ 
+@@ -143,9 +161,24 @@
+             mControllerFocus = 0;
+             for (size_t i = 0; i < mKey.size(); i++)
+                 mKey[i].button->setControllerFocus(i == mControllerFocus);
++            sSlotTooltip = false;
++            showSlotTooltip(mKey[mControllerFocus].button);
+         }
+     }
+ 
++    void QuickKeysMenu::onFrame(float /*duration*/)
++    {
++        // OpenMW-DS: the item and spell lists opened from this menu turn controller tooltips on by
++        // their own setting. Once they are closed, go back to what R3 chose.
++        if (!Settings::gui().mControllerMenus)
++            return;
++        if ((mAssignDialog && mAssignDialog->isVisible())
++            || (mItemSelectionDialog && mItemSelectionDialog->isVisible())
++            || (mMagicSelectionDialog && mMagicSelectionDialog->isVisible()))
++            return;
++        MWBase::Environment::get().getWindowManager()->setControllerTooltipVisible(sSlotTooltip);
++    }
++
+     void QuickKeysMenu::onClose()
+     {
+         WindowBase::onClose();
+@@ -565,6 +598,8 @@
+             }
+             return true;
+         }
++        else if (arg.button == SDL_CONTROLLER_BUTTON_RIGHTSTICK)
++            sSlotTooltip = !sSlotTooltip; // OpenMW-DS: R3 shows or hides the tooltip of the highlighted slot.
+         else if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_UP || arg.button == SDL_CONTROLLER_BUTTON_DPAD_DOWN)
+             mControllerFocus = (mControllerFocus + 5) % 10;
+         else if (arg.button == SDL_CONTROLLER_BUTTON_DPAD_LEFT)
+@@ -589,6 +624,10 @@
+         for (size_t i = 0; i < mKey.size(); i++)
+             mKey[i].button->setControllerFocus(i == mControllerFocus);
+ 
++        // B has closed the menu by now.
++        if (isVisible())
++            showSlotTooltip(mKey[mControllerFocus].button);
++
+         return true;
+     }
+ 
+--- a/apps/openmw/mwgui/quickkeysmenu.hpp
++++ b/apps/openmw/mwgui/quickkeysmenu.hpp
+@@ -43,6 +43,7 @@
+         void onAssignMagicCancel();
+         void onOpen() override;
+         void onClose() override;
++        void onFrame(float duration) override;
+ 
+         void activateQuickKey(int index);
+         void updateActivatedQuickKey();
+--- a/apps/openmw/mwinput/mousemanager.cpp
++++ b/apps/openmw/mwinput/mousemanager.cpp
+@@ -4,6 +4,7 @@
+ #include <MyGUI_InputManager.h>
+ #include <MyGUI_RenderManager.h>
+ 
++#include <components/myguiplatform/scalinglayer.hpp>
+ #include <components/sdlutil/sdlinputwrapper.hpp>
+ #include <components/sdlutil/sdlmappings.hpp>
+ #include <components/settings/values.hpp>
+@@ -287,6 +288,19 @@
+     {
+         float widgetX = widget->getAbsoluteCoord().left + widget->getWidth() / 2.f;
+         float widgetY = widget->getAbsoluteCoord().top + widget->getHeight() / 4.f;
++        // OpenMW-DS: on a scaling layer the widget coordinates are in the layer's own canvas, which is
++        // stretched over the screen around its centre. Turn them into screen coordinates.
++        MyGUI::Widget* root = widget;
++        while (root->getParent())
++            root = root->getParent();
++        if (auto* layer = root->getLayer(); layer && layer->isType<MyGUIPlatform::ScalingLayer>())
++        {
++            const MyGUI::IntSize layerSize = layer->getSize();
++            const MyGUI::IntSize viewSize = MyGUI::RenderManager::getInstance().getViewSize();
++            const float scale = MyGUIPlatform::ScalingLayer::getScaleFactor(layerSize);
++            widgetX = (widgetX - layerSize.width / 2.f) * scale + viewSize.width / 2.f;
++            widgetY = (widgetY - layerSize.height / 2.f) * scale + viewSize.height / 2.f;
++        }
+         if (std::abs(mGuiCursorX - widgetX) > 1 || std::abs(mGuiCursorY - widgetY) > 1)
+         {
+             mGuiCursorX = widgetX;
