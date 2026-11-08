@@ -705,8 +705,9 @@ const val TUNED_PERF_SETTINGS_VERSION = 7
  *   **The saving does NOT show up as reduced CPU** and looking for that will mislead: the OSG draw
  *   thread is SATURATED (~100% of one core, and only ever one, since a GL context is bound to a
  *   single thread), so it burns the same cycles either way - 23.38 Gcyc at tier 2 vs 23.42 at tier
- *   0 over 8 s. The win is THROUGHPUT: per-frame draw cost fell ~34%. Interiors are unaffected
- *   (`std::clamp(detail, mInterior ? 2 : 0, 5)`). Water had never been profiled in this project;
+ *   0 over 8 s. The win is THROUGHPUT: per-frame draw cost fell ~34%. Upstream ignores this in
+ *   interiors (`std::clamp(detail, mInterior ? 2 : 0, 5)`), which drew every static of a cell with
+ *   water twice; `interior-water-reflection.patch` makes interiors follow it too. Water had never been profiled in this project;
  *   Narsis showed none of this because it is inland, which is why the two test areas disagreed.
  *
  * The v3 values were measured on the Retroid Pocket Duo Lite (Adreno 610, big cores at 2.0 GHz),
