@@ -1,5 +1,6 @@
 package org.openmw
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.hardware.input.InputManager
@@ -121,6 +122,17 @@ class MainActivity : ComponentActivity() {
 
         if (currentDisplayId == Display.DEFAULT_DISPLAY) return false
 
+        // Opened on top of a running game: tapping the icon on the bottom screen's launcher while
+        // the game is in the background can bring the game's task to that screen and put this
+        // activity on top of it. Relaunching below would remove that task and the game with it.
+        // Finishing uncovers the game, which moves itself back to its own screen
+        // (EngineActivity.returnToGameDisplayIfMoved).
+        if (isOnTopOfGame()) {
+            Log.w(TAG, "Launched on display $currentDisplayId over the running game; returning to it")
+            finish()
+            return true
+        }
+
         Log.w(TAG, "Launched on display $currentDisplayId; relaunching on the top screen")
 
         // Copy the original intent so a system-delivered action/extras survive the bounce.
@@ -138,6 +150,16 @@ class MainActivity : ComponentActivity() {
         startActivity(corrected, topScreenLaunchOptions())
         finishAndRemoveTask()
         return true
+    }
+
+    /** Whether this activity sits in the game's task, i.e. the task was started by EngineActivity. */
+    @OptIn(InternalCoroutinesApi::class)
+    private fun isOnTopOfGame(): Boolean {
+        if (isTaskRoot) return false
+        val base = getSystemService(ActivityManager::class.java)?.appTasks
+            ?.firstOrNull { runCatching { it.taskInfo?.taskId }.getOrNull() == taskId }
+            ?.let { runCatching { it.taskInfo?.baseActivity }.getOrNull() }
+        return base?.className == EngineActivity::class.java.name
     }
 
     @Suppress("OVERRIDE_DEPRECATION")

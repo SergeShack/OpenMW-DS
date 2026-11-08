@@ -41,6 +41,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.graphics.PixelFormat
+import android.app.ActivityManager
 import android.app.ActivityOptions
 import android.content.Intent
 import android.os.Build
@@ -147,6 +148,7 @@ import org.openmw.utils.GameFilesPreferences.loadAutoMouseMode
 import org.openmw.utils.GameFilesPreferences.readAngle
 import org.openmw.utils.GameFilesPreferences.readSPIRV
 import org.openmw.utils.DisplayRoles
+import org.openmw.utils.gameLaunchOptions
 import org.openmw.utils.topScreenLaunchOptions
 import java.io.File
 import kotlin.math.roundToInt
@@ -188,6 +190,11 @@ class EngineActivity : SDLActivity() {
     // natural reset and the point at which the situation may genuinely have changed.
     private val COMPANION_REASSERT_MAX = 4
     private val COMPANION_REASSERT_RETRY_MS = 800L
+
+    // Uptime of the last request to put the game back on its own display, so a device that
+    // ignores the request is not asked again on every callback. See returnToGameDisplayIfMoved.
+    private var gameDisplayRequestAt = 0L
+    private val GAME_DISPLAY_RETRY_MS = 2000L
 
     // Read-only conversation-history overlay on the TOP screen (this activity's own
     // window / Display 0), shown while a conversation is active AND the Conversation
@@ -297,6 +304,7 @@ class EngineActivity : SDLActivity() {
         super.onStart()
         companionBackgrounded = false
         updateCompanionForWindowState("onStart")
+        returnToGameDisplayIfMoved("onStart")
         // The companion's task is separate and excluded from recents, so restoring the game does
         // not restore it — this is what brings the second screen back with the game. Allowed where
         // the post-home re-assert was not, because coming back from recents is a foreground,
@@ -313,6 +321,53 @@ class EngineActivity : SDLActivity() {
         // Keep SDLActivity's own handling (it resizes the top-screen game surface).
         super.onConfigurationChanged(newConfig)
         updateCompanionForWindowState("onConfigurationChanged")
+        // A move between displays arrives here (the two panels differ in size and density). Coming
+        // back to the game display is also where the companion is brought up again, since
+        // ensureCompanionForeground held it back while the game was on the wrong one.
+        returnToGameDisplayIfMoved("onConfigurationChanged")
+        ensureCompanionForeground("onConfigurationChanged")
+    }
+
+    private fun onGameDisplay(): Boolean {
+        val current = display?.displayId ?: return true
+        return current == DisplayRoles.gameDisplayId(this)
+    }
+
+    /**
+     * Put the game back on its own display if Android moved its task to another one.
+     *
+     * Tapping the app icon on the bottom screen's launcher while the game is in the background does
+     * not start anything new: Android finds the game's task and brings it to the front on the
+     * display the tap came from. On the Duo Lite (Nov 8 2026) the game then came up on the bottom
+     * screen and the companion was launched over it on the same display. The game stopped, which
+     * sent the companion back, and the companion stopping sent the game to the back in turn
+     * (onCompanionBackgrounded), so the game opened and minimized at once.
+     *
+     * Starting this activity again in its own task with the game's launch display brings that task
+     * back, the same way recents does. It goes through the task's AppTask, by id, and not through
+     * FLAG_ACTIVITY_NEW_TASK: that finds a task by affinity, and when the tap had also opened the
+     * launcher (MainActivity's self-correction gives it a task of its own) it picked the launcher's
+     * task and started a second engine there, which aborted the process. SINGLE_TOP delivers to the
+     * engine already on top of its task instead of making another one.
+     */
+    private fun returnToGameDisplayIfMoved(reason: String) {
+        if (isFinishing || isDestroyed || onGameDisplay()) return
+        val now = SystemClock.uptimeMillis()
+        if (now - gameDisplayRequestAt < GAME_DISPLAY_RETRY_MS) return
+        gameDisplayRequestAt = now
+        val wanted = DisplayRoles.gameDisplayId(this)
+        val appTask = getSystemService(ActivityManager::class.java)?.appTasks
+            ?.firstOrNull { runCatching { it.taskInfo?.taskId }.getOrNull() == taskId }
+        if (appTask == null) {
+            Log.e(TAG, "Game is on display ${display?.displayId}, but its task $taskId was not found")
+            return
+        }
+        Log.w(TAG, "Game is on display ${display?.displayId}; moving it back to $wanted ($reason)")
+        val intent = Intent(this, EngineActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        runCatching { appTask.startActivity(this, intent, gameLaunchOptions(this)) }
+            .onFailure { Log.e(TAG, "Could not move the game back to display $wanted", it) }
     }
 
     /**
@@ -345,6 +400,12 @@ class EngineActivity : SDLActivity() {
             return
         }
         if (CompanionActivity.started) return
+        // On the wrong display the companion would be launched over the game; it is brought up
+        // from onConfigurationChanged once the game is back. See returnToGameDisplayIfMoved.
+        if (!onGameDisplay()) {
+            Log.d(TAG, "Second-screen: re-assert skipped ($reason); game is not on its display")
+            return
+        }
         if (attempt >= COMPANION_REASSERT_MAX) {
             Log.w(TAG, "Second-screen: gave up bringing the companion forward ($reason)")
             return
