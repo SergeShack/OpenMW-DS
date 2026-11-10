@@ -1,14 +1,15 @@
 --- a/apps/openmw/mwinput/bindingsmanager.cpp
 +++ b/apps/openmw/mwinput/bindingsmanager.cpp
-@@ -1,6 +1,7 @@
+@@ -1,6 +1,8 @@
  #include "bindingsmanager.hpp"
  
  #include <filesystem>
 +#include <fstream>
++#include <set>
  
  #include <MyGUI_EditBox.h>
  
-@@ -46,6 +47,53 @@
+@@ -46,6 +48,137 @@ namespace MWInput
                  sFakeDeviceId, inputBinder->getJoystickButtonBinding(control, sFakeDeviceId, ICS::Control::INCREASE));
      }
  
@@ -59,24 +60,40 @@
 +        return swapped;
 +    }
 +
-     class InputControlSystem : public ICS::InputControlSystem
-     {
-     public:
-@@ -182,6 +230,8 @@
- 
-         loadKeyDefaults();
-         loadControllerDefaults();
-+        if (swapOldUseAndQuickSave(mInputBinder.get(), mUserFile, userFileExists))
-+            saveBindings();
- 
-         for (int i = 0; i < A_Last; ++i)
-         {
-@@ -365,25 +415,33 @@
-         std::map<int, int> defaultButtonBindings;
- 
-         defaultButtonBindings[A_Activate] = SDL_CONTROLLER_BUTTON_A;
--        defaultButtonBindings[A_ToggleWeapon] = SDL_CONTROLLER_BUTTON_X;
--        defaultButtonBindings[A_ToggleSpell] = SDL_CONTROLLER_BUTTON_Y;
++    // COMPANION (OpenMW-DS): binding a button that another action had leaves that action with no
++    // controller binding, and the bindings file can't tell that apart from an action that never had
++    // one, so on the next start loadControllerDefaults gave it its default button back whenever that
++    // button was free. The actions the player left without a controller binding are written to a
++    // file next to the bindings when they are saved, and their defaults are no longer restored.
++    static std::filesystem::path unboundControllerActionsFile(const std::filesystem::path& userFile)
++    {
++        return userFile.parent_path() / "input_v3_unbound.txt";
++    }
++
++    static std::set<int> readUnboundControllerActions(const std::filesystem::path& userFile)
++    {
++        std::set<int> actions;
++        std::ifstream in(unboundControllerActionsFile(userFile));
++        int action;
++        while (in >> action)
++            actions.insert(action);
++        return actions;
++    }
++
++    static bool hasControllerBinding(ICS::InputControlSystem* inputBinder, ICS::Control* control)
++    {
++        return inputBinder->getJoystickAxisBinding(control, sFakeDeviceId, ICS::Control::INCREASE)
++            != ICS::InputControlSystem::UNASSIGNED
++            || inputBinder->getJoystickButtonBinding(control, sFakeDeviceId, ICS::Control::INCREASE)
++            != ICS_MAX_DEVICE_BUTTONS;
++    }
++
++    // Using hardcoded key defaults is inevitable, if we want the configuration files to stay valid
++    // across different versions of OpenMW (in the case where another input action is added).
++    static void getControllerDefaults(
++        std::map<int, int>& defaultButtonBindings, std::map<int, int>& defaultAxisBindings)
++    {
++        defaultButtonBindings[A_Activate] = SDL_CONTROLLER_BUTTON_A;
 +        // COMPANION (OpenMW-DS): controller defaults tuned for the AYN Thor layout. Ready Weapon/Magic
 +        // swapped to Y/X; Inventory on D-Pad Up; Rest on Back; Use on Right Shoulder and Quick Save on
 +        // Right Trigger (on handhelds whose triggers sit in line with the shoulders, R2 is a reach);
@@ -85,33 +102,123 @@
 +        defaultButtonBindings[A_Jump] = SDL_CONTROLLER_BUTTON_B;
 +        defaultButtonBindings[A_ToggleWeapon] = SDL_CONTROLLER_BUTTON_Y;
 +        defaultButtonBindings[A_ToggleSpell] = SDL_CONTROLLER_BUTTON_X;
-         // defaultButtonBindings[A_QuickButtonsMenu] = SDL_GetButtonFromScancode(SDL_SCANCODE_F1); // Need to implement,
-         // should be ToggleSpell(5) AND Wait(9)
-         defaultButtonBindings[A_Sneak] = SDL_CONTROLLER_BUTTON_LEFTSTICK;
-         defaultButtonBindings[A_Journal] = SDL_CONTROLLER_BUTTON_LEFTSHOULDER;
--        defaultButtonBindings[A_Rest] = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
++        // defaultButtonBindings[A_QuickButtonsMenu] = SDL_GetButtonFromScancode(SDL_SCANCODE_F1); // Need to implement,
++        // should be ToggleSpell(5) AND Wait(9)
++        defaultButtonBindings[A_Sneak] = SDL_CONTROLLER_BUTTON_LEFTSTICK;
++        defaultButtonBindings[A_Journal] = SDL_CONTROLLER_BUTTON_LEFTSHOULDER;
 +        defaultButtonBindings[A_Rest] = SDL_CONTROLLER_BUTTON_BACK;
-         defaultButtonBindings[A_TogglePOV] = SDL_CONTROLLER_BUTTON_RIGHTSTICK;
--        defaultButtonBindings[A_Inventory] = SDL_CONTROLLER_BUTTON_B;
++        defaultButtonBindings[A_TogglePOV] = SDL_CONTROLLER_BUTTON_RIGHTSTICK;
 +        defaultButtonBindings[A_Inventory] = SDL_CONTROLLER_BUTTON_DPAD_UP;
-         defaultButtonBindings[A_GameMenu] = SDL_CONTROLLER_BUTTON_START;
--        defaultButtonBindings[A_QuickSave] = SDL_CONTROLLER_BUTTON_GUIDE;
++        defaultButtonBindings[A_GameMenu] = SDL_CONTROLLER_BUTTON_START;
 +        defaultButtonBindings[A_Use] = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
 +        defaultButtonBindings[A_ZoomIn] = SDL_CONTROLLER_BUTTON_DPAD_RIGHT;
 +        defaultButtonBindings[A_ZoomOut] = SDL_CONTROLLER_BUTTON_DPAD_LEFT;
- 
-         std::map<int, int> defaultAxisBindings;
-         defaultAxisBindings[A_MoveForwardBackward] = SDL_CONTROLLER_AXIS_LEFTY;
-         defaultAxisBindings[A_MoveLeftRight] = SDL_CONTROLLER_AXIS_LEFTX;
-         defaultAxisBindings[A_LookUpDown] = SDL_CONTROLLER_AXIS_RIGHTY;
-         defaultAxisBindings[A_LookLeftRight] = SDL_CONTROLLER_AXIS_RIGHTX;
--        defaultAxisBindings[A_Use] = SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
--        defaultAxisBindings[A_Jump] = SDL_CONTROLLER_AXIS_TRIGGERLEFT;
++
++        defaultAxisBindings[A_MoveForwardBackward] = SDL_CONTROLLER_AXIS_LEFTY;
++        defaultAxisBindings[A_MoveLeftRight] = SDL_CONTROLLER_AXIS_LEFTX;
++        defaultAxisBindings[A_LookUpDown] = SDL_CONTROLLER_AXIS_RIGHTY;
++        defaultAxisBindings[A_LookLeftRight] = SDL_CONTROLLER_AXIS_RIGHTX;
 +        defaultAxisBindings[A_QuickSave] = SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
 +        defaultAxisBindings[A_QuickKeysMenu] = SDL_CONTROLLER_AXIS_TRIGGERLEFT;
++    }
++
++    // Only actions that have a default are written, so a default added later for an action that has
++    // none today still reaches existing bindings files.
++    static void writeUnboundControllerActions(
++        ICS::InputControlSystem* inputBinder, const std::filesystem::path& userFile)
++    {
++        std::map<int, int> defaultButtonBindings;
++        std::map<int, int> defaultAxisBindings;
++        getControllerDefaults(defaultButtonBindings, defaultAxisBindings);
++
++        std::ofstream out(unboundControllerActionsFile(userFile));
++        for (int i = 0; i < A_Last; ++i)
++        {
++            if (defaultButtonBindings.count(i) == 0 && defaultAxisBindings.count(i) == 0)
++                continue;
++            if (inputBinder->getChannel(i)->getControlsCount() == 0)
++                continue;
++            ICS::Control* control = inputBinder->getChannel(i)->getAttachedControls().front().control;
++            if (!hasControllerBinding(inputBinder, control))
++                out << i << '\n';
++        }
++    }
++
+     class InputControlSystem : public ICS::InputControlSystem
+     {
+     public:
+@@ -180,8 +313,17 @@ namespace MWInput
+         mListener = std::make_unique<BindingsListener>(mInputBinder.get(), this);
+         mInputBinder->setDetectingBindingListener(mListener.get());
+ 
++        // Without a bindings file every action starts from its default.
++        if (!userFileExists)
++        {
++            std::error_code ec;
++            std::filesystem::remove(unboundControllerActionsFile(mUserFile), ec);
++        }
++
+         loadKeyDefaults();
+         loadControllerDefaults();
++        if (swapOldUseAndQuickSave(mInputBinder.get(), mUserFile, userFileExists))
++            saveBindings();
+ 
+         for (int i = 0; i < A_Last; ++i)
+         {
+@@ -360,30 +502,11 @@ namespace MWInput
+ 
+     void BindingsManager::loadControllerDefaults(bool force)
+     {
+-        // using hardcoded key defaults is inevitable, if we want the configuration files to stay valid
+-        // across different versions of OpenMW (in the case where another input action is added)
+         std::map<int, int> defaultButtonBindings;
+-
+-        defaultButtonBindings[A_Activate] = SDL_CONTROLLER_BUTTON_A;
+-        defaultButtonBindings[A_ToggleWeapon] = SDL_CONTROLLER_BUTTON_X;
+-        defaultButtonBindings[A_ToggleSpell] = SDL_CONTROLLER_BUTTON_Y;
+-        // defaultButtonBindings[A_QuickButtonsMenu] = SDL_GetButtonFromScancode(SDL_SCANCODE_F1); // Need to implement,
+-        // should be ToggleSpell(5) AND Wait(9)
+-        defaultButtonBindings[A_Sneak] = SDL_CONTROLLER_BUTTON_LEFTSTICK;
+-        defaultButtonBindings[A_Journal] = SDL_CONTROLLER_BUTTON_LEFTSHOULDER;
+-        defaultButtonBindings[A_Rest] = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
+-        defaultButtonBindings[A_TogglePOV] = SDL_CONTROLLER_BUTTON_RIGHTSTICK;
+-        defaultButtonBindings[A_Inventory] = SDL_CONTROLLER_BUTTON_B;
+-        defaultButtonBindings[A_GameMenu] = SDL_CONTROLLER_BUTTON_START;
+-        defaultButtonBindings[A_QuickSave] = SDL_CONTROLLER_BUTTON_GUIDE;
+-
+         std::map<int, int> defaultAxisBindings;
+-        defaultAxisBindings[A_MoveForwardBackward] = SDL_CONTROLLER_AXIS_LEFTY;
+-        defaultAxisBindings[A_MoveLeftRight] = SDL_CONTROLLER_AXIS_LEFTX;
+-        defaultAxisBindings[A_LookUpDown] = SDL_CONTROLLER_AXIS_RIGHTY;
+-        defaultAxisBindings[A_LookLeftRight] = SDL_CONTROLLER_AXIS_RIGHTX;
+-        defaultAxisBindings[A_Use] = SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
+-        defaultAxisBindings[A_Jump] = SDL_CONTROLLER_AXIS_TRIGGERLEFT;
++        getControllerDefaults(defaultButtonBindings, defaultAxisBindings);
++
++        const std::set<int> leftUnbound = force ? std::set<int>() : readUnboundControllerActions(mUserFile);
  
          for (int i = 0; i < A_Last; i++)
          {
+@@ -406,10 +529,7 @@ namespace MWInput
+             }
+ 
+             if (!controlExists || force
+-                || (mInputBinder->getJoystickAxisBinding(control, sFakeDeviceId, ICS::Control::INCREASE)
+-                        == ICS::InputControlSystem::UNASSIGNED
+-                    && mInputBinder->getJoystickButtonBinding(control, sFakeDeviceId, ICS::Control::INCREASE)
+-                        == ICS_MAX_DEVICE_BUTTONS))
++                || (!hasControllerBinding(mInputBinder.get(), control) && leftUnbound.count(i) == 0))
+             {
+                 clearAllControllerBindings(mInputBinder.get(), control);
+ 
+@@ -709,6 +829,7 @@ namespace MWInput
+             if (mInputBinder->save(newFileName))
+             {
+                 std::filesystem::rename(Files::pathFromUnicodeString(newFileName), mUserFile);
++                writeUnboundControllerActions(mInputBinder.get(), mUserFile);
+                 Log(Debug::Info) << "Saved input bindings: " << mUserFile;
+             }
+             else
 --- a/files/data/scripts/omw/input/actionbindings.lua
 +++ b/files/data/scripts/omw/input/actionbindings.lua
 @@ -86,7 +86,11 @@
