@@ -612,6 +612,64 @@ fun seedConsoleWindowSize() {
 }
 
 /**
+ * Fix two `[Shadows]` keys that `settings.fallback.cfg` used to ship under names the engine does
+ * not know. The engine reads such keys and ignores them, so they did nothing:
+ * - `indoor shadows` is renamed to `enable indoor shadows`, keeping its value. Under the wrong name
+ *   the engine used its own default (true), so turning shadows on also turned them on indoors.
+ * - `percentage closer filtering` is removed. The engine has no such setting any more.
+ *
+ * The fallback file reaches fresh installs only, so this is what fixes the installs in the field.
+ * It runs every launch and is idempotent: once the old keys are gone there is nothing to do. If
+ * `enable indoor shadows` is already there, its value wins and the old key is only removed.
+ */
+fun fixShadowSettingKeys() {
+    val file = File(Constants.SETTINGS_FILE)
+    if (!file.exists()) return
+
+    val original = file.readLines()
+    val lines = original.toMutableList()
+    val sectionStart = lines.indexOfFirst { it.trim().equals("[Shadows]", ignoreCase = true) }
+    if (sectionStart < 0) return
+
+    fun isHeader(i: Int) = lines[i].trim().let { it.startsWith("[") && it.endsWith("]") }
+    fun keyAt(i: Int): String? {
+        val trimmed = lines[i].trim()
+        if (trimmed.startsWith("#")) return null
+        return trimmed.substringBefore('=', "").trim().lowercase().takeIf { it.isNotEmpty() }
+    }
+    // Drop the entry at [i] along with the comment the fallback file put under it and the blank line
+    // after, so the section does not end up with an orphaned comment or a double gap.
+    fun removeEntry(i: Int, comment: String?) {
+        lines.removeAt(i)
+        if (comment != null && i < lines.size && lines[i].trim().startsWith(comment)) lines.removeAt(i)
+        if (i < lines.size && lines[i].isBlank() && i > 0 && lines[i - 1].isBlank()) lines.removeAt(i)
+    }
+
+    var sectionEnd = (sectionStart + 1 until lines.size).firstOrNull { isHeader(it) } ?: lines.size
+    val hasNewKey = (sectionStart + 1 until sectionEnd).any { keyAt(it) == "enable indoor shadows" }
+
+    var i = sectionStart + 1
+    while (i < sectionEnd) {
+        when (keyAt(i)) {
+            "indoor shadows" -> if (hasNewKey) {
+                removeEntry(i, null)
+            } else {
+                lines[i] = "enable indoor shadows = ${lines[i].substringAfter('=').trim()}"
+                i++
+            }
+            "percentage closer filtering" -> removeEntry(i, "# Smooth out shadows edges")
+            else -> i++
+        }
+        sectionEnd = (sectionStart + 1 until lines.size).firstOrNull { isHeader(it) } ?: lines.size
+    }
+
+    if (lines != original) {
+        file.writeText(lines.joinToString("\n"))
+        Log.d("UITools", "Fixed old [Shadows] keys in ${Constants.SETTINGS_FILE}")
+    }
+}
+
+/**
  * Version of the tuned performance defaults this build wants applied.
  *
  * **BUMP THIS whenever the values in [applyTunedPerformanceSettings] change.** It is compared
