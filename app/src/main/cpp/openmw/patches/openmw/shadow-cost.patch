@@ -1,0 +1,393 @@
+--- a/apps/openmw/mwrender/renderingmanager.cpp
++++ b/apps/openmw/mwrender/renderingmanager.cpp
+@@ -187,6 +187,7 @@
+         mShadowManager = std::make_unique<SceneUtil::ShadowManager>(sceneRoot, mRootNode, shadowCastingTraversalMask,
+             indoorShadowCastingTraversalMask, Mask_Terrain | Mask_Object | Mask_Static, Settings::shadows(),
+             mResourceSystem->getSceneManager()->getShaderManager());
++        mShadowManager->setObjectShadowMask(Mask_Object | Mask_Static, Mask_Actor | Mask_Player | Mask_Terrain);
+ 
+         Shader::ShaderManager::DefineMap globalDefines = Shader::getDefaultDefines();
+         Shader::ShaderManager::DefineMap shadowDefines = mShadowManager->getShadowDefines(Settings::shadows());
+--- a/components/sceneutil/mwshadowtechnique.cpp
++++ b/components/sceneutil/mwshadowtechnique.cpp
+@@ -28,6 +28,8 @@
+ 
+ #include <sstream>
+ #include <vector>
++#include <algorithm>
++#include <cmath>
+ 
+ #include "glextensions.hpp"
+ #include "shadowsbin.hpp"
+@@ -249,12 +251,21 @@
+         osg::RefMatrix* getProjectionMatrix() { return _projectionMatrix.get(); }
+         osgUtil::RenderStage* getRenderStage() { return _renderStage.get(); }
+ 
++        /// After the normal pass, draw the casters in mask again, limited to polytope.
++        void setNearObjectPass(unsigned int mask, const osg::Polytope& polytope)
++        {
++            _nearObjectMask = mask;
++            _nearObjectPolytope = polytope;
++        }
++
+     protected:
+ 
+         MWShadowTechnique*                      _vdsm;
+         osg::ref_ptr<osg::RefMatrix>            _projectionMatrix;
+         osg::ref_ptr<osgUtil::RenderStage>      _renderStage;
+         osg::Polytope                           _polytope;
++        unsigned int                            _nearObjectMask = 0;
++        osg::Polytope                           _nearObjectPolytope;
+ };
+ 
+ VDSMCameraCullCallback::VDSMCameraCullCallback(MWShadowTechnique* vdsm, osg::Polytope& polytope):
+@@ -287,6 +298,18 @@
+     {
+         _vdsm->getShadowedScene()->osg::Group::traverse(*nv);
+     }
++    // Objects left out of this shadow map by distance are still drawn when they are near the camera,
++    // since their shadows can reach far enough to land in this map.
++    if (_nearObjectMask && _vdsm->getShadowedScene())
++    {
++        const unsigned int traversalMask = cv->getTraversalMask();
++        cv->setTraversalMask(_nearObjectMask);
++        cv->getProjectionCullingStack().back().setFrustum(_nearObjectPolytope);
++        cv->pushCullingSet();
++        _vdsm->getShadowedScene()->osg::Group::traverse(*nv);
++        cv->popCullingSet();
++        cv->setTraversalMask(traversalMask);
++    }
+     cv->popStateSet();
+ #if 1
+     if (!_polytope.empty())
+@@ -1216,6 +1239,21 @@
+ 
+         LightData& pl = **itr;
+ 
++        // Stable shadow maps follow the sun in steps rather than every frame. Otherwise the map turns a little each
++        // frame as the sun moves, and shadow edges crawl.
++        bool stableLightMoved = false;
++        if (_stableShadowMaps && pl.directionalLight)
++        {
++            if (_stableLightDir.length2() == 0.0
++                || _stableLightDir * pl.lightDir < std::cos(osg::DegreesToRadians(0.1)))
++            {
++                _stableLightDir = pl.lightDir;
++                stableLightMoved = true;
++            }
++            else
++                pl.lightDir = _stableLightDir;
++        }
++
+         // 3.1 compute light space polytope
+         //
+         osg::Polytope polytope = computeLightViewFrustumPolytope(frustum, pl);
+@@ -1237,9 +1275,39 @@
+             continue;
+         }
+ 
++        // Stable shadow maps: the light view only depends on the light direction and its x/y origin is fixed in
++        // the world, the cascade splits do not follow the computed near and far planes, and each cascade covers
++        // the bounding sphere of its slice of the view, moved in whole texels (below). Then the shadow map texels
++        // stay in place while the camera turns and moves, and shadow edges do not swim.
++        const bool stable = _stableShadowMaps && pl.directionalLight && !orthographicViewFrustum
++            && settings->getMultipleShadowMapHint() == ShadowSettings::CASCADED;
++        osg::Vec3d stableSide, stableUp;
++        double stableNear = 0.0, stableFar = 0.0, tanX = 0.0, tanY = 0.0;
++        if (stable)
++        {
++            const osg::Vec3d& lightDir = pl.lightDir;
++            osg::Vec3d reference(0.0, 1.0, 0.0);
++            if (std::abs(lightDir * reference) > 0.99)
++                reference.set(1.0, 0.0, 0.0);
++            stableSide = lightDir ^ reference;
++            stableSide.normalize();
++            stableUp = stableSide ^ lightDir;
++
++            // The light view goes through the world origin, so all of its coordinates, depth included, are fixed
++            // in the world.
++            viewMatrix.makeLookAt(osg::Vec3d(), lightDir, stableUp);
++
++            double left, right, bottom, top, zNear, zFar;
++            viewProjectionMatrix.getFrustum(left, right, bottom, top, zNear, zFar);
++            tanX = std::max(std::abs(left), std::abs(right)) / zNear;
++            tanY = std::max(std::abs(bottom), std::abs(top)) / zNear;
++            stableNear = std::max(minZNear, 1.0);
++            stableFar = maxZFar;
++        }
++
+         // if we are using multiple shadow maps and CastShadowTraversalMask is being used
+         // traverse the scene to compute the extents of the objects
+-        if (/*numShadowMapsPerLight>1 &&*/ (_shadowedScene->getCastsShadowTraversalMask() & _worldMask) == 0)
++        if (!stable && (_shadowedScene->getCastsShadowTraversalMask() & _worldMask) == 0)
+         {
+             // osg::ElapsedTime timer;
+ 
+@@ -1368,6 +1436,24 @@
+ 
+             osg::ref_ptr<osg::Camera> camera = sd->_camera;
+ 
++            // With stable shadow maps the farthest map is drawn every other frame only. Its texels are fixed in the
++            // world, so last frame's map and matrices are still right for everything that does not move; only the
++            // shadows of distant actors lag a frame. It is drawn again at once when the sun has moved a step.
++            if (stable && sm_i > 0 && sm_i + 1 == numShadowMapsPerLight && sd->_stableDrawn && !stableLightMoved
++                && (cv.getTraversalNumber() & 1))
++            {
++                sd->_stableDrawn = false;
++                assignShadowStateSettings(cv, camera, sm_i, vddUniforms);
++                pl.textureUnits.push_back(textureUnit);
++                sd->_textureUnit = textureUnit;
++                sd->_sm_i = sm_i;
++                sdl.push_back(sd);
++                ++textureUnit;
++                ++numValidShadows;
++                continue;
++            }
++            sd->_stableDrawn = stable;
++
+             camera->setProjectionMatrix(projectionMatrix);
+             camera->setViewMatrix(viewMatrix);
+ 
+@@ -1389,8 +1475,8 @@
+             osg::Polytope local_polytope(polytope);
+             local_polytope.transformProvidingInverse(invertModelView);
+ 
+-            double cascaseNear = reducedNear;
+-            double cascadeFar = reducedFar;
++            double cascaseNear = stable ? stableNear : reducedNear;
++            double cascadeFar = stable ? stableFar : reducedFar;
+             if (numShadowMapsPerLight>1)
+             {
+                 // compute the start and end range in non-dimensional coords
+@@ -1406,8 +1492,8 @@
+                 double r_start, r_end;
+ 
+                 // split system based on the original Parallel Split Shadow Maps paper.
+-                double n = reducedNear;
+-                double f = reducedFar;
++                double n = stable ? stableNear : reducedNear;
++                double f = stable ? stableFar : reducedFar;
+                 double i = double(sm_i);
+                 double m = double(numShadowMapsPerLight);
+                 if (sm_i == 0)
+@@ -1499,7 +1585,46 @@
+             }
+ 
+             std::vector<osg::Plane> extraPlanes;
+-            if (settings->getMultipleShadowMapHint() == ShadowSettings::CASCADED)
++            if (stable)
++            {
++                // Bounding sphere of this cascade's slice of the view frustum. Its size only depends on the split
++                // distances and the field of view, so it stays the same while the camera turns.
++                const double k = tanX * tanX + tanY * tanY;
++                double centerDistance = (cascadeFar + cascaseNear) * (1.0 + k) * 0.5;
++                double radius;
++                if (centerDistance >= cascadeFar)
++                {
++                    centerDistance = cascadeFar;
++                    radius = cascadeFar * std::sqrt(k);
++                }
++                else
++                    radius = std::sqrt(cascadeFar * cascadeFar * k
++                        + (cascadeFar - centerDistance) * (cascadeFar - centerDistance));
++                const osg::Vec3d sphereCenter = frustum.eye + frustum.frustumCenterLine * centerDistance;
++
++                // Move the map in whole texels only.
++                const double texel = 2.0 * radius / camera->getViewport()->width();
++                const double x = std::floor(sphereCenter * stableSide / texel) * texel;
++                const double y = std::floor(sphereCenter * stableUp / texel) * texel;
++                // Depth only around the sphere, with room towards the light for casters outside it, moved in steps
++                // too, so the depths of static geometry stay the same while the camera moves. A depth range as large
++                // as the whole scene loses too much precision and makes shadow edges flicker.
++                const double margin = 8192.0;
++                const double depthRange = 2.0 * radius + margin;
++                const double depthStep = depthRange / 256.0;
++                const double depthNear
++                    = std::floor((sphereCenter * pl.lightDir - radius - margin) / depthStep) * depthStep;
++                camera->setProjectionMatrix(osg::Matrixd::ortho(
++                    x - radius, x + radius, y - radius, y + radius, depthNear, depthNear + depthRange + depthStep));
++
++                // Leave out the casters outside this map.
++                local_polytope.getPlaneList().push_back(osg::Plane(1.0, 0.0, 0.0, -(x - radius)));
++                local_polytope.getPlaneList().push_back(osg::Plane(-1.0, 0.0, 0.0, x + radius));
++                local_polytope.getPlaneList().push_back(osg::Plane(0.0, 1.0, 0.0, -(y - radius)));
++                local_polytope.getPlaneList().push_back(osg::Plane(0.0, -1.0, 0.0, y + radius));
++                local_polytope.setupMask();
++            }
++            else if (settings->getMultipleShadowMapHint() == ShadowSettings::CASCADED)
+             {
+                 cropShadowCameraToMainFrustum(frustum, camera, cascaseNear, cascadeFar, extraPlanes);
+                 for (const auto& plane : extraPlanes)
+@@ -1517,7 +1642,33 @@
+ 
+             cv.pushStateSet(_shadowCastingStateSet.get());
+ 
+-            cullShadowCastingScene(&cv, camera.get());
++            // The shadow maps that start beyond the object shadow distance get objects only from near the camera,
++            // in a second pass below. Actors and terrain still cast there as usual.
++            unsigned int excludeMask = 0;
++            if (_objectShadowDistance > 0.0f && cascaseNear > _objectShadowDistance)
++                excludeMask = _objectMask;
++
++            if (excludeMask)
++            {
++                // A box around the camera, as wide as the object shadow distance, in this shadow camera's view space.
++                osg::Polytope nearPolytope(local_polytope);
++                const osg::Vec3d& eye = frustum.eye;
++                const double d = _objectShadowDistance;
++                osg::Plane planes[] = { osg::Plane(1.0, 0.0, 0.0, -(eye.x() - d)), osg::Plane(-1.0, 0.0, 0.0, eye.x() + d),
++                    osg::Plane(0.0, 1.0, 0.0, -(eye.y() - d)), osg::Plane(0.0, -1.0, 0.0, eye.y() + d) };
++                for (osg::Plane& plane : planes)
++                {
++                    plane.transformProvidingInverse(invertModelView);
++                    nearPolytope.getPlaneList().push_back(plane);
++                }
++                nearPolytope.setupMask();
++                vdsmCallback->setNearObjectPass(
++                    cv.getTraversalMask() & _shadowedScene->getShadowSettings()->getCastsShadowTraversalMask()
++                        & ~_otherCasterMask,
++                    nearPolytope);
++            }
++
++            cullShadowCastingScene(&cv, camera.get(), excludeMask);
+ 
+             cv.popStateSet();
+ 
+@@ -3166,14 +3317,14 @@
+     return;
+ }
+ 
+-void MWShadowTechnique::cullShadowCastingScene(osgUtil::CullVisitor* cv, osg::Camera* camera) const
++void MWShadowTechnique::cullShadowCastingScene(osgUtil::CullVisitor* cv, osg::Camera* camera, unsigned int excludeMask) const
+ {
+     OSG_INFO<<"cullShadowCastingScene()"<<std::endl;
+ 
+     // record the traversal mask on entry so we can reapply it later.
+     unsigned int traversalMask = cv->getTraversalMask();
+ 
+-    cv->setTraversalMask( traversalMask & _shadowedScene->getShadowSettings()->getCastsShadowTraversalMask() );
++    cv->setTraversalMask( traversalMask & _shadowedScene->getShadowSettings()->getCastsShadowTraversalMask() & ~excludeMask );
+ 
+         if (camera) camera->accept(*cv);
+ 
+--- a/components/sceneutil/mwshadowtechnique.hpp
++++ b/components/sceneutil/mwshadowtechnique.hpp
+@@ -88,6 +88,21 @@
+ 
+         virtual void disableFrontFaceCulling();
+ 
++
++        /// Shadow maps fixed in the world: a light view that only depends on the light direction, one bounding
++        /// sphere per cascade and the map moved in whole texels. Needs orthographic shadow maps.
++        void setStableShadowMaps(bool stable) { _stableShadowMaps = stable; }
++
++        /// The shadow maps that start further away than distance only get the casters in objectMask that are within
++        /// distance of the camera. 0 turns it off.
++        void setObjectShadowDistance(float distance) { _objectShadowDistance = distance; }
++        /// otherCasterMask: the casters that are not objects (actors, terrain), left out of the near-object pass.
++        void setObjectMask(unsigned int objectMask, unsigned int otherCasterMask)
++        {
++            _objectMask = objectMask;
++            _otherCasterMask = otherCasterMask;
++        }
++
+         virtual void setupCastingShader(Shader::ShaderManager &shaderManager);
+ 
+         class ComputeLightSpaceBounds : public osg::NodeVisitor, public osg::CullStack
+@@ -198,6 +213,8 @@
+             unsigned int                        _sm_i;
+             osg::ref_ptr<osg::Texture2D>        _texture;
+             osg::ref_ptr<osg::Camera>           _camera;
++            /// Drawn last frame as a stable shadow map, so its texture and matrices can be used again.
++            bool                                _stableDrawn = false;
+         };
+ 
+         typedef std::list< osg::ref_ptr<ShadowData> > ShadowDataList;
+@@ -265,7 +282,7 @@
+ 
+         virtual void cullShadowReceivingScene(osgUtil::CullVisitor* cv) const;
+ 
+-        virtual void cullShadowCastingScene(osgUtil::CullVisitor* cv, osg::Camera* camera) const;
++        virtual void cullShadowCastingScene(osgUtil::CullVisitor* cv, osg::Camera* camera, unsigned int excludeMask = 0) const;
+ 
+         virtual osg::StateSet* prepareStateSetForRenderingShadow(ViewDependentData& vdd, unsigned int traversalNumber) const;
+ 
+@@ -309,6 +326,12 @@
+ 
+         unsigned int                            _worldMask = ~0u;
+ 
++        bool                                    _stableShadowMaps = false;
++        osg::Vec3d                              _stableLightDir;
++        float                                   _objectShadowDistance = 0.0f;
++        unsigned int                            _objectMask = 0;
++        unsigned int                            _otherCasterMask = 0;
++
+         class DebugHUD final : public osg::Referenced
+         {
+         public:
+--- a/components/sceneutil/shadow.cpp
++++ b/components/sceneutil/shadow.cpp
+@@ -55,6 +55,12 @@
+ 
+         mShadowSettings->setMinimumShadowMapNearFarRatio(settings.mMinimumLispsmNearFarRatio);
+ 
++        mShadowSettings->setShadowMapProjectionHint(!settings.mStableShadowMaps
++                ? ShadowSettings::PERSPECTIVE_SHADOW_MAP
++                : ShadowSettings::ORTHOGRAPHIC_SHADOW_MAP);
++        mShadowTechnique->setStableShadowMaps(settings.mStableShadowMaps);
++        mShadowTechnique->setObjectShadowDistance(settings.mObjectShadowDistance);
++
+         const std::string& computeSceneBounds = settings.mComputeSceneBounds;
+         if (Misc::StringUtils::ciEqual(computeSceneBounds, "primitives"))
+             mShadowSettings->setComputeNearFarModeOverride(osg::CullSettings::COMPUTE_NEAR_FAR_USING_PRIMITIVES);
+@@ -82,6 +88,11 @@
+             mShadowTechnique->disableDebugHUD();
+     }
+ 
++    void ShadowManager::setObjectShadowMask(unsigned int objectMask, unsigned int otherCasterMask)
++    {
++        mShadowTechnique->setObjectMask(objectMask, otherCasterMask);
++    }
++
+     void ShadowManager::disableShadowsForStateSet(osg::StateSet& stateset) const
+     {
+         if (!mEnableShadows)
+--- a/components/sceneutil/shadow.hpp
++++ b/components/sceneutil/shadow.hpp
+@@ -45,6 +45,9 @@
+ 
+         void enableOutdoorMode();
+ 
++        /// The casters that '[Shadows] object shadow distance' applies to.
++        void setObjectShadowMask(unsigned int objectMask, unsigned int otherCasterMask);
++
+     protected:
+         static ShadowManager* sInstance;
+ 
+--- a/components/settings/categories/shadows.hpp
++++ b/components/settings/categories/shadows.hpp
+@@ -42,6 +42,9 @@
+         SettingValue<bool> mTerrainShadows{ mIndex, "Shadows", "terrain shadows" };
+         SettingValue<bool> mObjectShadows{ mIndex, "Shadows", "object shadows" };
+         SettingValue<bool> mEnableIndoorShadows{ mIndex, "Shadows", "enable indoor shadows" };
++        SettingValue<float> mObjectShadowDistance{ mIndex, "Shadows", "object shadow distance",
++            makeMaxSanitizerFloat(0) };
++        SettingValue<bool> mStableShadowMaps{ mIndex, "Shadows", "stable shadow maps" };
+     };
+ }
+ 
+--- a/files/settings-default.cfg
++++ b/files/settings-default.cfg
+@@ -1064,6 +1064,12 @@
+ # Allow shadows indoors. Due to limitations with Morrowind's data, only actors can cast shadows indoors, which some might feel is distracting.
+ enable indoor shadows = true
+ 
++# The shadow maps that start further from the camera than this only get the objects (not actors or terrain) within this distance of the camera. 0 means no extra limit.
++object shadow distance = 0.0
++
++# Keep the shadow maps fixed in the world, so shadows do not shimmer or swim when the camera turns or moves. Shadows near the camera get a little less detail.
++stable shadow maps = false
++
+ [Physics]
+ # Set the number of background threads used for physics.
+ # If no background threads are used, physics calculations are processed in the main thread

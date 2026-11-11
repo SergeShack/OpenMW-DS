@@ -47,6 +47,7 @@ import org.openmw.ui.view.applyGameScreenResolution
 import org.openmw.ui.view.TUNED_PERF_SETTINGS_VERSION
 import org.openmw.ui.view.applyTunedPerformanceSettings
 import org.openmw.ui.view.seedConsoleWindowSize
+import org.openmw.ui.view.fixShadowSettingKeys
 import org.openmw.utils.CaptureCrash
 import org.openmw.utils.applyBookSize
 import org.openmw.utils.ConfigFileObserver
@@ -204,6 +205,9 @@ class MainActivity : ComponentActivity() {
                 // this app overwriting a resolution the player chose; this one never overwrites
                 // anything (see seedConsoleWindowSize).
                 seedConsoleWindowSize()
+                // Renames or removes two [Shadows] keys the engine does not know. Idempotent, so
+                // every launch; see fixShadowSettingKeys.
+                fixShadowSettingKeys()
                 // The internal openmw.cfg, not settings.cfg, and owned by the app, so every launch.
                 // Without it the `[GUI] font size` pushed below does nothing; see GAME_FONT_LINE.
                 useTrueTypeGameFont()
