@@ -1263,6 +1263,15 @@ Java_org_libsdl_app_SDLActivity_companionTouchClickActive(JNIEnv* /*env*/, jclas
         return JNI_FALSE;
     return (companionTouchClick() && companionIsGuiMode()) ? JNI_TRUE : JNI_FALSE;
 }
+// Phone app only: seconds the controller button hints stay up after they last changed, 0 = always.
+// Set by org.openmw.phone.PhoneExternal, read by phone-controller-hints-autohide.patch.
+static std::atomic<float> g_controllerHintsAutoHide{0.f};
+extern "C" float companionControllerHintsAutoHide() { return g_controllerHintsAutoHide.load(); }
+extern "C" JNIEXPORT void JNICALL
+Java_org_openmw_phone_PhoneExternal_setControllerHintsAutoHide(JNIEnv* /*env*/, jclass /*cls*/, jfloat seconds)
+{
+    g_controllerHintsAutoHide.store(seconds);
+}
 // Read by the phone's touch controller (SidePad): true while a menu (GUI mode) is open. There the
 // look pad acts as the right stick, which scrolls lists, instead of turning the camera.
 extern "C" JNIEXPORT jboolean JNICALL

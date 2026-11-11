@@ -1534,6 +1534,7 @@ class EngineActivity : SDLActivity() {
         // the native character-creation menus always has the button hints — including under "All
         // DS", which otherwise turns them off. The stored preference is untouched and takes effect
         // the moment the first journal entry lands. See UiPreferences.controllerTooltipsEffectiveFlow.
+        PhoneExternal.onGameStart(this)
         lifecycleScope.launch {
             UiPreferences.controllerTooltipsEffectiveFlow().collect { on ->
                 runCatching { setCompanionHudControllerTooltips(on) }

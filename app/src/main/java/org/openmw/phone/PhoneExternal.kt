@@ -54,6 +54,23 @@ object PhoneExternal {
      */
     fun legacyTouchControls(pinnedGameDisplay: Int?): Boolean = pinnedGameDisplay == null
 
+    /**
+     * Seconds the game's controller button hints (the bar along the bottom of a menu) stay up after
+     * they last changed. On a phone they cover the menus, and the controller beside them already
+     * names its buttons. They come back with the next window or menu.
+     */
+    private const val CONTROLLER_HINTS_SECONDS = 4f
+
+    /** Engine side: phone-controller-hints-autohide.patch. 0 keeps the hints up. */
+    @JvmStatic
+    private external fun setControllerHintsAutoHide(seconds: Float)
+
+    /** Called by the game activity at start. */
+    fun onGameStart(context: Context) {
+        if (!isActive(context)) return
+        runCatching { setControllerHintsAutoHide(CONTROLLER_HINTS_SECONDS) }
+    }
+
     /** Whether the side controller goes over the game: this profile, with the game on the phone. */
     fun wantsPadOverGame(pinnedGameDisplay: Int?): Boolean = pinnedGameDisplay == Display.DEFAULT_DISPLAY
 }
