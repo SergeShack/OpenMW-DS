@@ -167,17 +167,25 @@ object PadHaptics {
     private fun pulse(ms: Long, amplitude: Int): VibrationEffect = VibrationEffect.createOneShot(ms, amplitude)
 }
 
+/** Room left above the controller when it is over the game, for the corner buttons. */
+private val OVER_GAME_TOP = 52.dp
+
 private val PadBronze = Color(0xFFC8A062)
 private val PadFill = Color(0x402A2118)
 private val PadPressed = Color(0x80C8A062)
 
-/** Left side: triggers and shoulder, Back, the d-pad and the movement stick. */
+/**
+ * Left side: triggers and shoulder, Back, the d-pad and the movement stick.
+ *
+ * [overGame] is the phone-alone layout, drawn over the game: it leaves the top corners free for
+ * the keyboard and quick slot buttons.
+ */
 @Composable
-fun SidePadLeft() {
+fun SidePadLeft(overGame: Boolean = false) {
     val context = LocalContext.current
     remember(context) { PadHaptics.init(context.applicationContext); true }
     Column(
-        modifier = Modifier.fillMaxSize().padding(8.dp),
+        modifier = Modifier.fillMaxSize().padding(8.dp).padding(top = if (overGame) OVER_GAME_TOP else 0.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         PadRow {
@@ -195,13 +203,13 @@ fun SidePadLeft() {
     }
 }
 
-/** Right side: Start, shoulder and trigger, the face buttons and the look pad. */
+/** Right side: Start, shoulder and trigger, the face buttons and the look pad. See [SidePadLeft]. */
 @Composable
-fun SidePadRight() {
+fun SidePadRight(overGame: Boolean = false) {
     val context = LocalContext.current
     remember(context) { PadHaptics.init(context.applicationContext); true }
     Column(
-        modifier = Modifier.fillMaxSize().padding(8.dp),
+        modifier = Modifier.fillMaxSize().padding(8.dp).padding(top = if (overGame) OVER_GAME_TOP else 0.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         PadRow {

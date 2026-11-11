@@ -148,6 +148,7 @@ import org.openmw.utils.GameFilesPreferences.loadAutoMouseMode
 import org.openmw.utils.GameFilesPreferences.readAngle
 import org.openmw.utils.GameFilesPreferences.readSPIRV
 import org.openmw.phone.FramedCompanion
+import org.openmw.phone.GameScreenPad
 import org.openmw.phone.PhoneExternal
 import org.openmw.utils.DisplayRoles
 import org.openmw.utils.gameLaunchOptions
@@ -807,8 +808,8 @@ class EngineActivity : SDLActivity() {
                             }
                         }
 
-                        // No touch controls on an external game screen: it cannot be touched.
-                        val gameScreenTouch = remember { PhoneExternal.gameScreenTouchable(launchGameDisplayId) }
+                        // Not on Phone + external screen, which has its own controller. See PhoneExternal.
+                        val gameScreenTouch = remember { PhoneExternal.legacyTouchControls(launchGameDisplayId) }
                         if (gameScreenTouch) {
                             Buttons(context = this@EngineActivity, containerWidth = containerWidth, containerHeight = containerHeight)
                         }
@@ -886,9 +887,12 @@ class EngineActivity : SDLActivity() {
                         )
                     }
 
-                    if (PhoneExternal.gameScreenTouchable(launchGameDisplayId)) {
+                    if (PhoneExternal.legacyTouchControls(launchGameDisplayId)) {
                         sdlContainer.addView(composeViewLeftThumb)
                         updateComposeViewPosition(composeViewLeftThumb)
+                    }
+                    if (PhoneExternal.wantsPadOverGame(launchGameDisplayId)) {
+                        GameScreenPad.install(this@EngineActivity, sdlContainer)
                     }
                     //}
                 } else if (UIStateManager.useNavmesh) {

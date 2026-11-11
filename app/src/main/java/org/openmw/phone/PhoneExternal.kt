@@ -47,7 +47,13 @@ object PhoneExternal {
      */
     fun pinnedGameDisplay(context: Context): Int? = if (isActive(context)) gameDisplayId(context) else null
 
-    /** Whether the game's own screen gets touch controls: not when it is the external screen. */
-    fun gameScreenTouchable(pinnedGameDisplay: Int?): Boolean =
-        pinnedGameDisplay == null || pinnedGameDisplay == Display.DEFAULT_DISPLAY
+    /**
+     * Whether the game screen gets the old touch layer. Never on this profile ([pinnedGameDisplay]
+     * set): an external screen cannot be touched, and on the phone alone the side controller
+     * replaces it ([wantsPadOverGame]).
+     */
+    fun legacyTouchControls(pinnedGameDisplay: Int?): Boolean = pinnedGameDisplay == null
+
+    /** Whether the side controller goes over the game: this profile, with the game on the phone. */
+    fun wantsPadOverGame(pinnedGameDisplay: Int?): Boolean = pinnedGameDisplay == Display.DEFAULT_DISPLAY
 }
