@@ -69,6 +69,7 @@ object PhoneExternal {
     fun onGameStart(context: Context) {
         if (!isActive(context)) return
         runCatching { setControllerHintsAutoHide(CONTROLLER_HINTS_SECONDS) }
+            .onFailure { android.util.Log.e("PhoneExternal", "controller hints auto-hide not set", it) }
     }
 
     /** Whether the side controller goes over the game: this profile, with the game on the phone. */

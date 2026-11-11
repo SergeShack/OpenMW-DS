@@ -1314,6 +1314,10 @@ class EngineActivity : SDLActivity() {
 
     // OpenMW-DS Second screen function.
     private fun startCompanionScreen() {
+        // Before the single-screen return below: the phone profile without an external screen has
+        // no companion but still wants its game-side settings.
+        PhoneExternal.onGameStart(this)
+
         // SINGLE SCREEN DEVICE: there is no second screen, so nothing companion-side is set up at
         // all — no host window, no log sink, and none of startCompanionCollectors.
         //
@@ -1534,7 +1538,6 @@ class EngineActivity : SDLActivity() {
         // the native character-creation menus always has the button hints — including under "All
         // DS", which otherwise turns them off. The stored preference is untouched and takes effect
         // the moment the first journal entry lands. See UiPreferences.controllerTooltipsEffectiveFlow.
-        PhoneExternal.onGameStart(this)
         lifecycleScope.launch {
             UiPreferences.controllerTooltipsEffectiveFlow().collect { on ->
                 runCatching { setCompanionHudControllerTooltips(on) }
