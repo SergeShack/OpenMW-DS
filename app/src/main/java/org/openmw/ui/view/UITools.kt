@@ -9,6 +9,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
+import org.openmw.BuildConfig
 import org.openmw.ui.theme.MwBone
 import org.openmw.ui.theme.MwBoneDim
 import org.openmw.ui.theme.MwBronze
@@ -696,8 +697,12 @@ fun fixShadowSettingKeys() {
  *     `stable shadow maps = true`, see [seedShadowDefaults]. Written only where the file does not
  *     have the key yet, on every path, so a value the player set is kept. An install already at v6
  *     or v7 gets only the steps it is missing.
+ * v9 (Nov 11 2026): shadows on: `[Shadows] enable shadows`, `actor shadows`, `player shadows` and
+ *     `object shadows = true`, see [turnShadowsOn]. Only in builds with `SHADOWS_ON_BY_DEFAULT`, and
+ *     only where none of the shadow switches was ever turned on, so a player who set any of them
+ *     keeps their choice.
  */
-const val TUNED_PERF_SETTINGS_VERSION = 8
+const val TUNED_PERF_SETTINGS_VERSION = 9
 
 /**
  * Force this build's measured performance defaults into the user's `settings.cfg`.
@@ -815,7 +820,11 @@ const val TUNED_PERF_SETTINGS_VERSION = 8
  * - `stable shadow maps = true` (new): shadows no longer swim when the camera turns, and the far
  *   map is drawn every other frame, which pays for the stable maps' larger near map. At the busiest
  *   spot measured, frames over 36 ms went from 92% with the engine defaults to 25%.
- * None of them change anything until the player turns shadows on.
+ * None of them change anything until shadows are on.
+ * With v9 shadows on, same device and cap, with the v8 values: in a town under 1% of frames over
+ * 36 ms, about 25% at the busiest spot measured (0.4% without shadows), and walking through open
+ * country 15% against 0.7%, with the GPU 83% busy and 4-5 times as many frames of 60 ms or more on
+ * screen. Open country is the part left to make cheaper. Terrain shadows and indoor shadows stay off.
  *
  * Deliberately NOT included: `[Cells] prediction time = 3` measured as noise (26.5 -> 25.4 ms/s,
  * inside route variance) and did not fix what it was aimed at, so shipping it would put an
@@ -835,6 +844,7 @@ fun applyTunedPerformanceSettings(appliedVersion: Int) {
             setSettingInSection(lines, "[Camera]", "viewing distance", "4500")
         }
         if (appliedVersion < 8) seedShadowDefaults(lines)
+        if (appliedVersion < 9 && BuildConfig.SHADOWS_ON_BY_DEFAULT) turnShadowsOn(lines)
         if (lines != original) {
             file.writeText(lines.joinToString("\n"))
             Log.d("UITools", "Applied tuned defaults v${appliedVersion + 1}..v$TUNED_PERF_SETTINGS_VERSION")
@@ -855,6 +865,7 @@ fun applyTunedPerformanceSettings(appliedVersion: Int) {
     // The engine's maximum (12..18). Larger tooltips and menu text on the top screen.
     setSettingInSection(lines, "[GUI]", "font size", "18")
     seedShadowDefaults(lines)
+    if (BuildConfig.SHADOWS_ON_BY_DEFAULT) turnShadowsOn(lines)
 
     if (lines != original) {
         file.writeText(lines.joinToString("\n"))
@@ -876,6 +887,21 @@ private fun seedShadowDefaults(lines: MutableList<String>) {
         if (getSettingInSection(lines, "[Shadows]", key) == null) {
             setSettingInSection(lines, "[Shadows]", key, value)
         }
+    }
+}
+
+/**
+ * The v9 change (see [TUNED_PERF_SETTINGS_VERSION]), in builds with `SHADOWS_ON_BY_DEFAULT` only:
+ * turn on the shadows of actors, the player and objects, but only while every shadow switch is still
+ * off (or missing, which the engine reads as off), as this app has always shipped it. If the player
+ * turned any of them on, the section is theirs and is left alone. New installs get it the same way,
+ * since `settings.fallback.cfg` is shared by every build and keeps shadows off.
+ */
+private fun turnShadowsOn(lines: MutableList<String>) {
+    val switches = listOf("enable shadows", "actor shadows", "player shadows", "object shadows", "terrain shadows")
+    if (switches.any { (getSettingInSection(lines, "[Shadows]", it) ?: "false") != "false" }) return
+    listOf("enable shadows", "actor shadows", "player shadows", "object shadows").forEach {
+        setSettingInSection(lines, "[Shadows]", it, "true")
     }
 }
 

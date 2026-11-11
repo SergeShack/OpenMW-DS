@@ -22,6 +22,8 @@ if (keystorePropertiesFile.exists()) {
 // the official OpenMW-DS (org.openmw.ds, /OpenMW-DS) without sharing saves or config.
 val forkAppId = "io.github.sergeshack.openmwds"
 val forkStorageDir = "OpenMW-DS-DuoLite"
+// Whether shadows are on by default (see turnShadowsOn in UITools.kt).
+val forkShadowsOnByDefault = true
 
 // ---------------------------------------------------------------------------------------------
 // Release version — the SINGLE source of truth for "what version is this?".
@@ -107,6 +109,7 @@ android {
         applicationId = forkAppId
         // Folder under /storage/emulated/0 that holds saves, config, mods and resources.
         buildConfigField("String", "STORAGE_DIR", "\"$forkStorageDir\"")
+        buildConfigField("boolean", "SHADOWS_ON_BY_DEFAULT", "$forkShadowsOnByDefault")
         minSdk = 26
 
         //noinspection OldTargetApi
