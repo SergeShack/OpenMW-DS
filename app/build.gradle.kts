@@ -23,7 +23,7 @@ if (keystorePropertiesFile.exists()) {
 // The phone build (branch phone-ds) has its own as well, so it installs next to the Duo Lite one.
 val forkAppId = "io.github.sergeshack.openmwds.phone"
 val forkStorageDir = "OpenMW-DS-Phone"
-// Whether shadows are on by default (see turnShadowsOn in UITools.kt).
+// Whether shadows are on by default (see turnShadowsOn in UITools.kt). On for the phone build.
 val forkShadowsOnByDefault = true
 
 // ---------------------------------------------------------------------------------------------

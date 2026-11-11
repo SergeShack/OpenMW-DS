@@ -821,10 +821,11 @@ const val TUNED_PERF_SETTINGS_VERSION = 9
  *   map is drawn every other frame, which pays for the stable maps' larger near map. At the busiest
  *   spot measured, frames over 36 ms went from 92% with the engine defaults to 25%.
  * None of them change anything until shadows are on.
- * With v9 shadows on, same device and cap, with the v8 values: in a town under 1% of frames over
- * 36 ms, about 25% at the busiest spot measured (0.4% without shadows), and walking through open
- * country 15% against 0.7%, with the GPU 83% busy and 4-5 times as many frames of 60 ms or more on
- * screen. Open country is the part left to make cheaper. Terrain shadows and indoor shadows stay off.
+ * With shadows on, same device and cap, with the v8 values: in a town under 1% of frames over 36 ms,
+ * about 25% at the busiest spot measured (0.4% without shadows), and walking through open country
+ * 15% against 0.7%, with the GPU 83% busy and 4-5 times as many frames of 60 ms or more on screen.
+ * That is why the Duo Lite build keeps v9 off for now; open country is the part left to make cheaper.
+ * Terrain shadows and indoor shadows stay off in every build.
  *
  * Deliberately NOT included: `[Cells] prediction time = 3` measured as noise (26.5 -> 25.4 ms/s,
  * inside route variance) and did not fix what it was aimed at, so shipping it would put an
