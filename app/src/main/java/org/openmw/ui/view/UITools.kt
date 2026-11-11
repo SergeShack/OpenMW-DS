@@ -692,8 +692,12 @@ fun fixShadowSettingKeys() {
  * v7 (Nov 7 2026): `[Camera] viewing distance = 4500`. An install already at v6 only gets this one
  *     change, and only while the distance is still the v3 value 3500, so nothing the player set is
  *     reverted. Older installs get the full list as before.
+ * v8 (Nov 11 2026): `[Shadows] number of shadow maps = 2`, `object shadow distance = 1000`,
+ *     `stable shadow maps = true`, see [seedShadowDefaults]. Written only where the file does not
+ *     have the key yet, on every path, so a value the player set is kept. An install already at v6
+ *     or v7 gets only the steps it is missing.
  */
-const val TUNED_PERF_SETTINGS_VERSION = 7
+const val TUNED_PERF_SETTINGS_VERSION = 8
 
 /**
  * Force this build's measured performance defaults into the user's `settings.cfg`.
@@ -803,6 +807,16 @@ const val TUNED_PERF_SETTINGS_VERSION = 7
  *   2-3x as many stalls of 60 ms or more on screen, and in the open Ascadian Isles the frame no
  *   longer fits; 8000 misses it there in every run.
  *
+ * The v8 values, same device, Performance mode, 30 cap, actor and object shadows on, in a town:
+ * - `number of shadow maps = 2` (engine default 3) and `object shadow distance = 1000` (new, 0 means
+ *   no limit): the shadow maps draw every caster again, and the draw thread cost follows the indices
+ *   drawn, not the draw calls. With objects limited to near the camera in the far map the draw
+ *   thread went from 28-30 to 19-20 ms a frame and frames over 36 ms from about 35% to under 1%.
+ * - `stable shadow maps = true` (new): shadows no longer swim when the camera turns, and the far
+ *   map is drawn every other frame, which pays for the stable maps' larger near map. At the busiest
+ *   spot measured, frames over 36 ms went from 92% with the engine defaults to 25%.
+ * None of them change anything until the player turns shadows on.
+ *
  * Deliberately NOT included: `[Cells] prediction time = 3` measured as noise (26.5 -> 25.4 ms/s,
  * inside route variance) and did not fix what it was aimed at, so shipping it would put an
  * unjustified value in front of every user; `[Terrain] lod factor = 0.5` is a real +9.3% but raises
@@ -814,15 +828,16 @@ fun applyTunedPerformanceSettings(appliedVersion: Int) {
 
     val original = file.readLines()
     val lines = original.toMutableList()
-    if (appliedVersion == 6) {
+    if (appliedVersion >= 6) {
         // v7 changed only the viewing distance. Raise it where it is still the old default and leave
         // every other value as the player has it.
-        if (getSettingInSection(lines, "[Camera]", "viewing distance") == "3500") {
+        if (appliedVersion < 7 && getSettingInSection(lines, "[Camera]", "viewing distance") == "3500") {
             setSettingInSection(lines, "[Camera]", "viewing distance", "4500")
         }
+        if (appliedVersion < 8) seedShadowDefaults(lines)
         if (lines != original) {
             file.writeText(lines.joinToString("\n"))
-            Log.d("UITools", "Raised viewing distance to 4500 (tuned defaults v$TUNED_PERF_SETTINGS_VERSION)")
+            Log.d("UITools", "Applied tuned defaults v${appliedVersion + 1}..v$TUNED_PERF_SETTINGS_VERSION")
         }
         return
     }
@@ -839,10 +854,28 @@ fun applyTunedPerformanceSettings(appliedVersion: Int) {
     setSettingInSection(lines, "[Terrain]", "object paging min size", "0.03")
     // The engine's maximum (12..18). Larger tooltips and menu text on the top screen.
     setSettingInSection(lines, "[GUI]", "font size", "18")
+    seedShadowDefaults(lines)
 
     if (lines != original) {
         file.writeText(lines.joinToString("\n"))
         Log.d("UITools", "Applied tuned performance defaults v$TUNED_PERF_SETTINGS_VERSION")
+    }
+}
+
+/**
+ * The v8 shadow values (see [TUNED_PERF_SETTINGS_VERSION]), written only where the file does not have
+ * the key yet, so a value the player chose is kept. They make shadows much cheaper once the player turns
+ * them on and change nothing before that.
+ */
+private fun seedShadowDefaults(lines: MutableList<String>) {
+    listOf(
+        "number of shadow maps" to "2",
+        "object shadow distance" to "1000",
+        "stable shadow maps" to "true"
+    ).forEach { (key, value) ->
+        if (getSettingInSection(lines, "[Shadows]", key) == null) {
+            setSettingInSection(lines, "[Shadows]", key, value)
+        }
     }
 }
 
