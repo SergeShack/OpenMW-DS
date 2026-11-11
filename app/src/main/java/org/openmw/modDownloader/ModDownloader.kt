@@ -452,16 +452,14 @@ object ModListManager {
             while (retryCount < maxRetries) {
                 try {
                     response = chain.proceed(request)
-                    try {
-                        if (response.isSuccessful) {
-                            return response
-                        } else {
-                            response.close()
-                        }
-                    } catch (e: Exception) {
-                        response.run { close() }
-                        throw e
+                    // Only server errors are worth another try. Anything else, and the last
+                    // server error, goes back to the caller, which checks isSuccessful itself.
+                    if (response.code < 500 || retryCount + 1 >= maxRetries) {
+                        return response
                     }
+                    response.close()
+                    retryCount++
+                    Thread.sleep((1000 * retryCount).toLong())
                 } catch (e: IOException) {
                     lastException = e
                     retryCount++
