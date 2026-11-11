@@ -22,8 +22,9 @@ if (keystorePropertiesFile.exists()) {
 // the official OpenMW-DS (org.openmw.ds, /OpenMW-DS) without sharing saves or config.
 val forkAppId = "io.github.sergeshack.openmwds"
 val forkStorageDir = "OpenMW-DS-DuoLite"
-// Whether shadows are on by default (see turnShadowsOn in UITools.kt).
-val forkShadowsOnByDefault = true
+// Whether shadows are on by default (see turnShadowsOn in UITools.kt). Off for the Duo Lite for now:
+// in open country its GPU cannot hold the 30 fps cap with them.
+val forkShadowsOnByDefault = false
 
 // ---------------------------------------------------------------------------------------------
 // Release version — the SINGLE source of truth for "what version is this?".
