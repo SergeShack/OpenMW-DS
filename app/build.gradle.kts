@@ -20,8 +20,9 @@ if (keystorePropertiesFile.exists()) {
 
 // This fork (github.com/SergeShack/OpenMW-DS). Its own id and storage folder, so it installs next to
 // the official OpenMW-DS (org.openmw.ds, /OpenMW-DS) without sharing saves or config.
-val forkAppId = "io.github.sergeshack.openmwds"
-val forkStorageDir = "OpenMW-DS-DuoLite"
+// The phone build (branch phone-ds) has its own as well, so it installs next to the Duo Lite one.
+val forkAppId = "io.github.sergeshack.openmwds.phone"
+val forkStorageDir = "OpenMW-DS-Phone"
 
 // ---------------------------------------------------------------------------------------------
 // Release version — the SINGLE source of truth for "what version is this?".

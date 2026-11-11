@@ -73,7 +73,8 @@ object DisplayRoles {
     /** Stored as the Custom companion choice to mean "no companion": the single-screen behaviour. */
     const val CUSTOM_NONE = "none"
 
-    const val PROFILE_DEFAULT = PROFILE_CUSTOM
+    // This build is for phones: Phone + external screen by default. See org.openmw.phone.
+    const val PROFILE_DEFAULT = PhoneExternal.PROFILE
 
     /**
      * Last known profile, so the two call sites can resolve a role synchronously.

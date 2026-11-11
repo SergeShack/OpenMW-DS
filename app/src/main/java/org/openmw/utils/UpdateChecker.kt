@@ -54,6 +54,15 @@ object UpdateChecker {
     const val RELEASES_LATEST_URL =
         "https://api.github.com/repos/SergeShack/OpenMW-DS/releases/latest"
 
+    /**
+     * This phone build shares the repository with the Duo Lite build, so it does not use the
+     * "latest release" endpoint above: that is the Duo Lite release. Its releases are tagged
+     * `phone-vX.Y.Z` and published without being marked latest, so the Duo Lite updater never
+     * offers them. This lists recent releases and takes the newest one with that prefix.
+     */
+    const val TAG_PREFIX = "phone-v"
+    private const val RELEASES_URL = "https://api.github.com/repos/SergeShack/OpenMW-DS/releases?per_page=30"
+
     /** GitHub rejects API requests with no User-Agent (403), so this header is mandatory. */
     private val USER_AGENT = "OpenMW-DS-Updater/${BuildConfig.RELEASE_VERSION}"
 
@@ -197,7 +206,7 @@ object UpdateChecker {
 
                 val tag = release["tag_name"]?.jsonPrimitive?.content
                     ?: return@withContext UpdateState.Failed("Release has no tag_name")
-                val latest = tag.removePrefix("v").removePrefix("V")
+                val latest = tag.removePrefix(TAG_PREFIX)
 
                 // Exactly one .apk asset per release today, but pick by extension rather than by
                 // index so an added checksum/mapping asset can't break this.
@@ -256,7 +265,7 @@ object UpdateChecker {
 
     private fun fetchLatestReleaseJson(): String {
         val request = Request.Builder()
-            .url(RELEASES_LATEST_URL)
+            .url(RELEASES_URL)
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .header("User-Agent", USER_AGENT)
@@ -266,7 +275,13 @@ object UpdateChecker {
             if (!response.isSuccessful) {
                 throw IOException("GitHub returned HTTP ${response.code}")
             }
-            return response.body.string()
+            val releases = json.parseToJsonElement(response.body.string()).jsonArray
+            val release = releases.map { it.jsonObject }.firstOrNull { r ->
+                r["draft"]?.jsonPrimitive?.content != "true" &&
+                    r["prerelease"]?.jsonPrimitive?.content != "true" &&
+                    r["tag_name"]?.jsonPrimitive?.content?.startsWith(TAG_PREFIX) == true
+            } ?: throw IOException("No phone release yet")
+            return release.toString()
         }
     }
 
