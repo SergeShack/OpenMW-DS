@@ -23,6 +23,8 @@ if (keystorePropertiesFile.exists()) {
 // The phone build (branch phone-ds) has its own as well, so it installs next to the Duo Lite one.
 val forkAppId = "io.github.sergeshack.openmwds.phone"
 val forkStorageDir = "OpenMW-DS-Phone"
+// Whether shadows are on by default (see turnShadowsOn in UITools.kt).
+val forkShadowsOnByDefault = true
 
 // ---------------------------------------------------------------------------------------------
 // Release version — the SINGLE source of truth for "what version is this?".
@@ -108,6 +110,7 @@ android {
         applicationId = forkAppId
         // Folder under /storage/emulated/0 that holds saves, config, mods and resources.
         buildConfigField("String", "STORAGE_DIR", "\"$forkStorageDir\"")
+        buildConfigField("boolean", "SHADOWS_ON_BY_DEFAULT", "$forkShadowsOnByDefault")
         minSdk = 26
 
         //noinspection OldTargetApi
