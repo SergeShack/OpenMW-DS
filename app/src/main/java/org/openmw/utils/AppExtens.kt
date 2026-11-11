@@ -67,7 +67,15 @@ fun Context.startGame(isFinish: Boolean = true) {
     val intent = Intent(this, EngineActivity::class.java).apply {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-    this.startActivity(intent, gameLaunchOptions(this))
+    try {
+        this.startActivity(intent, gameLaunchOptions(this))
+    } catch (e: SecurityException) {
+        // Android refuses some external screens (a cast or mirroring display it does not trust).
+        // Stay in the launcher so the screen can be changed.
+        android.util.Log.e("startGame", "Game launch refused on display ${DisplayRoles.gameDisplayId(this)}", e)
+        Toast("Android did not allow the game on the chosen screen. Choose another one in Settings > Device.", isLong = true)
+        return
+    }
     if (isFinish) {
         if ((this is Activity)) {
             this.finish()
