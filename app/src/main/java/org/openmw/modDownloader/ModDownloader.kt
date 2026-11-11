@@ -25,7 +25,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -54,6 +53,7 @@ import java.io.File
 import java.io.IOException
 import java.net.URL
 import java.time.Instant
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import kotlin.math.absoluteValue
 
@@ -373,21 +373,38 @@ object ModListManager {
 
     var remainingMods by mutableIntStateOf(0)
 
-    val availableLists = runBlocking { fetchAvailableLists() }
-    suspend fun fetchAvailableLists(): MutableList<String> = withContext(Dispatchers.IO) {
+    // Starts with the two main lists, so creating this object never touches the network.
+    // The full set is fetched when the mod lists are downloaded, see refreshAvailableLists().
+    // Read from the UI and changed from background threads, hence the copy-on-write list.
+    val availableLists: MutableList<String> = CopyOnWriteArrayList(
+        listOf(
+            "i-heart-vanilla",
+            "total-overhaul"
+        )
+    )
+    private var availableListsFetched = false
+
+    suspend fun refreshAvailableLists() {
+        if (availableListsFetched) return
+        val lists = fetchAvailableLists() ?: return
+        lists.filter { it !in availableLists }.forEach { availableLists.add(it) }
+        availableListsFetched = true
+    }
+
+    private suspend fun fetchAvailableLists(): List<String>? = withContext(Dispatchers.IO) {
         try {
-            val jsonString = URL("https://modding-openmw.com/lists/json").readText()
+            val connection = URL("https://modding-openmw.com/lists/json").openConnection().apply {
+                connectTimeout = 15_000
+                readTimeout = 15_000
+            }
+            val jsonString = connection.getInputStream().bufferedReader().use { it.readText() }
             Json.decodeFromString<List<String>>(jsonString)
                 .filter { !it.endsWith("-wip") }
                 .filter { !it.contains("one-day-morrowind-modernization") }
-                .toMutableList()
         } catch (e: Exception) {
             println("Failed to fetch/parse mod lists: ${e.message}")
             addCustomLog("Failed to fetch/parse mod lists: ${e.message}", textSize = 10, textColor = Color.Cyan)
-            mutableListOf(
-                "i-heart-vanilla",
-                "total-overhaul"
-            )
+            null
         }
     }
 
@@ -435,16 +452,14 @@ object ModListManager {
             while (retryCount < maxRetries) {
                 try {
                     response = chain.proceed(request)
-                    try {
-                        if (response.isSuccessful) {
-                            return response
-                        } else {
-                            response.close()
-                        }
-                    } catch (e: Exception) {
-                        response.run { close() }
-                        throw e
+                    // Only server errors are worth another try. Anything else, and the last
+                    // server error, goes back to the caller, which checks isSuccessful itself.
+                    if (response.code < 500 || retryCount + 1 >= maxRetries) {
+                        return response
                     }
+                    response.close()
+                    retryCount++
+                    Thread.sleep((1000 * retryCount).toLong())
                 } catch (e: IOException) {
                     lastException = e
                     retryCount++
@@ -482,6 +497,7 @@ object ModListManager {
 
     suspend fun downloadAndParseModList(context: Context): List<ModDesc> = withContext(Dispatchers.Default) {
         processing = true
+        refreshAvailableLists()
         val allFilteredMods = mutableListOf<ModDesc>()
         val blockedModNames = listOf(
             "Buy and Install Morrowind",
