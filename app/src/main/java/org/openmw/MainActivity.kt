@@ -326,10 +326,15 @@ fun isControllerConnected(context: Context): Boolean {
     val inputManager = context.getSystemService(Context.INPUT_SERVICE) as InputManager
     val deviceIds = inputManager.inputDeviceIds
     for (id in deviceIds) {
-        val device = inputManager.getInputDevice(id)
-        if (device?.sources?.and(SOURCE_GAMEPAD) == SOURCE_GAMEPAD) {
-            return true
-        }
+        val device = inputManager.getInputDevice(id) ?: continue
+        if (device.sources and SOURCE_GAMEPAD != SOURCE_GAMEPAD) continue
+        // Some phones have a built-in virtual device that reports gamepad keys but has no sticks
+        // (Xiaomi's "uinput-xiaomi"). It is not a controller, and counting it hides the touch
+        // controls. A real one has sticks, or is plugged in or paired.
+        val hasSticks = device.sources and android.view.InputDevice.SOURCE_JOYSTICK ==
+            android.view.InputDevice.SOURCE_JOYSTICK
+        val external = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && device.isExternal
+        if (hasSticks || external) return true
     }
     return false
 }
