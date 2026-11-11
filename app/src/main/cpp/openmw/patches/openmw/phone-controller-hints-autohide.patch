@@ -55,22 +55,21 @@
          // COMPANION: the console gets an unconditional hint of its own, ahead of every gate below.
          //
          // The console has no controller support at all -- no getControllerButtons, no
-@@ -3321,6 +3358,18 @@
+@@ -3319,6 +3356,17 @@
+             return;
+         }
  
-         // setButtons will handle setting visibility based on if any buttons are defined.
-         mControllerButtonsOverlay->setButtons(topWin->getControllerButtons());
 +#ifdef __ANDROID__
-+        // PHONE: start the auto-hide time for a new window; for the same one, stay hidden if the
-+        // time already ran out.
++        // PHONE: start the auto-hide time for a new window. For the same window, once the time ran
++        // out, the bar is left alone rather than refreshed and hidden again on every call.
 +        sControllerHintsWindow = topWin;
 +        if (topWin != hintsWindowBefore)
 +        {
 +            sControllerHintsShownAt = std::chrono::steady_clock::now();
 +            sControllerHintsHidden = false;
 +        }
-+        else if (sControllerHintsHidden)
-+            mControllerButtonsOverlay->setVisible(false);
++        if (!sControllerHintsHidden)
 +#endif
+         // setButtons will handle setting visibility based on if any buttons are defined.
+         mControllerButtonsOverlay->setButtons(topWin->getControllerButtons());
          if (getMode() == GM_Inventory)
-         {
-             mInventoryTabsOverlay->setVisible(true);
