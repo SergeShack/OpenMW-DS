@@ -170,6 +170,7 @@ import org.openmw.utils.BOOK_SIZE_VANILLA
 import org.openmw.utils.applyBookSize
 import org.openmw.utils.ApkInstaller
 import org.openmw.utils.BugReport
+import org.openmw.phone.PhoneExternal
 import org.openmw.utils.DisplayRoles
 import org.openmw.utils.FileBrowserMode
 import org.openmw.utils.InstallResult
@@ -3770,6 +3771,7 @@ private fun DeviceProfileDropdown(selected: String, onSelected: (String) -> Unit
         DisplayRoles.PROFILE_THOR to stringResource(R.string.launcher_device_thor),
         DisplayRoles.PROFILE_RETROID to stringResource(R.string.launcher_device_retroid),
         DisplayRoles.PROFILE_SINGLE to stringResource(R.string.launcher_device_single),
+        PhoneExternal.PROFILE to stringResource(R.string.launcher_device_phone_external),
         DisplayRoles.PROFILE_CUSTOM to stringResource(R.string.launcher_device_custom),
     )
     // An unrecognised stored id falls back to showing the id itself rather than silently reading

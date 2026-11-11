@@ -168,7 +168,7 @@
     <string name="use_simplified_launcher_tip">Switch to the streamlined OpenMW-DS launcher. You can switch back from its settings screen at any time.</string>
     <string name="launcher_game_font">Use game font</string>
     <string name="launcher_device">Device</string>
-    <string name="launcher_device_tip">Which screen the game runs on. Change this only if the game and the second screen appear on the wrong panels, or pick Single Screen Device if this device has just one screen, which turns off the second screen menus and shows every game menu the original way. On other dual-screen devices, pick Custom to choose the screens yourself. The launcher itself always stays on this screen, so you can change it back.</string>
+    <string name="launcher_device_tip">Which screen the game runs on. Change this only if the game and the second screen appear on the wrong panels, or pick Single Screen Device if this device has just one screen, which turns off the second screen menus and shows every game menu the original way. To play on a TV or monitor with this phone as the second screen, pick Phone + External Screen. On other dual-screen devices, pick Custom to choose the screens yourself. The launcher itself always stays on this screen, so you can change it back.</string>
     <string name="launcher_device_thor">AYN Thor</string>
     <string name="launcher_resolution">Resolution</string>
     <string name="launcher_resolution_tip">The resolution the game screen is drawn at. The second screen is not affected, and the game menus are scaled to match. Applies the next time you start the game.</string>
@@ -188,6 +188,7 @@
     <string name="ini_hint_water_reflection">Recommended: 0. On the Retroid Pocket Duo Lite in Balmora, 1 left 15 percent of frames uneven at the 30 fps cap and 0 cut that to 7 percent, reflecting only the sky. Interiors are not affected.</string>
     <string name="launcher_device_retroid">Retroid Dual Screen (Experimental)</string>
     <string name="launcher_device_single">Single Screen Device</string>
+    <string name="launcher_device_phone_external">Phone + External Screen (Experimental)</string>
     <string name="launcher_device_custom">Custom (Experimental)</string>
     <string name="launcher_device_unsupported">No second screen was detected, so this option has no effect here.</string>
     <string name="launcher_game_font_tip">Show this launcher in the game\'s font, matching the companion screens. Turn off for the standard system font.</string>

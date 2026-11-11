@@ -953,6 +953,8 @@ public class SDLActivity extends AppCompatActivity implements View.OnSystemUiVis
     // COMPANION: true when direct touch-to-click applies — the "Touch input" option is on AND a
     // menu (GUI mode) is open. Read by SDLSurface.onTouch to skip the right-thumbstick drop-gate.
     public static native boolean companionTouchClickActive();
+    // COMPANION: true while a menu (GUI mode) is open. Read by the phone's touch controller.
+    public static native boolean companionGuiModeActive();
 
     public static native void omwSurfaceDestroyed();
     public static native void omwSurfaceRecreated();

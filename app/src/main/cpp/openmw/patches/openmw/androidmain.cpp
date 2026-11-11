@@ -1263,6 +1263,16 @@ Java_org_libsdl_app_SDLActivity_companionTouchClickActive(JNIEnv* /*env*/, jclas
         return JNI_FALSE;
     return (companionTouchClick() && companionIsGuiMode()) ? JNI_TRUE : JNI_FALSE;
 }
+// Read by the phone's touch controller (SidePad): true while a menu (GUI mode) is open. There the
+// look pad acts as the right stick, which scrolls lists, instead of turning the camera.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_org_libsdl_app_SDLActivity_companionGuiModeActive(JNIEnv* /*env*/, jclass /*cls*/)
+{
+    std::shared_lock engineLock(g_engineLifeMutex);
+    if (!g_engineAlive)
+        return JNI_FALSE;
+    return companionIsGuiMode() ? JNI_TRUE : JNI_FALSE;
+}
 // Per-element native HUD visibility bridges (companion-hud-elements.patch reads these in
 // hud.cpp to gate each element's setVisible). Each returns true when the native element
 // should be shown. Pushed from Kotlin (EngineActivity) on change + once at startup.

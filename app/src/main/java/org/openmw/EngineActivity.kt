@@ -147,6 +147,8 @@ import org.openmw.utils.GameFilesPreferences.getENVLine
 import org.openmw.utils.GameFilesPreferences.loadAutoMouseMode
 import org.openmw.utils.GameFilesPreferences.readAngle
 import org.openmw.utils.GameFilesPreferences.readSPIRV
+import org.openmw.phone.FramedCompanion
+import org.openmw.phone.PhoneExternal
 import org.openmw.utils.DisplayRoles
 import org.openmw.utils.gameLaunchOptions
 import org.openmw.utils.topScreenLaunchOptions
@@ -195,6 +197,12 @@ class EngineActivity : SDLActivity() {
     // ignores the request is not asked again on every callback. See returnToGameDisplayIfMoved.
     private var gameDisplayRequestAt = 0L
     private val GAME_DISPLAY_RETRY_MS = 2000L
+
+    // Phone + external screen: the display the game started on, kept for the run. See
+    // PhoneExternal.pinnedGameDisplay. Null on every other profile.
+    private var launchGameDisplayId: Int? = null
+
+    private fun wantedGameDisplayId(): Int = launchGameDisplayId ?: DisplayRoles.gameDisplayId(this)
 
     // Read-only conversation-history overlay on the TOP screen (this activity's own
     // window / Display 0), shown while a conversation is active AND the Conversation
@@ -330,7 +338,7 @@ class EngineActivity : SDLActivity() {
 
     private fun onGameDisplay(): Boolean {
         val current = display?.displayId ?: return true
-        return current == DisplayRoles.gameDisplayId(this)
+        return current == wantedGameDisplayId()
     }
 
     /**
@@ -355,7 +363,7 @@ class EngineActivity : SDLActivity() {
         val now = SystemClock.uptimeMillis()
         if (now - gameDisplayRequestAt < GAME_DISPLAY_RETRY_MS) return
         gameDisplayRequestAt = now
-        val wanted = DisplayRoles.gameDisplayId(this)
+        val wanted = wantedGameDisplayId()
         val appTask = getSystemService(ActivityManager::class.java)?.appTasks
             ?.firstOrNull { runCatching { it.taskInfo?.taskId }.getOrNull() == taskId }
         if (appTask == null) {
@@ -366,7 +374,8 @@ class EngineActivity : SDLActivity() {
         val intent = Intent(this, EngineActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
-        runCatching { appTask.startActivity(this, intent, gameLaunchOptions(this)) }
+        val options = ActivityOptions.makeBasic().setLaunchDisplayId(wanted).toBundle()
+        runCatching { appTask.startActivity(this, intent, options) }
             .onFailure { Log.e(TAG, "Could not move the game back to display $wanted", it) }
     }
 
@@ -518,6 +527,7 @@ class EngineActivity : SDLActivity() {
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
+        launchGameDisplayId = PhoneExternal.pinnedGameDisplay(this)
         enableEdgeToEdge()
         runCatching {
             initAlpha3()
@@ -797,10 +807,14 @@ class EngineActivity : SDLActivity() {
                             }
                         }
 
-                        Buttons(context = this@EngineActivity, containerWidth = containerWidth, containerHeight = containerHeight)
+                        // No touch controls on an external game screen: it cannot be touched.
+                        val gameScreenTouch = remember { PhoneExternal.gameScreenTouchable(launchGameDisplayId) }
+                        if (gameScreenTouch) {
+                            Buttons(context = this@EngineActivity, containerWidth = containerWidth, containerHeight = containerHeight)
+                        }
 
                         AnimatedVisibility(
-                            visible = enableRightThumb && UIStateManager.tempCodeGroup == "OpenMW",
+                            visible = gameScreenTouch && enableRightThumb && UIStateManager.tempCodeGroup == "OpenMW",
                             enter = fadeIn() + expandIn(),
                             exit = fadeOut() + shrinkOut()
                         ) {
@@ -822,7 +836,7 @@ class EngineActivity : SDLActivity() {
                         }
 
                         AnimatedVisibility(
-                            visible = isCursorVisible == 0 && enableQuickSlot,
+                            visible = gameScreenTouch && isCursorVisible == 0 && enableQuickSlot,
                             enter = fadeIn() + expandIn(),
                             exit = fadeOut() + shrinkOut()
                         ) {
@@ -872,8 +886,10 @@ class EngineActivity : SDLActivity() {
                         )
                     }
 
-                    sdlContainer.addView(composeViewLeftThumb)
-                    updateComposeViewPosition(composeViewLeftThumb)
+                    if (PhoneExternal.gameScreenTouchable(launchGameDisplayId)) {
+                        sdlContainer.addView(composeViewLeftThumb)
+                        updateComposeViewPosition(composeViewLeftThumb)
+                    }
                     //}
                 } else if (UIStateManager.useNavmesh) {
                     composeViewUI.setContent {
@@ -1347,10 +1363,10 @@ class EngineActivity : SDLActivity() {
         // companionUsesActivity() IS rolesSwapped() for every preset profile (Thor, Retroid,
         // Single); only the Custom profile decides differently, from the target display's
         // FLAG_PRESENTATION. See DisplayRoles.PROFILE_CUSTOM.
-        if (DisplayRoles.isCustom(this)) {
+        if (DisplayRoles.isCustom(this) || PhoneExternal.isActive(this)) {
             Log.d(
                 TAG,
-                "Second-screen: CUSTOM game=${DisplayRoles.gameDisplayId(this)} " +
+                "Second-screen: ${DisplayRoles.profile(this)} game=${DisplayRoles.gameDisplayId(this)} " +
                     "companion=${companionDisplay.displayId} " +
                     "host=${if (DisplayRoles.companionUsesActivity(this)) "activity" else "presentation"}"
             )
@@ -2262,6 +2278,9 @@ class EngineActivity : SDLActivity() {
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT
             ).apply { this.token = token }
+            if (companionPresentation == null && PhoneExternal.isActive(this@EngineActivity)) {
+                FramedCompanion.fitOverlay(lp)
+            }
             runCatching { wm.addView(overlay, lp) }
                 .onSuccess {
                     pauseOverlayView = overlay

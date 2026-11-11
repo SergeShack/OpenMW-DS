@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.libsdl.app.SDLActivity
 import org.libsdl.app.SDLControllerManager
 import org.openmw.companion.CompanionScreen
+import org.openmw.phone.FramedCompanion
+import org.openmw.phone.PhoneExternal
 
 
 /**
@@ -120,6 +122,11 @@ class CompanionActivity : ComponentActivity() {
                 if (insets.isVisible(WindowInsets.Type.systemBars())) applyImmersive()
                 insets
             }
+        }
+
+        if (PhoneExternal.isActive(this)) {
+            FramedCompanion.install(this, visible) { CompanionScreen() }
+            return
         }
 
         setContent {
@@ -446,6 +453,7 @@ class CompanionActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         removeFocusAnchor()
+        if (PhoneExternal.isActive(this)) FramedCompanion.onCompanionDestroyed()
         if (instance === this) instance = null
     }
 

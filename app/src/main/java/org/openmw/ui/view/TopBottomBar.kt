@@ -65,6 +65,7 @@ import org.openmw.ui.controls.UIStateManager.isTabExpanded
 import org.openmw.ui.controls.UIStateManager.launchedActivity
 import org.openmw.ui.controls.UIStateManager.transparentBlack
 import org.openmw.ui.page.setting.CodeGroupOptionSelector
+import org.openmw.phone.PhoneExternal
 import org.openmw.utils.GameFilesPreferences
 import org.openmw.utils.GameFilesPreferences.readCodeGroup
 import org.openmw.utils.MToast
@@ -304,6 +305,8 @@ suspend fun attemptLaunchGame(
 ) {
     UIStateManager.configureControls = false
     launchedActivity = true
+    // The external screen may have been connected after the launcher measured the game screen.
+    if (PhoneExternal.isActive(context)) context.applyGameScreenResolution()
     if (codeGroupOption == "OpenMW") {
         if (!bypassGameCheck) {
             val uri = savedPath

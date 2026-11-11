@@ -6,6 +6,7 @@ import android.util.Log
 import android.view.Display
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.openmw.phone.PhoneExternal
 
 /**
  * Which physical display plays the GAME role and which plays the COMPANION role.
@@ -210,7 +211,8 @@ object DisplayRoles {
         profile(context) == PROFILE_SINGLE ||
             // Custom with the companion set to None behaves as single screen (keyboard button,
             // full Vanilla). Unreachable for the presets: their profile is never PROFILE_CUSTOM.
-            (profile(context) == PROFILE_CUSTOM && customChoices(context).second == CUSTOM_NONE)
+            (profile(context) == PROFILE_CUSTOM && customChoices(context).second == CUSTOM_NONE) ||
+            PhoneExternal.phoneAlone(context)
 
     /**
      * The display id `EngineActivity` should be launched on.
@@ -221,6 +223,7 @@ object DisplayRoles {
      */
     fun gameDisplayId(context: Context): Int {
         if (isCustom(context)) return customGameDisplay(context)?.displayId ?: Display.DEFAULT_DISPLAY
+        if (PhoneExternal.isActive(context)) return PhoneExternal.gameDisplayId(context)
         if (!rolesSwapped(context)) return Display.DEFAULT_DISPLAY
         val presentation = presentationDisplay(context)
         if (presentation == null) {
@@ -244,6 +247,7 @@ object DisplayRoles {
             // is the whole meaning of the profile.
             singleScreen(context) -> null
             isCustom(context) -> customCompanionDisplay(context)
+            PhoneExternal.isActive(context) -> defaultDisplay(context)
             rolesSwapped(context) -> defaultDisplay(context)
             else -> presentationDisplay(context)
         }
@@ -383,6 +387,8 @@ object DisplayRoles {
      * anchor, which can hide it.
      */
     fun companionUsesActivity(context: Context): Boolean {
+        // The phone's own screen never allows a Presentation.
+        if (PhoneExternal.isActive(context)) return true
         if (!isCustom(context)) return rolesSwapped(context)
         val d = companionDisplay(context) ?: return false
         return d.flags and Display.FLAG_PRESENTATION == 0 || customFullscreen(context)

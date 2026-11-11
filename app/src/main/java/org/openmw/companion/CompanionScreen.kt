@@ -168,6 +168,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.openmw.phone.PhoneExternal
 import org.openmw.utils.DisplayRoles
 import org.openmw.ui.overlay.CornerOverlayButton
 import org.openmw.ui.view.readGuiScalingFromConfig
@@ -14111,7 +14112,9 @@ private fun SplashPanel() {
             when {
                 // = rolesSwapped() for every preset; the Custom profile also needs it whenever its
                 // companion is an Activity, which is what causes the boot-time controller steal.
-                DisplayRoles.companionUsesActivity(context) -> SPLASH_NOTICE_SWAPPED_CONTROLS
+                // Not with an external screen: it usually cannot be tapped.
+                DisplayRoles.companionUsesActivity(context) && !PhoneExternal.isActive(context) ->
+                    SPLASH_NOTICE_SWAPPED_CONTROLS
                 tamrielDataEnabledInConfig(File(Constants.USER_OPENMW_CFG)) ->
                     SPLASH_NOTICE_TAMRIEL_REBUILT
                 else -> null
