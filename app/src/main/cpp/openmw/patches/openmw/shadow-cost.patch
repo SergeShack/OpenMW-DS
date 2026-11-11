@@ -60,17 +60,21 @@
      cv->popStateSet();
  #if 1
      if (!_polytope.empty())
-@@ -1216,6 +1239,17 @@
+@@ -1216,6 +1239,21 @@
  
          LightData& pl = **itr;
  
 +        // Stable shadow maps follow the sun in steps rather than every frame. Otherwise the map turns a little each
 +        // frame as the sun moves, and shadow edges crawl.
++        bool stableLightMoved = false;
 +        if (_stableShadowMaps && pl.directionalLight)
 +        {
 +            if (_stableLightDir.length2() == 0.0
 +                || _stableLightDir * pl.lightDir < std::cos(osg::DegreesToRadians(0.1)))
++            {
 +                _stableLightDir = pl.lightDir;
++                stableLightMoved = true;
++            }
 +            else
 +                pl.lightDir = _stableLightDir;
 +        }
@@ -78,7 +82,7 @@
          // 3.1 compute light space polytope
          //
          osg::Polytope polytope = computeLightViewFrustumPolytope(frustum, pl);
-@@ -1237,9 +1271,39 @@
+@@ -1237,9 +1275,39 @@
              continue;
          }
  
@@ -119,7 +123,32 @@
          {
              // osg::ElapsedTime timer;
  
-@@ -1389,8 +1453,8 @@
+@@ -1368,6 +1436,24 @@
+ 
+             osg::ref_ptr<osg::Camera> camera = sd->_camera;
+ 
++            // With stable shadow maps the farthest map is drawn every other frame only. Its texels are fixed in the
++            // world, so last frame's map and matrices are still right for everything that does not move; only the
++            // shadows of distant actors lag a frame. It is drawn again at once when the sun has moved a step.
++            if (stable && sm_i > 0 && sm_i + 1 == numShadowMapsPerLight && sd->_stableDrawn && !stableLightMoved
++                && (cv.getTraversalNumber() & 1))
++            {
++                sd->_stableDrawn = false;
++                assignShadowStateSettings(cv, camera, sm_i, vddUniforms);
++                pl.textureUnits.push_back(textureUnit);
++                sd->_textureUnit = textureUnit;
++                sd->_sm_i = sm_i;
++                sdl.push_back(sd);
++                ++textureUnit;
++                ++numValidShadows;
++                continue;
++            }
++            sd->_stableDrawn = stable;
++
+             camera->setProjectionMatrix(projectionMatrix);
+             camera->setViewMatrix(viewMatrix);
+ 
+@@ -1389,8 +1475,8 @@
              osg::Polytope local_polytope(polytope);
              local_polytope.transformProvidingInverse(invertModelView);
  
@@ -130,7 +159,7 @@
              if (numShadowMapsPerLight>1)
              {
                  // compute the start and end range in non-dimensional coords
-@@ -1406,8 +1470,8 @@
+@@ -1406,8 +1492,8 @@
                  double r_start, r_end;
  
                  // split system based on the original Parallel Split Shadow Maps paper.
@@ -141,7 +170,7 @@
                  double i = double(sm_i);
                  double m = double(numShadowMapsPerLight);
                  if (sm_i == 0)
-@@ -1499,7 +1563,46 @@
+@@ -1499,7 +1585,46 @@
              }
  
              std::vector<osg::Plane> extraPlanes;
@@ -189,7 +218,7 @@
              {
                  cropShadowCameraToMainFrustum(frustum, camera, cascaseNear, cascadeFar, extraPlanes);
                  for (const auto& plane : extraPlanes)
-@@ -1517,7 +1620,33 @@
+@@ -1517,7 +1642,33 @@
  
              cv.pushStateSet(_shadowCastingStateSet.get());
  
@@ -224,7 +253,7 @@
  
              cv.popStateSet();
  
-@@ -3166,14 +3295,14 @@
+@@ -3166,14 +3317,14 @@
      return;
  }
  
@@ -265,7 +294,16 @@
          virtual void setupCastingShader(Shader::ShaderManager &shaderManager);
  
          class ComputeLightSpaceBounds : public osg::NodeVisitor, public osg::CullStack
-@@ -265,7 +280,7 @@
+@@ -198,6 +213,8 @@
+             unsigned int                        _sm_i;
+             osg::ref_ptr<osg::Texture2D>        _texture;
+             osg::ref_ptr<osg::Camera>           _camera;
++            /// Drawn last frame as a stable shadow map, so its texture and matrices can be used again.
++            bool                                _stableDrawn = false;
+         };
+ 
+         typedef std::list< osg::ref_ptr<ShadowData> > ShadowDataList;
+@@ -265,7 +282,7 @@
  
          virtual void cullShadowReceivingScene(osgUtil::CullVisitor* cv) const;
  
@@ -274,7 +312,7 @@
  
          virtual osg::StateSet* prepareStateSetForRenderingShadow(ViewDependentData& vdd, unsigned int traversalNumber) const;
  
-@@ -309,6 +324,12 @@
+@@ -309,6 +326,12 @@
  
          unsigned int                            _worldMask = ~0u;
  
