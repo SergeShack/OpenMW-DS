@@ -22,9 +22,11 @@ if (keystorePropertiesFile.exists()) {
 // the official OpenMW-DS (org.openmw.ds, /OpenMW-DS) without sharing saves or config.
 val forkAppId = "io.github.sergeshack.openmwds"
 val forkStorageDir = "OpenMW-DS-DuoLite"
-// Whether shadows are on by default (see turnShadowsOn in UITools.kt). Off for the Duo Lite for now:
-// in open country its GPU cannot hold the 30 fps cap with them.
-val forkShadowsOnByDefault = false
+// Whether shadows are on by default (see turnShadowsOn in UITools.kt), and the tuned settings version
+// (TUNED_PERF_SETTINGS_VERSION) that first turned them on in this build. Installs that already applied
+// that version are not turned on again, so a player who switched shadows off keeps them off.
+val forkShadowsOnByDefault = true
+val forkShadowsOnSince = 10
 
 // ---------------------------------------------------------------------------------------------
 // Release version — the SINGLE source of truth for "what version is this?".
@@ -111,6 +113,7 @@ android {
         // Folder under /storage/emulated/0 that holds saves, config, mods and resources.
         buildConfigField("String", "STORAGE_DIR", "\"$forkStorageDir\"")
         buildConfigField("boolean", "SHADOWS_ON_BY_DEFAULT", "$forkShadowsOnByDefault")
+        buildConfigField("int", "SHADOWS_ON_SINCE", "$forkShadowsOnSince")
         minSdk = 26
 
         //noinspection OldTargetApi

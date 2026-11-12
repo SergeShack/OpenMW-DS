@@ -700,7 +700,8 @@ fun fixShadowSettingKeys() {
  * v9 (Nov 11 2026): shadows on: `[Shadows] enable shadows`, `actor shadows`, `player shadows` and
  *     `object shadows = true`, see [turnShadowsOn]. Only in builds with `SHADOWS_ON_BY_DEFAULT`, and
  *     only where none of the shadow switches was ever turned on, so a player who set any of them
- *     keeps their choice.
+ *     keeps their choice. Applied at the version in `SHADOWS_ON_SINCE`: 9 in the phone build, 10 in
+ *     the Duo Lite build, which turned shadows on only then.
  * v10 (Nov 12 2026): `[Shadows] object shadow distance = 2000`, `maximum shadow map distance = 2000`,
  *     `shadow fade start = 0.6`, `number of shadow maps = 1`, see [updateShadowDistances]. Each written
  *     only where the key is missing or still has the earlier value (1000, 8192, 0.9, 2), so a value the
@@ -828,7 +829,7 @@ const val TUNED_PERF_SETTINGS_VERSION = 10
  * With shadows on, same device and cap, with the v8 values: in a town under 1% of frames over 36 ms,
  * about 25% at the busiest spot measured (0.4% without shadows), and walking through open country
  * 15% against 0.7%, with the GPU 83% busy and 4-5 times as many frames of 60 ms or more on screen.
- * That is why the Duo Lite build keeps v9 off for now; open country is the part left to make cheaper.
+ * That is why the Duo Lite build kept v9 off; it turns shadows on with the v10 values below.
  * Terrain shadows and indoor shadows stay off in every build.
  *
  * The v10 values, same device and cap, with the engine's object shadows now limited to the same area in
@@ -863,7 +864,7 @@ fun applyTunedPerformanceSettings(appliedVersion: Int) {
             setSettingInSection(lines, "[Camera]", "viewing distance", "4500")
         }
         if (appliedVersion < 8) seedShadowDefaults(lines)
-        if (appliedVersion < 9 && BuildConfig.SHADOWS_ON_BY_DEFAULT) turnShadowsOn(lines)
+        if (appliedVersion < BuildConfig.SHADOWS_ON_SINCE && BuildConfig.SHADOWS_ON_BY_DEFAULT) turnShadowsOn(lines)
         if (appliedVersion < 10) updateShadowDistances(lines)
         if (lines != original) {
             file.writeText(lines.joinToString("\n"))
@@ -930,7 +931,7 @@ private fun updateShadowDistances(lines: MutableList<String>) {
 }
 
 /**
- * The v9 change (see [TUNED_PERF_SETTINGS_VERSION]), in builds with `SHADOWS_ON_BY_DEFAULT` only:
+ * The v9 change (v10 in the Duo Lite build, see `SHADOWS_ON_SINCE`), in builds with `SHADOWS_ON_BY_DEFAULT` only:
  * turn on the shadows of actors, the player and objects, but only while every shadow switch is still
  * off (or missing, which the engine reads as off), as this app has always shipped it. If the player
  * turned any of them on, the section is theirs and is left alone. New installs get it the same way,
