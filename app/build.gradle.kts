@@ -23,8 +23,11 @@ if (keystorePropertiesFile.exists()) {
 // The phone build (branch phone-ds) has its own as well, so it installs next to the Duo Lite one.
 val forkAppId = "io.github.sergeshack.openmwds.phone"
 val forkStorageDir = "OpenMW-DS-Phone"
-// Whether shadows are on by default (see turnShadowsOn in UITools.kt). On for the phone build.
+// Whether shadows are on by default (see turnShadowsOn in UITools.kt), and the tuned settings version
+// (TUNED_PERF_SETTINGS_VERSION) that first turned them on in this build. Installs that already applied
+// that version are not turned on again, so a player who switched shadows off keeps them off.
 val forkShadowsOnByDefault = true
+val forkShadowsOnSince = 9
 
 // ---------------------------------------------------------------------------------------------
 // Release version — the SINGLE source of truth for "what version is this?".
@@ -33,7 +36,7 @@ val forkShadowsOnByDefault = true
 // render time, and the GitHub release TAG carries one (`v0.8.0`), so anything comparing the two
 // must strip it. Bump this one line per release.
 // ---------------------------------------------------------------------------------------------
-val releaseVersion = "1.4.9"
+val releaseVersion = "1.4.10"
 
 // Derive the OS-facing versionCode from `releaseVersion` rather than hand-maintaining a second
 // number. It used to be a hardcoded `2` that never moved, which meant the package manager had no
@@ -111,6 +114,7 @@ android {
         // Folder under /storage/emulated/0 that holds saves, config, mods and resources.
         buildConfigField("String", "STORAGE_DIR", "\"$forkStorageDir\"")
         buildConfigField("boolean", "SHADOWS_ON_BY_DEFAULT", "$forkShadowsOnByDefault")
+        buildConfigField("int", "SHADOWS_ON_SINCE", "$forkShadowsOnSince")
         minSdk = 26
 
         //noinspection OldTargetApi
