@@ -702,8 +702,9 @@ fun fixShadowSettingKeys() {
  *     only where none of the shadow switches was ever turned on, so a player who set any of them
  *     keeps their choice.
  * v10 (Nov 12 2026): `[Shadows] object shadow distance = 2000`, `maximum shadow map distance = 2000`,
- *     `shadow fade start = 0.6`, see [updateShadowDistances]. Each written only where the key is
- *     missing or still has the earlier default (1000, 8192, 0.9), so a value the player set is kept.
+ *     `shadow fade start = 0.6`, `number of shadow maps = 1`, see [updateShadowDistances]. Each written
+ *     only where the key is missing or still has the earlier value (1000, 8192, 0.9, 2), so a value the
+ *     player set is kept.
  */
 const val TUNED_PERF_SETTINGS_VERSION = 10
 
@@ -839,8 +840,10 @@ const val TUNED_PERF_SETTINGS_VERSION = 10
  *   shadows fade out between 1200 and 2000, so an object that starts casting at the edge does it where
  *   shadows have already faded, instead of its shadow appearing at once. Not slower: open country 6.4%
  *   of frames over 36 ms against 7.6% without the fade, a town 1.0%.
- * Open country with the low morning sun is the dearest case (about 11%; 7% at noon, 13-15% with the
- * v8 values).
+ * - `number of shadow maps = 1` (was 2): with shadows ending at 2000 one map covers them closely enough,
+ *   and the second map drew every caster again. Open country with the low morning sun, the dearest
+ *   case: 2.0% of frames over 36 ms against 9.7% with two maps (13-15% with the v8 values, 0.2% without
+ *   shadows); GPU busy 74% against 82%. Small casters such as characters get blockier shadows.
  *
  * Deliberately NOT included: `[Cells] prediction time = 3` measured as noise (26.5 -> 25.4 ms/s,
  * inside route variance) and did not fix what it was aimed at, so shipping it would put an
@@ -909,14 +912,15 @@ private fun seedShadowDefaults(lines: MutableList<String>) {
 }
 
 /**
- * The v10 shadow distances (see [TUNED_PERF_SETTINGS_VERSION]), each written only where the key is missing
+ * The v10 shadow values (see [TUNED_PERF_SETTINGS_VERSION]), each written only where the key is missing
  * or still has the value this app shipped before, so a value the player chose is kept.
  */
 private fun updateShadowDistances(lines: MutableList<String>) {
     listOf(
         Triple("object shadow distance", "1000", "2000"),
         Triple("maximum shadow map distance", "8192", "2000"),
-        Triple("shadow fade start", "0.9", "0.6")
+        Triple("shadow fade start", "0.9", "0.6"),
+        Triple("number of shadow maps", "2", "1")
     ).forEach { (key, previous, value) ->
         val current = getSettingInSection(lines, "[Shadows]", key)
         if (current == null || current == previous) {
