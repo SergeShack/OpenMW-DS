@@ -1,0 +1,195 @@
+diff --git a/components/sceneutil/mwshadowtechnique.cpp b/components/sceneutil/mwshadowtechnique.cpp
+index 8a9af28..a71d2fc 100644
+--- a/components/sceneutil/mwshadowtechnique.cpp
++++ b/components/sceneutil/mwshadowtechnique.cpp
+@@ -563,29 +563,41 @@ MWShadowTechnique::ShadowData::ShadowData(MWShadowTechnique::ViewDependentData*
+ 
+     bool debug = settings->getDebugDraw();
+ 
+-    // set up the texture
+-    _texture = new osg::Texture2D;
+-
+     osg::Vec2s textureSize = debug ? osg::Vec2s(512,512) : settings->getTextureSize();
+-    _texture->setTextureSize(textureSize.x(), textureSize.y());
+ 
+-    if (debug)
+-    {
+-        _texture->setInternalFormat(GL_RGB);
+-    }
++    // With a shadow atlas all maps of the view share one texture, each map drawn into its own part of it.
++    const unsigned int numMaps = settings->getNumShadowMapsPerLight();
++    const bool atlas = !debug && numMaps > 1 && vdd->getViewDependentShadowMap()->getShadowAtlas();
++    if (atlas && vdd->atlasTexture())
++        _texture = vdd->atlasTexture();
+     else
+     {
+-        _texture->setInternalFormat(GL_DEPTH_COMPONENT);
+-        _texture->setShadowComparison(true);
+-        _texture->setShadowTextureMode(osg::Texture2D::LUMINANCE);
+-    }
++        // set up the texture
++        _texture = new osg::Texture2D;
+ 
+-    _texture->setFilter(osg::Texture2D::MIN_FILTER,osg::Texture2D::LINEAR);
+-    _texture->setFilter(osg::Texture2D::MAG_FILTER,osg::Texture2D::LINEAR);
++        _texture->setTextureSize(textureSize.x() * (atlas ? numMaps : 1), textureSize.y());
+ 
+-    // the shader clips sampled coordinates, so no need for border
+-    _texture->setWrap(osg::Texture2D::WRAP_S,osg::Texture2D::CLAMP_TO_EDGE);
+-    _texture->setWrap(osg::Texture2D::WRAP_T,osg::Texture2D::CLAMP_TO_EDGE);
++        if (debug)
++        {
++            _texture->setInternalFormat(GL_RGB);
++        }
++        else
++        {
++            _texture->setInternalFormat(GL_DEPTH_COMPONENT);
++            _texture->setShadowComparison(true);
++            _texture->setShadowTextureMode(osg::Texture2D::LUMINANCE);
++        }
++
++        _texture->setFilter(osg::Texture2D::MIN_FILTER,osg::Texture2D::LINEAR);
++        _texture->setFilter(osg::Texture2D::MAG_FILTER,osg::Texture2D::LINEAR);
++
++        // the shader clips sampled coordinates, so no need for border
++        _texture->setWrap(osg::Texture2D::WRAP_S,osg::Texture2D::CLAMP_TO_EDGE);
++        _texture->setWrap(osg::Texture2D::WRAP_T,osg::Texture2D::CLAMP_TO_EDGE);
++
++        if (atlas)
++            vdd->atlasTexture() = _texture;
++    }
+ 
+     // set up the camera
+     _camera = new osg::Camera;
+@@ -1436,6 +1448,13 @@ void MWShadowTechnique::cull(osgUtil::CullVisitor& cv)
+ 
+             osg::ref_ptr<osg::Camera> camera = sd->_camera;
+ 
++            // Each map gets its own part of a shared shadow atlas (the camera clears only its viewport).
++            if (_shadowAtlas && !settings->getDebugDraw() && numShadowMapsPerLight > 1)
++            {
++                const osg::Vec2s& size = settings->getTextureSize();
++                camera->setViewport(sm_i * size.x(), 0, size.x(), size.y());
++            }
++
+             // With stable shadow maps the farthest map is drawn every other frame only. Its texels are fixed in the
+             // world, so last frame's map and matrices are still right for everything that does not move; only the
+             // shadows of distant actors lag a frame. It is drawn again at once when the sun has moved a step.
+diff --git a/components/sceneutil/mwshadowtechnique.hpp b/components/sceneutil/mwshadowtechnique.hpp
+index 59cfb16..35eefdd 100644
+--- a/components/sceneutil/mwshadowtechnique.hpp
++++ b/components/sceneutil/mwshadowtechnique.hpp
+@@ -96,6 +96,10 @@ namespace SceneUtil {
+         /// The shadow maps that start further away than distance only get the casters in objectMask that are within
+         /// distance of the camera. 0 turns it off.
+         void setObjectShadowDistance(float distance) { _objectShadowDistance = distance; }
++
++        /// Draw all shadow maps of a light side by side into one texture, so the shaders read it once per pixel.
++        void setShadowAtlas(bool atlas) { _shadowAtlas = atlas; }
++        bool getShadowAtlas() const { return _shadowAtlas; }
+         /// otherCasterMask: the casters that are not objects (actors, terrain), left out of the near-object pass.
+         void setObjectMask(unsigned int objectMask, unsigned int otherCasterMask)
+         {
+@@ -239,6 +243,9 @@ namespace SceneUtil {
+ 
+             void setNumValidShadows(unsigned int numValidShadows) { _numValidShadows = numValidShadows; }
+ 
++            /// The texture all shadow maps of this view are drawn into when they share one.
++            osg::ref_ptr<osg::Texture2D>& atlasTexture() { return _atlasTexture; }
++
+         protected:
+             friend class MWShadowTechnique;
+             virtual ~ViewDependentData() {}
+@@ -252,6 +259,8 @@ namespace SceneUtil {
+             std::array<Uniforms, 2>     _uniforms;
+ 
+             unsigned int _numValidShadows;
++
++            osg::ref_ptr<osg::Texture2D> _atlasTexture;
+         };
+ 
+         virtual ViewDependentData* createViewDependentData(osgUtil::CullVisitor* cv);
+@@ -329,6 +338,7 @@ namespace SceneUtil {
+         bool                                    _stableShadowMaps = false;
+         osg::Vec3d                              _stableLightDir;
+         float                                   _objectShadowDistance = 0.0f;
++        bool                                    _shadowAtlas = false;
+         unsigned int                            _objectMask = 0;
+         unsigned int                            _otherCasterMask = 0;
+ 
+diff --git a/components/sceneutil/shadow.cpp b/components/sceneutil/shadow.cpp
+index 8c1431d..ff0754e 100644
+--- a/components/sceneutil/shadow.cpp
++++ b/components/sceneutil/shadow.cpp
+@@ -69,6 +69,10 @@ namespace SceneUtil
+ 
+         const short mapres = static_cast<short>(settings.mShadowMapResolution);
+         mShadowSettings->setTextureSize(osg::Vec2s(mapres, mapres));
++        // One shadow texture read per pixel instead of one per map: the shaders cannot skip the reads of the maps
++        // a pixel is not in. Only with stable (orthographic) maps, which need no valid region check.
++        mShadowTechnique->setShadowAtlas(settings.mStableShadowMaps && numberOfShadowMapsPerLight > 1
++            && numberOfShadowMapsPerLight * mapres <= 8192);
+ 
+         mShadowTechnique->setSplitPointUniformLogarithmicRatio(settings.mSplitPointUniformLogarithmicRatio);
+         mShadowTechnique->setSplitPointDeltaBias(settings.mSplitPointBias);
+@@ -183,6 +187,10 @@ namespace SceneUtil
+ 
+         definesWithShadows["limitShadowMapDistance"] = settings.mMaximumShadowMapDistance > 0 ? "1" : "0";
+ 
++        definesWithShadows["shadowAtlasMaps"]
++            = mShadowTechnique->getShadowAtlas() ? std::to_string(mShadowSettings->getNumShadowMapsPerLight()) : "0";
++        definesWithShadows["shadowMapTexel"] = std::to_string(1.0 / mShadowSettings->getTextureSize().x());
++
+         return definesWithShadows;
+     }
+ 
+@@ -204,6 +212,10 @@ namespace SceneUtil
+ 
+         definesWithoutShadows["limitShadowMapDistance"] = "0";
+ 
++        definesWithoutShadows["shadowAtlasMaps"] = "0";
++
++        definesWithoutShadows["shadowMapTexel"] = "0.0";
++
+         return definesWithoutShadows;
+     }
+ 
+diff --git a/files/shaders/compatibility/shadows_fragment.glsl b/files/shaders/compatibility/shadows_fragment.glsl
+index 3c7a37a..e9b3577 100644
+--- a/files/shaders/compatibility/shadows_fragment.glsl
++++ b/files/shaders/compatibility/shadows_fragment.glsl
+@@ -22,6 +22,26 @@ float unshadowedLightRatio(float distance)
+     if (fade == 1.0)
+         return shadowing;
+ #endif
++#if @shadowAtlasMaps
++    // All maps share one texture side by side (shadowTexture0). The first map holding the pixel is picked by
++    // arithmetic, so the texture is read once: a read per map would cost every pixel all of them.
++    vec3 atlasCoords = vec3(0.0);
++    bool inAtlas = false;
++    @foreach shadow_texture_unit_index @shadow_texture_unit_list
++        {
++            vec3 shadowXYZ = shadowSpaceCoords@shadow_texture_unit_index.xyz / shadowSpaceCoords@shadow_texture_unit_index.w;
++            if (!inAtlas && all(lessThan(shadowXYZ.xy, vec2(1.0, 1.0))) && all(greaterThan(shadowXYZ.xy, vec2(0.0, 0.0))))
++            {
++                // keep the filter footprint off the neighbouring map
++                float x = clamp(shadowXYZ.x, @shadowMapTexel, 1.0 - @shadowMapTexel);
++                atlasCoords = vec3((x + @shadow_texture_unit_index.0) / @shadowAtlasMaps.0, shadowXYZ.yz);
++                inAtlas = true;
++            }
++        }
++    @endforeach
++    if (inAtlas)
++        shadowing = shadow2D(shadowTexture0, atlasCoords).r;
++#else
+     bool doneShadows = false;
+     @foreach shadow_texture_unit_index @shadow_texture_unit_list
+         if (!doneShadows)
+@@ -41,6 +61,7 @@ float unshadowedLightRatio(float distance)
+             }
+         }
+     @endforeach
++#endif
+ #if @limitShadowMapDistance
+     shadowing = mix(shadowing, 1.0, fade);
+ #endif
