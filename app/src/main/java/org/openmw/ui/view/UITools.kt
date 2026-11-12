@@ -701,8 +701,11 @@ fun fixShadowSettingKeys() {
  *     `object shadows = true`, see [turnShadowsOn]. Only in builds with `SHADOWS_ON_BY_DEFAULT`, and
  *     only where none of the shadow switches was ever turned on, so a player who set any of them
  *     keeps their choice.
+ * v10 (Nov 12 2026): `[Shadows] object shadow distance = 2000`, `maximum shadow map distance = 2000`,
+ *     `shadow fade start = 0.6`, see [updateShadowDistances]. Each written only where the key is
+ *     missing or still has the earlier default (1000, 8192, 0.9), so a value the player set is kept.
  */
-const val TUNED_PERF_SETTINGS_VERSION = 9
+const val TUNED_PERF_SETTINGS_VERSION = 10
 
 /**
  * Force this build's measured performance defaults into the user's `settings.cfg`.
@@ -827,6 +830,18 @@ const val TUNED_PERF_SETTINGS_VERSION = 9
  * That is why the Duo Lite build keeps v9 off for now; open country is the part left to make cheaper.
  * Terrain shadows and indoor shadows stay off in every build.
  *
+ * The v10 values, same device and cap, with the engine's object shadows now limited to the same area in
+ * every shadow map (stretched towards the sun as far as a low sun's shadows reach), so they no longer
+ * come and go as the camera turns:
+ * - `object shadow distance = 2000` (was 1000): at 1000 the shadows of houses across a street were
+ *   missing; 2000 keeps them.
+ * - `maximum shadow map distance = 2000` (engine default 8192) and `shadow fade start = 0.6` (0.9):
+ *   shadows fade out between 1200 and 2000, so an object that starts casting at the edge does it where
+ *   shadows have already faded, instead of its shadow appearing at once. Not slower: open country 6.4%
+ *   of frames over 36 ms against 7.6% without the fade, a town 1.0%.
+ * Open country with the low morning sun is the dearest case (about 11%; 7% at noon, 13-15% with the
+ * v8 values).
+ *
  * Deliberately NOT included: `[Cells] prediction time = 3` measured as noise (26.5 -> 25.4 ms/s,
  * inside route variance) and did not fix what it was aimed at, so shipping it would put an
  * unjustified value in front of every user; `[Terrain] lod factor = 0.5` is a real +9.3% but raises
@@ -846,6 +861,7 @@ fun applyTunedPerformanceSettings(appliedVersion: Int) {
         }
         if (appliedVersion < 8) seedShadowDefaults(lines)
         if (appliedVersion < 9 && BuildConfig.SHADOWS_ON_BY_DEFAULT) turnShadowsOn(lines)
+        if (appliedVersion < 10) updateShadowDistances(lines)
         if (lines != original) {
             file.writeText(lines.joinToString("\n"))
             Log.d("UITools", "Applied tuned defaults v${appliedVersion + 1}..v$TUNED_PERF_SETTINGS_VERSION")
@@ -867,6 +883,7 @@ fun applyTunedPerformanceSettings(appliedVersion: Int) {
     setSettingInSection(lines, "[GUI]", "font size", "18")
     seedShadowDefaults(lines)
     if (BuildConfig.SHADOWS_ON_BY_DEFAULT) turnShadowsOn(lines)
+    updateShadowDistances(lines)
 
     if (lines != original) {
         file.writeText(lines.joinToString("\n"))
@@ -886,6 +903,23 @@ private fun seedShadowDefaults(lines: MutableList<String>) {
         "stable shadow maps" to "true"
     ).forEach { (key, value) ->
         if (getSettingInSection(lines, "[Shadows]", key) == null) {
+            setSettingInSection(lines, "[Shadows]", key, value)
+        }
+    }
+}
+
+/**
+ * The v10 shadow distances (see [TUNED_PERF_SETTINGS_VERSION]), each written only where the key is missing
+ * or still has the value this app shipped before, so a value the player chose is kept.
+ */
+private fun updateShadowDistances(lines: MutableList<String>) {
+    listOf(
+        Triple("object shadow distance", "1000", "2000"),
+        Triple("maximum shadow map distance", "8192", "2000"),
+        Triple("shadow fade start", "0.9", "0.6")
+    ).forEach { (key, previous, value) ->
+        val current = getSettingInSection(lines, "[Shadows]", key)
+        if (current == null || current == previous) {
             setSettingInSection(lines, "[Shadows]", key, value)
         }
     }
