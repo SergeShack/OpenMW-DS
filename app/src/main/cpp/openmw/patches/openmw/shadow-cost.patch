@@ -218,27 +218,63 @@
              {
                  cropShadowCameraToMainFrustum(frustum, camera, cascaseNear, cascadeFar, extraPlanes);
                  for (const auto& plane : extraPlanes)
-@@ -1517,7 +1642,33 @@
+@@ -1517,7 +1642,69 @@
  
              cv.pushStateSet(_shadowCastingStateSet.get());
  
 -            cullShadowCastingScene(&cv, camera.get());
-+            // The shadow maps that start beyond the object shadow distance get objects only from near the camera,
-+            // in a second pass below. Actors and terrain still cast there as usual.
++            // Every shadow map gets objects only from near the camera, in a second pass below, so where their
++            // shadows end does not depend on where the camera looks. Actors and terrain still cast as usual.
 +            unsigned int excludeMask = 0;
-+            if (_objectShadowDistance > 0.0f && cascaseNear > _objectShadowDistance)
++            if (_objectShadowDistance > 0.0f)
 +                excludeMask = _objectMask;
 +
 +            if (excludeMask)
 +            {
-+                // A box around the camera, as wide as the object shadow distance, in this shadow camera's view space.
++                // The objects that can shadow the ground within the object shadow distance of the camera: those
++                // within that distance, and those towards the sun from there as far as the shadow of something half
++                // that tall reaches. A low sun casts long shadows from outside the square, which would otherwise
++                // appear all at once on the way. A vertical prism over the square stretched towards the sun.
 +                osg::Polytope nearPolytope(local_polytope);
 +                const osg::Vec3d& eye = frustum.eye;
 +                const double d = _objectShadowDistance;
-+                osg::Plane planes[] = { osg::Plane(1.0, 0.0, 0.0, -(eye.x() - d)), osg::Plane(-1.0, 0.0, 0.0, eye.x() + d),
-+                    osg::Plane(0.0, 1.0, 0.0, -(eye.y() - d)), osg::Plane(0.0, -1.0, 0.0, eye.y() + d) };
-+                for (osg::Plane& plane : planes)
++                osg::Vec2d towardsSun(-pl.lightDir.x(), -pl.lightDir.y());
++                const double horizontal = towardsSun.length();
++                if (horizontal > 0.0)
++                    towardsSun *= std::min(0.5 * d * horizontal / std::max(std::abs(pl.lightDir.z()), 1e-3), 2.0 * d)
++                        / horizontal;
++                std::vector<osg::Vec2d> points;
++                for (int i = 0; i < 8; ++i)
++                    points.emplace_back(osg::Vec2d(eye.x() + ((i & 1) ? d : -d), eye.y() + ((i & 2) ? d : -d))
++                        + ((i & 4) ? towardsSun : osg::Vec2d()));
++                // convex hull, counter-clockwise (monotone chain)
++                std::sort(points.begin(), points.end(), [](const osg::Vec2d& l, const osg::Vec2d& r) {
++                    return l.x() < r.x() || (l.x() == r.x() && l.y() < r.y());
++                });
++                auto cross = [](const osg::Vec2d& o, const osg::Vec2d& l, const osg::Vec2d& r) {
++                    return (l.x() - o.x()) * (r.y() - o.y()) - (l.y() - o.y()) * (r.x() - o.x());
++                };
++                std::vector<osg::Vec2d> hull;
++                for (int pass = 0; pass < 2; ++pass)
 +                {
++                    const size_t start = hull.size();
++                    for (const osg::Vec2d& point : points)
++                    {
++                        while (hull.size() >= start + 2 && cross(hull[hull.size() - 2], hull.back(), point) <= 0.0)
++                            hull.pop_back();
++                        hull.push_back(point);
++                    }
++                    hull.pop_back();
++                    std::reverse(points.begin(), points.end());
++                }
++                for (size_t i = 0; i < hull.size(); ++i)
++                {
++                    const osg::Vec2d& from = hull[i];
++                    const osg::Vec2d& to = hull[(i + 1) % hull.size()];
++                    // inside is to the left of each edge
++                    osg::Vec2d normal(from.y() - to.y(), to.x() - from.x());
++                    normal.normalize();
++                    osg::Plane plane(normal.x(), normal.y(), 0.0, -(normal * from));
 +                    plane.transformProvidingInverse(invertModelView);
 +                    nearPolytope.getPlaneList().push_back(plane);
 +                }
@@ -382,7 +418,7 @@
  # Allow shadows indoors. Due to limitations with Morrowind's data, only actors can cast shadows indoors, which some might feel is distracting.
  enable indoor shadows = true
  
-+# The shadow maps that start further from the camera than this only get the objects (not actors or terrain) within this distance of the camera. 0 means no extra limit.
++# Only objects (not actors or terrain) within this distance of the camera cast shadows, and those further towards the sun as far as their shadows reach. 0 means no extra limit.
 +object shadow distance = 0.0
 +
 +# Keep the shadow maps fixed in the world, so shadows do not shimmer or swim when the camera turns or moves. Shadows near the camera get a little less detail.
