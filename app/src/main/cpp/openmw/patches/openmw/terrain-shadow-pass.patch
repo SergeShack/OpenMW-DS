@@ -1,0 +1,146 @@
+diff --git a/components/terrain/material.cpp b/components/terrain/material.cpp
+index 04d5ead..3c2bfdc 100644
+--- a/components/terrain/material.cpp
++++ b/components/terrain/material.cpp
+@@ -153,6 +153,25 @@ namespace
+         }
+     };
+ 
++    // The shadow pass multiplies what the layers drew by its output.
++    class BlendFuncShadow
++    {
++    public:
++        static const osg::ref_ptr<osg::BlendFunc>& value()
++        {
++            static BlendFuncShadow instance;
++            return instance.mValue;
++        }
++
++    private:
++        osg::ref_ptr<osg::BlendFunc> mValue;
++
++        BlendFuncShadow()
++            : mValue(new osg::BlendFunc(osg::BlendFunc::ZERO, osg::BlendFunc::SRC_COLOR))
++        {
++        }
++    };
++
+     class UniformCollection
+     {
+     public:
+@@ -186,6 +205,22 @@ namespace Terrain
+         auto& shaderManager = sceneManager->getShaderManager();
+         std::vector<osg::ref_ptr<osg::StateSet>> passes;
+ 
++        // With several layers the shadow lookup would run once per layer pass for every pixel of the chunk. Instead
++        // the layers are drawn lit as if in full light, and one more pass multiplies the result by the shadowed to
++        // unshadowed lighting ratio, so the lookup runs once per pixel. Only with per-vertex lighting, where that
++        // ratio does not depend on the layer.
++        bool shadowPass = false;
++        if (!isComposite && !blendmaps.empty())
++        {
++            const Shader::ShaderManager::DefineMap globalDefines = shaderManager.getGlobalDefines();
++            const auto shadows = globalDefines.find("shadows_enabled");
++            const auto forcePPL = globalDefines.find("forcePPL");
++            shadowPass = shadows != globalDefines.end() && shadows->second == "1"
++                && (forcePPL == globalDefines.end() || forcePPL->second == "0");
++            for (const TextureLayer& layer : layers)
++                shadowPass = shadowPass && !layer.mNormalMap && !layer.mSpecular;
++        }
++
+         unsigned int blendmapIndex = 0;
+         for (std::vector<TextureLayer>::const_iterator it = layers.begin(); it != layers.end(); ++it)
+         {
+@@ -264,6 +299,8 @@ namespace Terrain
+                 defineMap["parallax"] = parallax ? "1" : "0";
+                 defineMap["writeNormals"] = (it == layers.end() - 1) ? "1" : "0";
+                 defineMap["reconstructNormalZ"] = reconstructNormalZ ? "1" : "0";
++                defineMap["shadowLookup"] = shadowPass ? "0" : "1";
++                defineMap["shadowPass"] = "0";
+                 Stereo::shaderStereoDefines(defineMap);
+ 
+                 stateset->setAttributeAndModes(shaderManager.getProgram("terrain", defineMap));
+@@ -272,6 +309,32 @@ namespace Terrain
+ 
+             passes.push_back(stateset);
+         }
++
++        if (shadowPass)
++        {
++            osg::ref_ptr<osg::StateSet> stateset(new osg::StateSet);
++            stateset->setMode(GL_BLEND, osg::StateAttribute::ON);
++            if (sceneManager->getSupportsNormalsRT())
++                stateset->setAttribute(new osg::Disablei(GL_BLEND, 1));
++            stateset->setRenderBinDetails(2, "RenderBin");
++            stateset->setAttributeAndModes(BlendFuncShadow::value(), osg::StateAttribute::ON);
++            stateset->setAttributeAndModes(EqualDepth::value(), osg::StateAttribute::ON);
++
++            Shader::ShaderManager::DefineMap defineMap;
++            defineMap["normalMap"] = "0";
++            defineMap["blendMap"] = "0";
++            defineMap["specularMap"] = "0";
++            defineMap["parallax"] = "0";
++            defineMap["writeNormals"] = "1";
++            defineMap["reconstructNormalZ"] = "0";
++            defineMap["shadowLookup"] = "1";
++            defineMap["shadowPass"] = "1";
++            Stereo::shaderStereoDefines(defineMap);
++
++            stateset->setAttributeAndModes(shaderManager.getProgram("terrain", defineMap));
++            stateset->addUniform(UniformCollection::value().mColorMode);
++            passes.push_back(stateset);
++        }
+         return passes;
+     }
+ 
+diff --git a/files/shaders/compatibility/terrain.frag b/files/shaders/compatibility/terrain.frag
+index d206b90..6597c55 100644
+--- a/files/shaders/compatibility/terrain.frag
++++ b/files/shaders/compatibility/terrain.frag
+@@ -44,6 +44,29 @@ uniform float far;
+ #include "fog.glsl"
+ #include "compatibility/normals.glsl"
+ 
++#if @shadowPass
++// Drawn after all layers of a chunk, which were lit as if in full light: the output multiplies them by the ratio of
++// shadowed to unshadowed lighting, so the shadow lookup runs once per pixel instead of once per layer.
++void main()
++{
++    float shadowing = unshadowedLightRatio(linearDepth);
++    vec3 lit = passLighting + shadowDiffuseLighting;
++    vec3 shadowed = passLighting + shadowDiffuseLighting * shadowing;
++    clampLightingResult(lit);
++    clampLightingResult(shadowed);
++    vec3 ratio = clamp(shadowed / max(lit, vec3(0.0001)), 0.0, 1.0);
++
++    // The layers were fogged after lighting; keep the fog's share of the colour as it is.
++    vec3 litShare = applyFogAtDist(vec4(1.0), euclideanDepth, linearDepth, far).xyz
++        - applyFogAtDist(vec4(0.0, 0.0, 0.0, 1.0), euclideanDepth, linearDepth, far).xyz;
++    gl_FragData[0] = vec4(mix(vec3(1.0), ratio, clamp(litShare, 0.0, 1.0)), 1.0);
++
++#if !@disableNormals && @writeNormals
++    // Drawn last, so it writes the normals the last layer would have written.
++    gl_FragData[1].xyz = normalize(gl_NormalMatrix * passNormal) * 0.5 + 0.5;
++#endif
++}
++#else
+ void main()
+ {
+     vec2 adjustedUV = (gl_TextureMatrix[0] * vec4(uv, 0.0, 1.0)).xy;
+@@ -74,7 +97,11 @@ void main()
+     vec3 viewNormal = normalize(gl_NormalMatrix * passNormal);
+ #endif
+ 
++#if @shadowLookup
+     float shadowing = unshadowedLightRatio(linearDepth);
++#else
++    float shadowing = 1.0;
++#endif
+     vec3 lighting, specular;
+ #if !PER_PIXEL_LIGHTING
+     lighting = passLighting + shadowDiffuseLighting * shadowing;
+@@ -104,3 +131,4 @@ void main()
+ 
+     applyShadowDebugOverlay();
+ }
++#endif
