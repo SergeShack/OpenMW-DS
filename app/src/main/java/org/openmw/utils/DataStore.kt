@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.openmw.ui.controls.UIStateManager
 import org.openmw.ui.view.RESOLUTION_TIER_DEFAULT
+import org.openmw.ui.view.INTERFACE_SIZE_DEFAULT
 
 // Singleton instance to avoid multiple DataStore instances for the same file
 private var dataStoreInstance: DataStore<Preferences>? = null
@@ -175,6 +176,11 @@ object GameFilesPreferences {
     // corrupt the base: the tier lives in the SAME store, so they are lost together, and a lost
     // tier means Native, at which point the file's value IS the base again.
     val GUI_SCALING_BASE_KEY = floatPreferencesKey("gui_scaling_base")
+
+    // Interface size, in percent of the base GUI scaling above (100 = as shipped). It multiplies
+    // the `[GUI] scaling factor` that applyGameScreenResolution writes, so it is never part of the
+    // base itself.
+    val INTERFACE_SIZE_KEY = intPreferencesKey("interface_size_percent")
     // (SINGLE_SCREEN_OVERLAY_KEY, "single_screen_overlay", was here: the Single Screen Device
     // keyboard on/off switch. Removed Sep 10 2026, the keyboard button is now always on for that
     // profile. A value already stored under that name is inert and nothing reads it.)
@@ -669,6 +675,20 @@ object GameFilesPreferences {
     suspend fun saveBookSize(context: Context, percent: Int) {
         context.dataStore.edit { preferences ->
             preferences[BOOK_SIZE_KEY] = percent
+        }
+    }
+
+    /** Interface size in percent of the base GUI scaling; 100 = as shipped. Absent =
+     *  [INTERFACE_SIZE_DEFAULT]. */
+    fun loadInterfaceSize(context: Context): Flow<Int> {
+        return context.prefsData.map { preferences ->
+            preferences[INTERFACE_SIZE_KEY] ?: INTERFACE_SIZE_DEFAULT
+        }
+    }
+
+    suspend fun saveInterfaceSize(context: Context, percent: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[INTERFACE_SIZE_KEY] = percent
         }
     }
 

@@ -513,6 +513,18 @@ private val SPLIT_ROW_VERTICAL_PADDING = 13.dp
 // one width. Keep the two in step if either moves.
 private const val SPLIT_PANEL_WIDTH = 0.84f
 
+// Type scale shared by the DS service screens (training, spell buying, travel, repair, rest/wait,
+// persuasion, alchemy, enchanting, spellmaking, level up), so the same kind of text is the same size
+// on every one of them. The SPLIT rows above keep their own [SPLIT_ROW_FONT_SIZE]; the HUD and the
+// looting/barter lists have their own sizing and do not use these.
+private val DS_TITLE_SIZE = 18.sp       // window and popup titles
+private val DS_ROW_SIZE = 17.sp         // the main text of a row: item, skill, place, spell, effect
+private val DS_SECONDARY_SIZE = 14.sp   // prices, values, effect lists, gold, search fields, notes
+private val DS_LABEL_SIZE = 13.sp       // bold section headers ("APPARATUS", "EFFECTS")
+private val DS_CAPTION_SIZE = 12.sp     // captions and hints; nothing on these screens is smaller
+private val DS_BUTTON_SIZE = 15.sp      // action buttons and chips
+private val DS_STEP_GLYPH_SIZE = 22.sp  // the - / + of step buttons
+
 /** Sizes a SPLIT-view dialogue panel (topics/persuade/repair/travel/training/spell-buying)
  *  uniformly: [SPLIT_PANEL_WIDTH] of the screen width, inset from the top and bottom by the SAME
  *  margin that width leaves at the sides, so the panel sits equidistant from all four edges of the
@@ -2565,7 +2577,7 @@ fun LevelUpTopOverlay() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             Modifier
-                .fillMaxWidth(0.62f)
+                .fillMaxWidth(0.68f)
                 .clip(RoundedCornerShape(4.dp))
                 .background(StonePanel.copy(alpha = LocalPanelOpacity.current))
                 .border(2.dp, BronzeLight, RoundedCornerShape(4.dp))
@@ -2584,15 +2596,15 @@ fun LevelUpTopOverlay() {
             }
             Text(
                 "You have ascended to level ${s.level}",
-                color = BronzeLight, fontSize = 17.sp, fontFamily = MwDisplay,
+                color = BronzeLight, fontSize = DS_TITLE_SIZE, fontFamily = MwDisplay,
                 fontWeight = FontWeight.Bold, textAlign = TextAlign.Center
             )
             if (s.flavour.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))
                 Text(
                     s.flavour,
-                    color = Bone, fontSize = 12.sp, fontFamily = MwBody,
-                    textAlign = TextAlign.Center, lineHeight = 16.sp
+                    color = Bone, fontSize = DS_ROW_SIZE, fontFamily = MwBody,
+                    textAlign = TextAlign.Center, lineHeight = 22.sp
                 )
             }
         }
@@ -3259,7 +3271,7 @@ private fun PersuasionPopup(gold: Int, bandSized: Boolean, onPersuade: (Int) -> 
     // In the SPLIT bottom-screen band the popups use a larger row font (matches the topics/services
     // increase); the centred card keeps the default size.
     val splitMode = bandSized
-    val optionFontSize = if (splitMode) SPLIT_ROW_FONT_SIZE else 14.sp
+    val optionFontSize = if (splitMode) SPLIT_ROW_FONT_SIZE else DS_ROW_SIZE
 
     // Controller: this popup is a cancelable modal. Mark it open so the dialogue-topic nav collector
     // yields underneath (no accidental topic select behind it) and native routes B to cancel JUST the
@@ -3305,7 +3317,7 @@ private fun PersuasionPopup(gold: Int, bandSized: Boolean, onPersuade: (Int) -> 
                 .pointerInput(Unit) { detectTapGestures {} }
         ) {
             Text(
-                "Persuasion", color = BronzeLight, fontSize = 15.sp,
+                "Persuasion", color = BronzeLight, fontSize = DS_TITLE_SIZE,
                 fontFamily = MwDisplay, fontWeight = FontWeight.Bold,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)
             )
@@ -3351,7 +3363,7 @@ private fun PersuasionPopup(gold: Int, bandSized: Boolean, onPersuade: (Int) -> 
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Gold: $gold", color = BronzeLight, fontSize = 13.sp, fontFamily = MwData,
+                    "Gold: $gold", color = BronzeLight, fontSize = DS_SECONDARY_SIZE, fontFamily = MwData,
                     modifier = Modifier.weight(1f)
                 )
                 Box(
@@ -3360,10 +3372,10 @@ private fun PersuasionPopup(gold: Int, bandSized: Boolean, onPersuade: (Int) -> 
                         .background(SlotBg)
                         .border(1.dp, BronzeDark, RoundedCornerShape(2.dp))
                         .clickable { onCancel() }
-                        .padding(horizontal = 18.dp, vertical = 8.dp)
+                        .padding(horizontal = 18.dp, vertical = 11.dp)
                 ) {
                     Text(
-                        "CANCEL", color = BronzeLight, fontSize = 12.sp,
+                        "CANCEL", color = BronzeLight, fontSize = DS_BUTTON_SIZE,
                         fontFamily = MwDisplay, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
                     )
                 }
@@ -7380,7 +7392,7 @@ private fun RepairOverlay(session: RepairSession) {
     // Bottom vs Split from the repair layout pref (Top pending → falls back to the bottom card).
     // Currently BOTTOM-only (no Split pill), so this is always the centred card.
     val splitMode = UiPreferences.repairLocationFlow().collectAsState().value == ScreenLocation.SPLIT
-    val rowFontSize = if (splitMode) SPLIT_ROW_FONT_SIZE else 14.sp
+    val rowFontSize = if (splitMode) SPLIT_ROW_FONT_SIZE else DS_ROW_SIZE
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -7392,14 +7404,14 @@ private fun RepairOverlay(session: RepairSession) {
     ) {
         Column(
             modifier = Modifier
-                .then(if (splitMode) Modifier.splitDialoguePanel() else Modifier.fillMaxWidth(0.7f).fillMaxHeight(0.86f))
+                .then(if (splitMode) Modifier.splitDialoguePanel() else Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.9f))
                 .mwPanel()
                 .pointerInput(Unit) { detectTapGestures {} }
         ) {
             // ---- Title bar ----
             Text(
                 "Repair: ${session.npcName.ifBlank { "Merchant" }}",
-                color = BronzeLight, fontSize = 15.sp,
+                color = BronzeLight, fontSize = DS_TITLE_SIZE,
                 fontFamily = MwDisplay, fontWeight = FontWeight.Bold,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)
@@ -7423,7 +7435,7 @@ private fun RepairOverlay(session: RepairSession) {
                 Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                     Text(
                         "Nothing needs repair", color = BoneDim,
-                        fontSize = 13.sp, fontFamily = MwBody
+                        fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody
                     )
                 }
             } else {
@@ -7449,7 +7461,7 @@ private fun RepairOverlay(session: RepairSession) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    "Gold: ${session.playerGold}", color = BronzeLight, fontSize = 13.sp,
+                    "Gold: ${session.playerGold}", color = BronzeLight, fontSize = DS_SECONDARY_SIZE,
                     fontFamily = MwData, modifier = Modifier.weight(1f)
                 )
                 // Repair All shows the total cost of ALL listed items; the engine repairs as
@@ -7474,7 +7486,7 @@ private fun RepairOverlay(session: RepairSession) {
 private fun RepairRow(
     item: RepairItem,
     affordable: Boolean,
-    nameFontSize: TextUnit = 14.sp,
+    nameFontSize: TextUnit = 17.sp,
     focused: Boolean = false,
     onRepair: () -> Unit
 ) {
@@ -7487,7 +7499,7 @@ private fun RepairRow(
                 else Modifier
             )
             .then(if (affordable) Modifier.clickable { onRepair() } else Modifier)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -7503,13 +7515,13 @@ private fun RepairRow(
         )
         // Condition column: a thin bar + "X/Y" text.
         Column(
-            modifier = Modifier.width(96.dp).padding(horizontal = 10.dp),
+            modifier = Modifier.width(112.dp).padding(horizontal = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(6.dp)
+                    .height(7.dp)
                     .clip(RoundedCornerShape(2.dp))
                     .background(Color(0xFF0E0B07))
                     .border(1.dp, BronzeDark, RoundedCornerShape(2.dp))
@@ -7524,27 +7536,29 @@ private fun RepairRow(
             Spacer(Modifier.height(2.dp))
             Text(
                 "${item.condition}/${item.maxCondition}",
-                color = BoneDim, fontSize = 9.sp, fontFamily = MwData
+                color = BoneDim, fontSize = DS_CAPTION_SIZE, fontFamily = MwData
             )
         }
         Text(
             "${item.cost}g",
             color = if (affordable) BronzeLight else RepairCondRed,
-            fontSize = 13.sp, fontFamily = MwData,
+            fontSize = DS_SECONDARY_SIZE, fontFamily = MwData,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.End,
-            modifier = Modifier.width(54.dp)
+            modifier = Modifier.width(66.dp)
         )
     }
 }
 
-/** A repair action button (Repair All / Cancel), styled like [BarterButton]. */
+/** A repair action button (Repair All / Cancel), styled like [BarterButton]. Every service overlay
+ *  uses it, so their buttons share one size. */
 @Composable
 private fun RepairButton(
     label: String,
     color: Color,
     enabled: Boolean,
     modifier: Modifier = Modifier,
+    fontSize: TextUnit = DS_BUTTON_SIZE,
     onClick: () -> Unit
 ) {
     Box(
@@ -7553,13 +7567,13 @@ private fun RepairButton(
             .background(if (enabled) color.copy(alpha = 0.20f) else SlotBg)
             .border(1.dp, if (enabled) color else BronzeDark, RoundedCornerShape(3.dp))
             .then(if (enabled) Modifier.clickable { onClick() } else Modifier)
-            .padding(horizontal = 14.dp, vertical = 9.dp),
+            .padding(horizontal = 14.dp, vertical = (fontSize.value * 0.75f).dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             label,
             color = if (enabled) color else BoneDim,
-            fontSize = 12.sp, fontFamily = MwDisplay, fontWeight = FontWeight.Bold,
+            fontSize = fontSize, fontFamily = MwDisplay, fontWeight = FontWeight.Bold,
             maxLines = 1, overflow = TextOverflow.Ellipsis
         )
     }
@@ -7715,7 +7729,7 @@ private fun AlchemyOverlay(session: AlchemySession) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "ALCHEMY",
-                    color = BronzeLight, fontSize = 15.sp, fontFamily = MwDisplay,
+                    color = BronzeLight, fontSize = DS_TITLE_SIZE, fontFamily = MwDisplay,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -7754,12 +7768,12 @@ private fun AlchemyOverlay(session: AlchemySession) {
                         .background(SlotBg)
                         .border(1.dp, BronzeDark, RoundedCornerShape(3.dp))
                         .clickable { searching = true }
-                        .padding(horizontal = 9.dp, vertical = 8.dp)
+                        .padding(horizontal = 10.dp, vertical = 10.dp)
                 ) {
                     Text(
                         AlchemyUiState.filter.ifBlank { "Search name or known effect…" },
                         color = if (AlchemyUiState.filter.isBlank()) BoneDim else BoneBright,
-                        fontSize = 12.sp, fontFamily = MwBody, maxLines = 1,
+                        fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody, maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -7781,7 +7795,7 @@ private fun AlchemyOverlay(session: AlchemySession) {
                     Text(
                         if (session.ingredients.isEmpty()) "No ingredients carried"
                         else "No ingredients match",
-                        color = BoneDim, fontSize = 12.sp, fontFamily = MwBody,
+                        color = BoneDim, fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody,
                         modifier = Modifier.padding(vertical = 10.dp)
                     )
                 } else visible.forEach { item ->
@@ -7814,7 +7828,7 @@ private fun AlchemyOverlay(session: AlchemySession) {
                 Spacer(Modifier.width(8.dp))
                 Box(
                     Modifier
-                        .width(58.dp)
+                        .width(64.dp)
                         // Same height as the two step buttons flanking it, so the trio reads as one
                         // control rather than a short box wedged between two tall ones.
                         .height(ALCHEMY_CONTROL_HEIGHT)
@@ -7825,7 +7839,7 @@ private fun AlchemyOverlay(session: AlchemySession) {
                 ) {
                     Text(
                         "${AlchemyUiState.qty}",
-                        color = BoneBright, fontSize = 15.sp, fontFamily = MwData,
+                        color = BoneBright, fontSize = DS_ROW_SIZE, fontFamily = MwData,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -7840,7 +7854,7 @@ private fun AlchemyOverlay(session: AlchemySession) {
                 Text(
                     "of ${session.maxBrew}",
                     color = if (session.maxBrew > 0) BoneDim else BoneMuted,
-                    fontSize = 13.sp, fontFamily = MwData
+                    fontSize = DS_SECONDARY_SIZE, fontFamily = MwData
                 )
                 Spacer(Modifier.weight(1f))
                 // Create is ALWAYS enabled, exactly as in vanilla: pressing it with an invalid recipe
@@ -7872,7 +7886,7 @@ private fun AlchemyOverlay(session: AlchemySession) {
             ) {
                 Text(
                     text,
-                    color = BoneBright, fontSize = 13.sp, fontFamily = MwDisplay,
+                    color = BoneBright, fontSize = DS_ROW_SIZE, fontFamily = MwDisplay,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth(0.9f)
@@ -7931,14 +7945,14 @@ private fun AlchemyChip(label: String, active: Boolean, onTap: () -> Unit) {
         Text(
             label,
             color = if (active) BoneBright else BoneDim,
-            fontSize = 11.sp, fontFamily = MwDisplay, maxLines = 1
+            fontSize = DS_BUTTON_SIZE, fontFamily = MwDisplay, maxLines = 1
         )
     }
 }
 
 /** Height shared by the whole bottom control row — the two step buttons, the quantity readout
  *  between them, and Create/Cancel — so nothing in that row is a different size from its neighbour. */
-private val ALCHEMY_CONTROL_HEIGHT = 46.dp
+private val ALCHEMY_CONTROL_HEIGHT = 56.dp
 
 @Composable
 private fun AlchemyStepButton(label: String, enabled: Boolean = true, onTap: () -> Unit) {
@@ -7954,7 +7968,7 @@ private fun AlchemyStepButton(label: String, enabled: Boolean = true, onTap: () 
         Text(
             label,
             color = if (enabled) BoneBright else BoneMuted.copy(alpha = 0.45f),
-            fontSize = 18.sp, fontFamily = MwData, fontWeight = FontWeight.Bold
+            fontSize = DS_STEP_GLYPH_SIZE, fontFamily = MwData, fontWeight = FontWeight.Bold
         )
     }
 }
@@ -7975,7 +7989,7 @@ private fun AlchemyActionButton(label: String, color: Color, onTap: () -> Unit) 
     ) {
         Text(
             label, color = color,
-            fontSize = 14.sp, fontFamily = MwDisplay, fontWeight = FontWeight.Bold, maxLines = 1
+            fontSize = DS_BUTTON_SIZE, fontFamily = MwDisplay, fontWeight = FontWeight.Bold, maxLines = 1
         )
     }
 }
@@ -7987,7 +8001,7 @@ private fun AlchemySlotBox(slot: AlchemySlot, modifier: Modifier = Modifier, onT
     val icon = rememberItemIcon(slot.icon)
     Column(
         modifier
-            .height(62.dp)
+            .height(78.dp)
             .clip(RoundedCornerShape(3.dp))
             .background(if (slot.present) SlotWorn else SlotBg)
             .border(1.dp, if (slot.present) BronzeLight else BronzeDark, RoundedCornerShape(3.dp))
@@ -7998,15 +8012,15 @@ private fun AlchemySlotBox(slot: AlchemySlot, modifier: Modifier = Modifier, onT
     ) {
         if (slot.present) {
             if (icon != null) {
-                Image(bitmap = icon, contentDescription = null, modifier = Modifier.size(28.dp))
+                Image(bitmap = icon, contentDescription = null, modifier = Modifier.size(40.dp))
             }
             Text(
                 slot.name,
-                color = BoneBright, fontSize = 9.sp, fontFamily = MwBody,
+                color = BoneBright, fontSize = DS_CAPTION_SIZE, fontFamily = MwBody,
                 maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center
             )
         } else {
-            Text("empty", color = BoneMuted, fontSize = 10.sp, fontFamily = MwBody)
+            Text("empty", color = BoneMuted, fontSize = DS_CAPTION_SIZE, fontFamily = MwBody)
         }
     }
 }
@@ -8038,29 +8052,29 @@ private fun AlchemyIngredientRow(item: AlchemyIngredient, enabled: Boolean, onTa
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (icon != null) {
-            Image(bitmap = icon, contentDescription = null, modifier = Modifier.size(40.dp))
-            Spacer(Modifier.width(9.dp))
+            Image(bitmap = icon, contentDescription = null, modifier = Modifier.size(46.dp))
+            Spacer(Modifier.width(10.dp))
         }
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     item.name,
                     color = if (enabled) BoneBright else BoneMuted,
-                    fontSize = 14.sp, fontFamily = MwBody,
+                    fontSize = DS_ROW_SIZE, fontFamily = MwBody,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
                 )
                 if (item.count > 1) {
                     Spacer(Modifier.width(6.dp))
-                    Text("x${item.count}", color = BoneDim, fontSize = 12.sp, fontFamily = MwData)
+                    Text("x${item.count}", color = BoneDim, fontSize = DS_SECONDARY_SIZE, fontFamily = MwData)
                 }
             }
             if (item.effects.isNotEmpty()) {
                 Spacer(Modifier.height(3.dp))
                 Text(
                     item.effects.joinToString(",   ") { if (it.known) it.name else "?" },
-                    color = BoneDim, fontSize = 11.sp, fontFamily = MwData,
-                    lineHeight = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis
+                    color = BoneDim, fontSize = DS_SECONDARY_SIZE, fontFamily = MwData,
+                    lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -8135,7 +8149,7 @@ fun AlchemyTopOverlay() {
             Column(Modifier.weight(1f)) {
                 Text(
                     "POTION NAME",
-                    color = BronzeLight, fontSize = 11.sp, fontFamily = MwDisplay,
+                    color = BronzeLight, fontSize = DS_LABEL_SIZE, fontFamily = MwDisplay,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.height(4.dp))
@@ -8146,7 +8160,7 @@ fun AlchemyTopOverlay() {
                         // value shown is always the field's real caption, echoed back in the batch.
                         s.name.ifBlank { "(unnamed)" },
                         color = if (s.name.isBlank()) BoneMuted else BoneBright,
-                        fontSize = 13.sp, fontFamily = MwBody,
+                        fontSize = DS_ROW_SIZE, fontFamily = MwBody,
                         maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -8154,7 +8168,7 @@ fun AlchemyTopOverlay() {
                 Spacer(Modifier.height(10.dp))
                 Text(
                     "APPARATUS",
-                    color = BronzeLight, fontSize = 11.sp, fontFamily = MwDisplay,
+                    color = BronzeLight, fontSize = DS_LABEL_SIZE, fontFamily = MwDisplay,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.height(4.dp))
@@ -8167,7 +8181,7 @@ fun AlchemyTopOverlay() {
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (appa.present && icon != null) {
-                                Image(bitmap = icon, contentDescription = null, modifier = Modifier.size(22.dp))
+                                Image(bitmap = icon, contentDescription = null, modifier = Modifier.size(28.dp))
                                 Spacer(Modifier.width(6.dp))
                             }
                             Column(Modifier.weight(1f)) {
@@ -8176,19 +8190,19 @@ fun AlchemyTopOverlay() {
                                     // Only the Mortar & Pestle is required; the rest are optional
                                     // quality modifiers, so an empty one is not an error state.
                                     color = if (appa.type == 0 && !appa.present) Color(0xFFC75C5C) else BoneDim,
-                                    fontSize = 9.sp, fontFamily = MwData
+                                    fontSize = DS_CAPTION_SIZE, fontFamily = MwData
                                 )
                                 Text(
                                     if (appa.present) appa.name else "(none)",
                                     color = if (appa.present) BoneBright else BoneMuted,
-                                    fontSize = 12.sp, fontFamily = MwBody,
+                                    fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis
                                 )
                             }
                             if (appa.present) {
                                 Text(
                                     formatQuality(appa.quality),
-                                    color = BronzeLight, fontSize = 10.sp, fontFamily = MwData
+                                    color = BronzeLight, fontSize = DS_CAPTION_SIZE, fontFamily = MwData
                                 )
                             }
                         }
@@ -8204,14 +8218,14 @@ fun AlchemyTopOverlay() {
             Column(Modifier.weight(1f)) {
                 Text(
                     "CREATED EFFECTS",
-                    color = BronzeLight, fontSize = 11.sp, fontFamily = MwDisplay,
+                    color = BronzeLight, fontSize = DS_LABEL_SIZE, fontFamily = MwDisplay,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.height(6.dp))
                 if (s.created.isEmpty()) {
                     Text(
                         "None",
-                        color = BoneMuted, fontSize = 12.sp, fontFamily = MwBody
+                        color = BoneMuted, fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody
                     )
                 } else s.created.forEach { eff ->
                     val icon = rememberItemIcon(if (eff.known) eff.icon else "")
@@ -8220,7 +8234,7 @@ fun AlchemyTopOverlay() {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (icon != null) {
-                            Image(bitmap = icon, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Image(bitmap = icon, contentDescription = null, modifier = Modifier.size(24.dp))
                             Spacer(Modifier.width(6.dp))
                         }
                         // NAME ONLY — no magnitude, no duration, no range. Vanilla builds this list
@@ -8229,7 +8243,7 @@ fun AlchemyTopOverlay() {
                         Text(
                             if (eff.known) eff.name else "?",
                             color = if (eff.known) Bone else BoneMuted,
-                            fontSize = 12.sp, fontFamily = MwBody,
+                            fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody,
                             maxLines = 1, overflow = TextOverflow.Ellipsis
                         )
                     }
@@ -8270,7 +8284,7 @@ fun AlchemyTopOverlay() {
                 Column(
                     Modifier
                         .padding(bottom = ALCHEMY_TOP_PANEL_INSET)
-                        .fillMaxWidth(0.5f)
+                        .fillMaxWidth(0.55f)
                         .mwPanel()
                         // Swallow taps on the card so a miss between rows cannot dismiss it.
                         .pointerInput(Unit) { detectTapGestures { } }
@@ -8278,12 +8292,12 @@ fun AlchemyTopOverlay() {
                 ) {
                     Text(
                         ALCHEMY_APPARATUS_NAMES.getOrElse(picker) { "Apparatus" }.uppercase(),
-                        color = BronzeLight, fontSize = 13.sp, fontFamily = MwDisplay,
+                        color = BronzeLight, fontSize = DS_TITLE_SIZE, fontFamily = MwDisplay,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(Modifier.height(8.dp))
                     if (pickerTools.isEmpty()) {
-                        Text("You carry none.", color = BoneMuted, fontSize = 12.sp, fontFamily = MwBody)
+                        Text("You carry none.", color = BoneMuted, fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody)
                     } else pickerTools.forEachIndexed { i, tool ->
                         val icon = rememberItemIcon(tool.icon)
                         AlchemyTopFocusBox(
@@ -8296,18 +8310,18 @@ fun AlchemyTopOverlay() {
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 if (icon != null) {
-                                    Image(bitmap = icon, contentDescription = null, modifier = Modifier.size(22.dp))
+                                    Image(bitmap = icon, contentDescription = null, modifier = Modifier.size(28.dp))
                                     Spacer(Modifier.width(6.dp))
                                 }
                                 Text(
                                     tool.name,
-                                    color = BoneBright, fontSize = 12.sp, fontFamily = MwBody,
+                                    color = BoneBright, fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f)
                                 )
                                 Text(
                                     formatQuality(tool.quality),
-                                    color = BronzeLight, fontSize = 10.sp, fontFamily = MwData
+                                    color = BronzeLight, fontSize = DS_CAPTION_SIZE, fontFamily = MwData
                                 )
                             }
                         }
@@ -9826,7 +9840,7 @@ private fun EnchantingOverlay(session: EnchantSession) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "ENCHANTING",
-                    color = BronzeLight, fontSize = 18.sp, fontFamily = MwDisplay,
+                    color = BronzeLight, fontSize = DS_TITLE_SIZE, fontFamily = MwDisplay,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.weight(1f))
@@ -9834,7 +9848,7 @@ private fun EnchantingOverlay(session: EnchantSession) {
                 if (session.showPrice) {
                     Text(
                         "Gold: ${session.gold}",
-                        color = BronzeLight, fontSize = 15.sp, fontFamily = MwData
+                        color = BronzeLight, fontSize = DS_SECONDARY_SIZE, fontFamily = MwData
                     )
                 }
             }
@@ -9882,7 +9896,7 @@ private fun EnchantingOverlay(session: EnchantSession) {
                     Text(
                         EnchantUiState.filter.ifBlank { "Search magic effects…" },
                         color = if (EnchantUiState.filter.isBlank()) BoneDim else BoneBright,
-                        fontSize = 15.sp, fontFamily = MwBody, maxLines = 1,
+                        fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody, maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -9908,7 +9922,7 @@ private fun EnchantingOverlay(session: EnchantSession) {
                     Text(
                         if (session.available.isEmpty()) "No known enchantable effects"
                         else "No effects match",
-                        color = BoneDim, fontSize = 15.sp, fontFamily = MwBody,
+                        color = BoneDim, fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody,
                         modifier = Modifier.padding(vertical = 12.dp)
                     )
                 }
@@ -9993,7 +10007,7 @@ private fun EnchantingOverlay(session: EnchantSession) {
             ) {
                 Text(
                     text,
-                    color = BoneBright, fontSize = 13.sp, fontFamily = MwDisplay,
+                    color = BoneBright, fontSize = DS_ROW_SIZE, fontFamily = MwDisplay,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth(0.9f)
@@ -10055,7 +10069,7 @@ private fun EnchantingOverlay(session: EnchantSession) {
                     Text(
                         "Enchantment ${session.points} / ${session.maxPoints}",
                         color = if (session.overCapacity) BarterRed else BoneDim,
-                        fontSize = 15.sp, fontFamily = MwData
+                        fontSize = DS_SECONDARY_SIZE, fontFamily = MwData
                     )
                 }
             }
@@ -10118,23 +10132,23 @@ private fun EnchantSlotBox(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     label,
-                    color = BronzeLight, fontSize = 11.sp, fontFamily = MwDisplay,
+                    color = BronzeLight, fontSize = DS_CAPTION_SIZE, fontFamily = MwDisplay,
                     fontWeight = FontWeight.Bold, letterSpacing = 1.sp
                 )
                 if (hint != null) {
                     Spacer(Modifier.width(5.dp))
-                    Text("[$hint]", color = BoneDim, fontSize = 10.sp, fontFamily = MwData)
+                    Text("[$hint]", color = BoneDim, fontSize = DS_CAPTION_SIZE, fontFamily = MwData)
                 }
             }
             Text(
                 if (slot.present) slot.name else "Tap to select",
                 color = if (slot.present) BoneBright else BoneDim,
-                fontSize = 15.sp, fontFamily = MwBody, maxLines = 1, overflow = TextOverflow.Ellipsis
+                fontSize = DS_ROW_SIZE, fontFamily = MwBody, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
         }
         if (detail.isNotBlank()) {
             Spacer(Modifier.width(8.dp))
-            Text(detail, color = BronzeLight, fontSize = 14.sp, fontFamily = MwData)
+            Text(detail, color = BronzeLight, fontSize = DS_SECONDARY_SIZE, fontFamily = MwData)
         }
     }
 }
@@ -10199,11 +10213,11 @@ private fun EffectPickRow(
                 Text(
                     title,
                     color = if (enabled) Bone else BoneMuted,
-                    fontSize = 16.sp, fontFamily = MwBody, maxLines = 2,
+                    fontSize = DS_ROW_SIZE, fontFamily = MwBody, maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
                 if (subtitle != null) {
-                    Text(subtitle, color = BoneMuted, fontSize = 12.sp, fontFamily = MwBody)
+                    Text(subtitle, color = BoneMuted, fontSize = DS_CAPTION_SIZE, fontFamily = MwBody)
                 }
             }
         }
@@ -10249,14 +10263,14 @@ private fun EffectActionButton(
             Text(
                 label,
                 color = if (enabled) color else BoneMuted,
-                fontSize = 16.sp, fontFamily = MwDisplay, fontWeight = FontWeight.Bold, maxLines = 1
+                fontSize = DS_BUTTON_SIZE, fontFamily = MwDisplay, fontWeight = FontWeight.Bold, maxLines = 1
             )
             if (hint != null) {
                 Spacer(Modifier.width(6.dp))
                 Text(
                     "[$hint]",
                     color = if (enabled) BoneDim else BoneDim.copy(alpha = 0.5f),
-                    fontSize = 11.sp, fontFamily = MwData
+                    fontSize = DS_CAPTION_SIZE, fontFamily = MwData
                 )
             }
         }
@@ -10278,7 +10292,7 @@ private fun EffectChip(label: String, active: Boolean, onTap: () -> Unit) {
         Text(
             label,
             color = if (active) BoneBright else BoneDim,
-            fontSize = 15.sp, fontFamily = MwDisplay, maxLines = 1
+            fontSize = DS_BUTTON_SIZE, fontFamily = MwDisplay, maxLines = 1
         )
     }
 }
@@ -10299,7 +10313,7 @@ private fun EffectStepButton(label: String, enabled: Boolean = true, onTap: () -
         Text(
             label,
             color = if (enabled) BronzeLight else BoneMuted,
-            fontSize = 20.sp, fontFamily = MwDisplay, fontWeight = FontWeight.Bold
+            fontSize = DS_STEP_GLYPH_SIZE, fontFamily = MwDisplay, fontWeight = FontWeight.Bold
         )
     }
 }
@@ -10327,7 +10341,7 @@ private fun EffectPopupFrame(title: String, content: @Composable ColumnScope.() 
         ) {
             Text(
                 title,
-                color = BronzeLight, fontSize = 16.sp, fontFamily = MwDisplay,
+                color = BronzeLight, fontSize = DS_TITLE_SIZE, fontFamily = MwDisplay,
                 fontWeight = FontWeight.Bold, letterSpacing = 1.sp
             )
             Spacer(Modifier.height(6.dp))
@@ -10368,7 +10382,7 @@ private fun EnchantPickerPopup(
     EffectPopupFrame(title) {
         if (options.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                Text(empty, color = BoneDim, fontSize = 15.sp, fontFamily = MwBody,
+                Text(empty, color = BoneDim, fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody,
                     modifier = Modifier.padding(vertical = 12.dp))
             }
         } else {
@@ -10442,7 +10456,7 @@ private fun EffectArgPickerPopup(
     EffectPopupFrame(if (pick.isSkill) "SELECT SKILL" else "SELECT ATTRIBUTE") {
         if (rows.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                Text("Unavailable", color = BoneDim, fontSize = 15.sp, fontFamily = MwBody,
+                Text("Unavailable", color = BoneDim, fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody,
                     modifier = Modifier.padding(vertical = 12.dp))
             }
         } else {
@@ -10691,7 +10705,7 @@ private fun EffectEditorPopup(
             // Only the legal options are drawn. An effect with a single legal range shows that one
             // as an inert label rather than a button that cannot change anything.
             Column(Modifier.fillMaxWidth().reportRow(EffectEditRow.RANGE)) {
-                Text("Range", color = BronzeLight, fontSize = 14.sp, fontFamily = MwDisplay)
+                Text("Range", color = BronzeLight, fontSize = DS_SECONDARY_SIZE, fontFamily = MwDisplay)
                 Spacer(Modifier.height(6.dp))
                 Row(
                     Modifier
@@ -10816,10 +10830,10 @@ private fun EffectSliderRow(
             )
     ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = BronzeLight, fontSize = 14.sp, fontFamily = MwDisplay,
+        Text(label, color = BronzeLight, fontSize = DS_SECONDARY_SIZE, fontFamily = MwDisplay,
             modifier = Modifier.width(140.dp))
         Text(
-            "$value", color = BoneBright, fontSize = 16.sp, fontFamily = MwData,
+            "$value", color = BoneBright, fontSize = DS_ROW_SIZE, fontFamily = MwData,
             fontWeight = FontWeight.Bold, modifier = Modifier.width(58.dp), textAlign = TextAlign.End
         )
     }
@@ -10898,7 +10912,7 @@ fun EnchantingTopOverlay() {
             // --- Left: name + stats ------------------------------------------------------------------
             Column(Modifier.weight(0.44f)) {
                 Text(
-                    "ENCHANTMENT", color = BronzeLight, fontSize = 13.sp,
+                    "ENCHANTMENT", color = BronzeLight, fontSize = DS_LABEL_SIZE,
                     fontFamily = MwDisplay, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
                 )
                 Spacer(Modifier.height(6.dp))
@@ -10914,7 +10928,7 @@ fun EnchantingTopOverlay() {
                     Text(
                         s.name.ifBlank { "Tap to name" },
                         color = if (s.name.isBlank()) BoneDim else BoneBright,
-                        fontSize = 16.sp, fontFamily = MwBody, maxLines = 1,
+                        fontSize = DS_ROW_SIZE, fontFamily = MwBody, maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -10941,13 +10955,13 @@ fun EnchantingTopOverlay() {
             // --- Right: live effects readout -----------------------------------------------------------
             Column(Modifier.weight(0.56f)) {
                 Text(
-                    "EFFECTS ${s.effects.size}/${s.effectCap}", color = BronzeLight, fontSize = 13.sp,
+                    "EFFECTS ${s.effects.size}/${s.effectCap}", color = BronzeLight, fontSize = DS_LABEL_SIZE,
                     fontFamily = MwDisplay, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
                 )
                 Spacer(Modifier.height(6.dp))
                 if (s.effects.isEmpty()) {
                     Text(
-                        "None", color = BoneDim, fontSize = 14.sp, fontFamily = MwBody,
+                        "None", color = BoneDim, fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody,
                         modifier = Modifier.padding(vertical = 6.dp)
                     )
                 } else {
@@ -10970,7 +10984,7 @@ fun EnchantingTopOverlay() {
                                     // Composed natively from MWSpellEffect's own formatting, so this
                                     // reads exactly as the vanilla list does.
                                     eff.text,
-                                    color = Bone, fontSize = 13.sp, fontFamily = MwBody,
+                                    color = Bone, fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody,
                                     maxLines = 2, overflow = TextOverflow.Ellipsis
                                 )
                             }
@@ -10985,8 +10999,8 @@ fun EnchantingTopOverlay() {
 @Composable
 private fun EnchantStatRow(label: String, value: String, valueColor: Color) {
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = BoneDim, fontSize = 14.sp, fontFamily = MwBody, modifier = Modifier.weight(1f))
-        Text(value, color = valueColor, fontSize = 16.sp, fontFamily = MwData, fontWeight = FontWeight.Bold)
+        Text(label, color = BoneDim, fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody, modifier = Modifier.weight(1f))
+        Text(value, color = valueColor, fontSize = DS_ROW_SIZE, fontFamily = MwData, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -11182,13 +11196,13 @@ private fun SpellmakingOverlay(session: SpellmakingSession) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "SPELLMAKING",
-                    color = BronzeLight, fontSize = 18.sp, fontFamily = MwDisplay,
+                    color = BronzeLight, fontSize = DS_TITLE_SIZE, fontFamily = MwDisplay,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
                     "Gold: ${session.gold}",
-                    color = BronzeLight, fontSize = 15.sp, fontFamily = MwData
+                    color = BronzeLight, fontSize = DS_SECONDARY_SIZE, fontFamily = MwData
                 )
             }
             Spacer(Modifier.height(4.dp))
@@ -11209,7 +11223,7 @@ private fun SpellmakingOverlay(session: SpellmakingSession) {
                     Text(
                         SpellmakingUiState.filter.ifBlank { "Search magic effects…" },
                         color = if (SpellmakingUiState.filter.isBlank()) BoneDim else BoneBright,
-                        fontSize = 15.sp, fontFamily = MwBody, maxLines = 1,
+                        fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody, maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -11232,7 +11246,7 @@ private fun SpellmakingOverlay(session: SpellmakingSession) {
                     Text(
                         if (session.available.isEmpty()) "No known spellmaking effects"
                         else "No effects match",
-                        color = BoneDim, fontSize = 15.sp, fontFamily = MwBody,
+                        color = BoneDim, fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody,
                         modifier = Modifier.padding(vertical = 12.dp)
                     )
                 }
@@ -11274,7 +11288,7 @@ private fun SpellmakingOverlay(session: SpellmakingSession) {
                 Text(
                     "Price: ${session.price}",
                     color = if (session.cantAfford) BarterRed else BronzeLight,
-                    fontSize = 15.sp, fontFamily = MwData
+                    fontSize = DS_SECONDARY_SIZE, fontFamily = MwData
                 )
                 Spacer(Modifier.weight(1f))
                 // ALWAYS enabled, exactly as in vanilla: pressing Buy with something missing is how
@@ -11309,7 +11323,7 @@ private fun SpellmakingOverlay(session: SpellmakingSession) {
             ) {
                 Text(
                     text,
-                    color = BoneBright, fontSize = 13.sp, fontFamily = MwDisplay,
+                    color = BoneBright, fontSize = DS_ROW_SIZE, fontFamily = MwDisplay,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth(0.9f)
@@ -11353,7 +11367,7 @@ private fun SpellmakingOverlay(session: SpellmakingSession) {
                     // over-capacity colour.
                     Text(
                         "${session.costLabel.ifBlank { "Magicka Cost" }} ${session.cost}",
-                        color = BoneDim, fontSize = 15.sp, fontFamily = MwData
+                        color = BoneDim, fontSize = DS_SECONDARY_SIZE, fontFamily = MwData
                     )
                 }
             }
@@ -11420,7 +11434,7 @@ fun SpellmakingTopOverlay() {
             // --- Left: name + stats ------------------------------------------------------------------
             Column(Modifier.weight(0.44f)) {
                 Text(
-                    "SPELL", color = BronzeLight, fontSize = 13.sp,
+                    "SPELL", color = BronzeLight, fontSize = DS_LABEL_SIZE,
                     fontFamily = MwDisplay, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
                 )
                 Spacer(Modifier.height(6.dp))
@@ -11436,7 +11450,7 @@ fun SpellmakingTopOverlay() {
                     Text(
                         s.name.ifBlank { "Tap to name" },
                         color = if (s.name.isBlank()) BoneDim else BoneBright,
-                        fontSize = 16.sp, fontFamily = MwBody, maxLines = 1,
+                        fontSize = DS_ROW_SIZE, fontFamily = MwBody, maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -11455,13 +11469,13 @@ fun SpellmakingTopOverlay() {
             // --- Right: live effects readout -----------------------------------------------------------
             Column(Modifier.weight(0.56f)) {
                 Text(
-                    "EFFECTS ${s.effects.size}/${s.effectCap}", color = BronzeLight, fontSize = 13.sp,
+                    "EFFECTS ${s.effects.size}/${s.effectCap}", color = BronzeLight, fontSize = DS_LABEL_SIZE,
                     fontFamily = MwDisplay, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
                 )
                 Spacer(Modifier.height(6.dp))
                 if (s.effects.isEmpty()) {
                     Text(
-                        "None", color = BoneDim, fontSize = 14.sp, fontFamily = MwBody,
+                        "None", color = BoneDim, fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody,
                         modifier = Modifier.padding(vertical = 6.dp)
                     )
                 } else {
@@ -11488,7 +11502,7 @@ fun SpellmakingTopOverlay() {
                                     // Composed natively from MWSpellEffect's own formatting, so this
                                     // reads exactly as the vanilla list does.
                                     eff.text,
-                                    color = Bone, fontSize = 13.sp, fontFamily = MwBody,
+                                    color = Bone, fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody,
                                     maxLines = 2, overflow = TextOverflow.Ellipsis
                                 )
                             }
@@ -11547,7 +11561,7 @@ private fun LevelUpOverlay(session: LevelUpSession) {
         ) {
             Text(
                 "You have ascended to level ${session.level}",
-                color = BronzeLight, fontSize = 15.sp, fontFamily = MwDisplay,
+                color = BronzeLight, fontSize = DS_TITLE_SIZE, fontFamily = MwDisplay,
                 fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
             Spacer(Modifier.height(6.dp))
@@ -11563,7 +11577,7 @@ private fun LevelUpOverlay(session: LevelUpSession) {
                     Box(
                         Modifier
                             .padding(end = 6.dp)
-                            .size(14.dp)
+                            .size(16.dp)
                             .clip(CircleShape)
                             .background(if (filled) BronzeLight else Color(0xFF0E0B07))
                             .border(1.dp, if (filled) BronzeLight else BronzeDark, CircleShape)
@@ -11573,7 +11587,7 @@ private fun LevelUpOverlay(session: LevelUpSession) {
                 Text(
                     "${session.selected.size} of ${session.coinCount} chosen",
                     color = if (session.canConfirm) BoneBright else BoneDim,
-                    fontSize = 11.sp, fontFamily = MwBody
+                    fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody
                 )
             }
             Spacer(Modifier.height(8.dp))
@@ -11584,7 +11598,7 @@ private fun LevelUpOverlay(session: LevelUpSession) {
             val attrs = session.attributes
             val perCol = (attrs.size + 1) / 2
             // Capped and scrollable so the Done button can never be pushed off-screen. With the
-            // stock 8 attributes the grid is ~200dp and never scrolls; the cap only engages if a
+            // stock 8 attributes the grid is ~230dp and never scrolls; the cap only engages if a
             // mod adds enough attributes to overflow, which is exactly the case a fixed layout
             // would have clipped silently. Both columns scroll as ONE unit.
             Row(
@@ -11630,13 +11644,13 @@ private fun LevelUpOverlay(session: LevelUpSession) {
                             CompanionActions.levelUpConfirm()
                         } else Modifier
                     )
-                    .padding(vertical = 11.dp),
+                    .padding(vertical = 13.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     "Done",
                     color = if (enabled) BoneBright else BoneMuted,
-                    fontSize = 14.sp, fontFamily = MwDisplay, fontWeight = FontWeight.Bold
+                    fontSize = DS_BUTTON_SIZE, fontFamily = MwDisplay, fontWeight = FontWeight.Bold
                 )
             }
         }
@@ -11663,12 +11677,12 @@ private fun LevelUpOverlay(session: LevelUpSession) {
                         .padding(12.dp)
                 ) {
                     Text(
-                        attr.name, color = BronzeLight, fontSize = 14.sp,
+                        attr.name, color = BronzeLight, fontSize = DS_TITLE_SIZE,
                         fontFamily = MwDisplay, fontWeight = FontWeight.Bold
                     )
                     if (attr.description.isNotBlank()) {
                         Spacer(Modifier.height(4.dp))
-                        Text(attr.description, color = Bone, fontSize = 11.sp, fontFamily = MwBody)
+                        Text(attr.description, color = Bone, fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody)
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -11677,18 +11691,18 @@ private fun LevelUpOverlay(session: LevelUpSession) {
                                 "since your last level, worth x${attr.mult} here."
                         else
                             "No skill increases since your last level, so this rises by 1.",
-                        color = BoneBright, fontSize = 11.sp, fontFamily = MwBody
+                        color = BoneBright, fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody
                     )
                     if (attr.skills.isNotEmpty()) {
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "GOVERNS", color = BronzeLight, fontSize = 9.sp,
+                            "GOVERNS", color = BronzeLight, fontSize = DS_LABEL_SIZE,
                             fontFamily = MwDisplay, letterSpacing = 0.8.sp
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(
                             attr.skills.joinToString(", "),
-                            color = BoneDim, fontSize = 11.sp, fontFamily = MwBody
+                            color = BoneDim, fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody
                         )
                     }
                 }
@@ -11710,10 +11724,10 @@ private fun LevelUpOverlay(session: LevelUpSession) {
  * alone read as "focused" more than "chosen". A tick glyph was NOT used: MysticCards has no U+2713
  * (see the missing-glyph list under "Game font"), so it would render as tofu with the game font on.
  */
-private val LEVELUP_ROW_MIN_HEIGHT = 44.dp
+private val LEVELUP_ROW_MIN_HEIGHT = 52.dp
 
 /** Cap on the attribute grid's height, past which it scrolls. Sized so the stock 8 attributes
- *  (4 rows per column, ~200dp) never scroll — it exists only so a modded attribute list cannot
+ *  (4 rows per column, ~230dp) never scroll — it exists only so a modded attribute list cannot
  *  push the Done button off the 468dp-tall companion panel. */
 private val LEVELUP_GRID_MAX_HEIGHT = 300.dp
 
@@ -11749,7 +11763,7 @@ private fun LevelUpAttributeRow(
         // row is selected — an appearing/disappearing coin would shuffle every name sideways.
         Box(
             Modifier
-                .size(12.dp)
+                .size(14.dp)
                 .clip(CircleShape)
                 .background(if (selected) BronzeLight else Color.Transparent)
                 .border(
@@ -11759,7 +11773,7 @@ private fun LevelUpAttributeRow(
                 )
         )
         Spacer(Modifier.width(6.dp))
-        Box(Modifier.size(22.dp)) {
+        Box(Modifier.size(28.dp)) {
             if (icon != null) {
                 Image(
                     bitmap = icon, contentDescription = null,
@@ -11775,7 +11789,7 @@ private fun LevelUpAttributeRow(
                 selected -> BoneBright
                 else -> Bone
             },
-            fontSize = 12.sp, fontFamily = MwBody,
+            fontSize = DS_ROW_SIZE, fontFamily = MwBody,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
             maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
@@ -11785,14 +11799,14 @@ private fun LevelUpAttributeRow(
         if (attr.mult > 1 && !attr.disabled) {
             Text(
                 "x${attr.mult}",
-                color = BronzeLight, fontSize = 12.sp, fontFamily = MwData,
+                color = BronzeLight, fontSize = DS_SECONDARY_SIZE, fontFamily = MwData,
                 modifier = Modifier.padding(end = 6.dp)
             )
         }
         Text(
             if (selected) "${attr.base}→${attr.projected}" else "${attr.base}",
             color = if (selected) BoneBright else if (attr.disabled) BoneMuted else Bone,
-            fontSize = 12.sp, fontFamily = MwData, maxLines = 1
+            fontSize = DS_SECONDARY_SIZE, fontFamily = MwData, maxLines = 1
         )
     }
 }
@@ -11874,7 +11888,7 @@ private fun TrainingOverlayHost(session: TrainingSession?) {
     // Bottom vs Split from the training layout pref (Top pending → never selectable; falls back to
     // the bottom card). Mirrors the looting/bartering per-service layout selectors.
     val splitMode = UiPreferences.trainingLocationFlow().collectAsState().value == ScreenLocation.SPLIT
-    val rowFontSize = if (splitMode) SPLIT_ROW_FONT_SIZE else 14.sp
+    val rowFontSize = if (splitMode) SPLIT_ROW_FONT_SIZE else DS_ROW_SIZE
     val skills = session?.skills ?: emptyList()
     val playerGold = session?.playerGold ?: 0
 
@@ -11915,14 +11929,14 @@ private fun TrainingOverlayHost(session: TrainingSession?) {
     ) {
         Column(
             modifier = Modifier
-                .then(if (splitMode) Modifier.splitDialoguePanel() else Modifier.fillMaxWidth(0.7f).fillMaxHeight(0.86f))
+                .then(if (splitMode) Modifier.splitDialoguePanel() else Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.9f))
                 .mwPanel()
                 .pointerInput(Unit) { detectTapGestures {} }
         ) {
             // ---- Title bar ----
             Text(
                 "Training: ${cachedNpcName.ifBlank { "Trainer" }}",
-                color = BronzeLight, fontSize = 15.sp,
+                color = BronzeLight, fontSize = DS_TITLE_SIZE,
                 fontFamily = MwDisplay, fontWeight = FontWeight.Bold,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)
@@ -11933,7 +11947,7 @@ private fun TrainingOverlayHost(session: TrainingSession?) {
             if (phase == TrainingPhase.LIST) {
                 if (skills.isEmpty()) {
                     Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                        Text("No skills to train", color = BoneDim, fontSize = 13.sp, fontFamily = MwBody)
+                        Text("No skills to train", color = BoneDim, fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody)
                     }
                 } else {
                     LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().weight(1f)) {
@@ -11954,7 +11968,7 @@ private fun TrainingOverlayHost(session: TrainingSession?) {
                     Text(
                         if (phase == TrainingPhase.COMPLETE) "${trainedSkillName.ifBlank { "Skill" }} training complete"
                         else "Training…",
-                        color = BronzeLight, fontSize = 16.sp,
+                        color = BronzeLight, fontSize = DS_ROW_SIZE,
                         fontFamily = MwDisplay, fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(horizontal = 20.dp)
@@ -11970,7 +11984,7 @@ private fun TrainingOverlayHost(session: TrainingSession?) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    "Gold: $playerGold", color = BronzeLight, fontSize = 13.sp,
+                    "Gold: $playerGold", color = BronzeLight, fontSize = DS_SECONDARY_SIZE,
                     fontFamily = MwData, modifier = Modifier.weight(1f)
                 )
                 // Cancel only makes sense while choosing (LIST); during the messages it's inert.
@@ -12020,7 +12034,7 @@ private fun TrainingRow(
             )
             Text(
                 if (skill.capped) "Current: ${skill.currentLevel} (capped)" else "Current: ${skill.currentLevel}",
-                color = BoneDim, fontSize = 10.sp, fontFamily = MwData
+                color = BoneDim, fontSize = DS_SECONDARY_SIZE, fontFamily = MwData
             )
         }
         Text(
@@ -12030,7 +12044,7 @@ private fun TrainingRow(
                 affordable -> BronzeLight
                 else -> RepairCondRed
             },
-            fontSize = 13.sp, fontFamily = MwData, fontWeight = FontWeight.Bold,
+            fontSize = DS_SECONDARY_SIZE, fontFamily = MwData, fontWeight = FontWeight.Bold,
             textAlign = TextAlign.End,
             modifier = Modifier.width(60.dp)
         )
@@ -12052,7 +12066,7 @@ private fun SpellBuyingOverlay(session: SpellBuyingSession) {
     DisposableEffect(Unit) { onDispose { ItemInfoPopupState.close() } }
     // Bottom vs Split from the spell-buying layout pref (Top pending → falls back to the bottom card).
     val splitMode = UiPreferences.spellBuyingLocationFlow().collectAsState().value == ScreenLocation.SPLIT
-    val rowFontSize = if (splitMode) SPLIT_ROW_FONT_SIZE else 14.sp
+    val rowFontSize = if (splitMode) SPLIT_ROW_FONT_SIZE else DS_ROW_SIZE
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -12063,14 +12077,14 @@ private fun SpellBuyingOverlay(session: SpellBuyingSession) {
     ) {
         Column(
             modifier = Modifier
-                .then(if (splitMode) Modifier.splitDialoguePanel() else Modifier.fillMaxWidth(0.7f).fillMaxHeight(0.86f))
+                .then(if (splitMode) Modifier.splitDialoguePanel() else Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.9f))
                 .mwPanel()
                 .pointerInput(Unit) { detectTapGestures {} }
         ) {
             // ---- Title bar ----
             Text(
                 "Spells: ${session.npcName.ifBlank { "Merchant" }}",
-                color = BronzeLight, fontSize = 15.sp,
+                color = BronzeLight, fontSize = DS_TITLE_SIZE,
                 fontFamily = MwDisplay, fontWeight = FontWeight.Bold,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)
@@ -12109,7 +12123,7 @@ private fun SpellBuyingOverlay(session: SpellBuyingSession) {
             }
             if (session.spells.isEmpty()) {
                 Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                    Text("No spells for sale", color = BoneDim, fontSize = 13.sp, fontFamily = MwBody)
+                    Text("No spells for sale", color = BoneDim, fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody)
                 }
             } else {
                 LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().weight(1f)) {
@@ -12135,7 +12149,7 @@ private fun SpellBuyingOverlay(session: SpellBuyingSession) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    "Gold: ${session.playerGold}", color = BronzeLight, fontSize = 13.sp,
+                    "Gold: ${session.playerGold}", color = BronzeLight, fontSize = DS_SECONDARY_SIZE,
                     fontFamily = MwData, modifier = Modifier.weight(1f)
                 )
                 RepairButton(label = "Cancel", color = ActionCancel, enabled = true) {
@@ -12187,7 +12201,7 @@ private fun SpellForSaleRow(
             )
             Text(
                 if (spell.known) "Already known" else spell.school,
-                color = BoneDim, fontSize = 10.sp, fontFamily = MwData
+                color = BoneDim, fontSize = DS_SECONDARY_SIZE, fontFamily = MwData
             )
         }
         Text(
@@ -12197,7 +12211,7 @@ private fun SpellForSaleRow(
                 affordable -> BronzeLight
                 else -> RepairCondRed
             },
-            fontSize = 13.sp, fontFamily = MwData, fontWeight = FontWeight.Bold,
+            fontSize = DS_SECONDARY_SIZE, fontFamily = MwData, fontWeight = FontWeight.Bold,
             textAlign = TextAlign.End,
             modifier = Modifier.width(60.dp)
         )
@@ -12221,7 +12235,7 @@ private fun TravelOverlay(session: TravelSession) {
     // Bottom vs Split from the travel layout pref (Top pending → falls back to the bottom card).
     // Currently BOTTOM-only (no Split pill), so this is always the centred card.
     val splitMode = UiPreferences.travelLocationFlow().collectAsState().value == ScreenLocation.SPLIT
-    val rowFontSize = if (splitMode) SPLIT_ROW_FONT_SIZE else 14.sp
+    val rowFontSize = if (splitMode) SPLIT_ROW_FONT_SIZE else DS_ROW_SIZE
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -12233,14 +12247,14 @@ private fun TravelOverlay(session: TravelSession) {
     ) {
         Column(
             modifier = Modifier
-                .then(if (splitMode) Modifier.splitDialoguePanel() else Modifier.fillMaxWidth(0.7f).fillMaxHeight(0.86f))
+                .then(if (splitMode) Modifier.splitDialoguePanel() else Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.9f))
                 .mwPanel()
                 .pointerInput(Unit) { detectTapGestures {} }
         ) {
             // ---- Title bar ----
             Text(
                 "Travel: ${session.npcName.ifBlank { "Caravaner" }}",
-                color = BronzeLight, fontSize = 15.sp,
+                color = BronzeLight, fontSize = DS_TITLE_SIZE,
                 fontFamily = MwDisplay, fontWeight = FontWeight.Bold,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)
@@ -12263,7 +12277,7 @@ private fun TravelOverlay(session: TravelSession) {
                 Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                     Text(
                         "No destinations", color = BoneDim,
-                        fontSize = 13.sp, fontFamily = MwBody
+                        fontSize = DS_SECONDARY_SIZE, fontFamily = MwBody
                     )
                 }
             } else {
@@ -12289,7 +12303,7 @@ private fun TravelOverlay(session: TravelSession) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    "Gold: ${session.playerGold}", color = BronzeLight, fontSize = 13.sp,
+                    "Gold: ${session.playerGold}", color = BronzeLight, fontSize = DS_SECONDARY_SIZE,
                     fontFamily = MwData, modifier = Modifier.weight(1f)
                 )
                 RepairButton(label = "Cancel", color = ActionCancel, enabled = true) {
@@ -12336,7 +12350,7 @@ private fun TravelRow(
         Text(
             "${dest.cost}g",
             color = if (affordable) BronzeLight else RepairCondRed,
-            fontSize = 13.sp, fontFamily = MwData,
+            fontSize = DS_SECONDARY_SIZE, fontFamily = MwData,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.End,
             modifier = Modifier.width(60.dp)
@@ -12388,14 +12402,14 @@ private fun RestWaitOverlay(session: SleepSession) {
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth(0.7f)
+                .fillMaxWidth(0.9f)
                 .mwPanel()
                 .pointerInput(Unit) { detectTapGestures {} }
         ) {
             // ---- Title ----
             Text(
                 if (isRest) "Rest" else "Wait",
-                color = BronzeLight, fontSize = 15.sp,
+                color = BronzeLight, fontSize = DS_TITLE_SIZE,
                 fontFamily = MwDisplay, fontWeight = FontWeight.Bold,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)
             )
@@ -12407,7 +12421,7 @@ private fun RestWaitOverlay(session: SleepSession) {
             ) {
                 // ---- Date / time ----
                 Text(
-                    session.dateString, color = Bone, fontSize = 15.sp,
+                    session.dateString, color = Bone, fontSize = DS_ROW_SIZE,
                     fontFamily = MwBody, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -12416,7 +12430,7 @@ private fun RestWaitOverlay(session: SleepSession) {
                 // ---- Middle line: illegal-rest warning (WAIT) or "REST" banner ----
                 if (!isRest && session.warning.isNotBlank()) {
                     Text(
-                        session.warning, color = RepairCondRed, fontSize = 13.sp,
+                        session.warning, color = RepairCondRed, fontSize = DS_SECONDARY_SIZE,
                         fontFamily = MwBody, textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -12433,7 +12447,7 @@ private fun RestWaitOverlay(session: SleepSession) {
                 // ---- Hours label ----
                 Text(
                     "$hours ${if (hours == 1) "hour" else "hours"}",
-                    color = Bone, fontSize = 16.sp, fontFamily = MwData,
+                    color = Bone, fontSize = DS_ROW_SIZE, fontFamily = MwData,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.height(4.dp))
@@ -12443,7 +12457,7 @@ private fun RestWaitOverlay(session: SleepSession) {
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("1h", color = BoneDim, fontSize = 11.sp, fontFamily = MwData)
+                    Text("1h", color = BoneDim, fontSize = DS_CAPTION_SIZE, fontFamily = MwData)
                     Slider(
                         value = hours.toFloat(),
                         onValueChange = { hours = it.roundToInt().coerceIn(1, 24) },
@@ -12458,7 +12472,7 @@ private fun RestWaitOverlay(session: SleepSession) {
                         ),
                         modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
                     )
-                    Text("24h", color = BoneDim, fontSize = 11.sp, fontFamily = MwData)
+                    Text("24h", color = BoneDim, fontSize = DS_CAPTION_SIZE, fontFamily = MwData)
                 }
             }
 

@@ -145,6 +145,9 @@ import org.openmw.ui.page.mod.readModValues
 import org.openmw.ui.page.mod.sortedByDefaultLoadOrder
 import org.openmw.ui.page.setting.SettingRow
 import org.openmw.ui.view.RESOLUTION_TIER_DEFAULT
+import org.openmw.ui.view.INTERFACE_SIZE_DEFAULT
+import org.openmw.ui.view.INTERFACE_SIZE_OPTIONS
+import org.openmw.ui.view.INTERFACE_SIZE_ORIGINAL
 import org.openmw.ui.view.RESOLUTION_TIER_NATIVE
 import org.openmw.ui.view.applyGameScreenResolution
 import org.openmw.ui.view.gameScreenRealSize
@@ -2412,6 +2415,8 @@ private fun SimplifiedSettingsScreen(onBack: () -> Unit) {
     val resolutionTier by resolutionTierFlow.collectAsState(initial = RESOLUTION_TIER_DEFAULT)
     val bookSizeFlow = remember(context) { GameFilesPreferences.loadBookSize(context) }
     val bookSize by bookSizeFlow.collectAsState(initial = BOOK_SIZE_DEFAULT)
+    val interfaceSizeFlow = remember(context) { GameFilesPreferences.loadInterfaceSize(context) }
+    val interfaceSize by interfaceSizeFlow.collectAsState(initial = INTERFACE_SIZE_DEFAULT)
     var showResetDialog by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var confirmModOrder by rememberSaveable { mutableStateOf(false) }
@@ -2654,6 +2659,24 @@ private fun SimplifiedSettingsScreen(onBack: () -> Unit) {
                             // settings.cfg until the launcher was closed and reopened. The engine
                             // still only READS settings.cfg at startup, so this makes the change
                             // land on the next Play rather than the launch after it.
+                            context.applyGameScreenResolution()
+                        }
+                    }
+                )
+            }
+
+            // Interface size. Next to Resolution because it scales the same `[GUI] scaling factor`
+            // that the resolution tier writes; re-applying the resolution writes the new value now,
+            // so it lands on the next Play. See applyGuiScalingForTier.
+            SettingRow(
+                title = stringResource(R.string.launcher_interface_size),
+                subtitle = stringResource(R.string.launcher_interface_size_tip)
+            ) {
+                InterfaceSizeDropdown(
+                    selected = interfaceSize,
+                    onSelected = { percent ->
+                        scope.launch {
+                            GameFilesPreferences.saveInterfaceSize(context, percent)
                             context.applyGameScreenResolution()
                         }
                     }
@@ -3545,6 +3568,35 @@ private fun ResolutionTierDropdown(selected: Int, onSelected: (Int) -> Unit) {
                     onClick = {
                         expanded = false
                         if (height != selected) onSelected(height)
+                    }
+                )
+            }
+        }
+    }
+}
+
+/** The Interface size picker: [INTERFACE_SIZE_OPTIONS], with 100% named as the original size. */
+@Composable
+private fun InterfaceSizeDropdown(selected: Int, onSelected: (Int) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val originalLabel = stringResource(R.string.launcher_interface_size_original)
+    fun labelFor(percent: Int) = if (percent == INTERFACE_SIZE_ORIGINAL) originalLabel else "$percent%"
+
+    Box {
+        OutlinedButton(onClick = { expanded = true }) {
+            Text(labelFor(selected))
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            INTERFACE_SIZE_OPTIONS.forEach { percent ->
+                DropdownMenuItem(
+                    text = { Text(labelFor(percent)) },
+                    onClick = {
+                        expanded = false
+                        if (percent != selected) onSelected(percent)
                     }
                 )
             }

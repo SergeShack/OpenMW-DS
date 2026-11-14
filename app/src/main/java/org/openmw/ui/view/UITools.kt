@@ -1085,6 +1085,20 @@ suspend fun Context.applyGameScreenResolution() {
  */
 private const val GUI_SCALING_FALLBACK_BASE = 2.0f
 
+/** Interface size at which the engine's windows are drawn as shipped. */
+const val INTERFACE_SIZE_ORIGINAL = 100
+
+/** Interface size a fresh install starts on. The vanilla windows read small on the Duo Lite's
+ *  game screen, so this build starts larger. */
+const val INTERFACE_SIZE_DEFAULT = 125
+
+/**
+ * The Interface size choices, in percent. It multiplies the base `[GUI] scaling factor`, so every
+ * window the engine draws on the game screen grows by the same amount. 130% leaves a logical canvas
+ * of about 740 x 415, and some vanilla windows have a minimum size close to that.
+ */
+val INTERFACE_SIZE_OPTIONS = listOf(100, 105, 110, 115, 120, 125, 130)
+
 /** The engine's own sanitizer range for `[GUI] scaling factor` (`components/settings/categories/gui.hpp`). */
 private const val GUI_SCALING_MIN = 0.5f
 private const val GUI_SCALING_MAX = 8.0f
@@ -1127,7 +1141,10 @@ private suspend fun applyGuiScalingForTier(context: Context, appliedHeight: Int,
         GameFilesPreferences.saveGuiScalingBase(context, it)
     }
 
-    val scaling = (base * appliedHeight / nativeHeight)
+    // Interface size scales the base on top of the tier. It is applied here and never stored into
+    // the base, so changing it back to 100% gives exactly the old value.
+    val interfaceSize = GameFilesPreferences.loadInterfaceSize(context).first()
+    val scaling = (base * appliedHeight / nativeHeight * interfaceSize / 100f)
         .coerceIn(GUI_SCALING_MIN, GUI_SCALING_MAX)
 
     val file = File(Constants.SETTINGS_FILE)
@@ -1140,7 +1157,7 @@ private suspend fun applyGuiScalingForTier(context: Context, appliedHeight: Int,
     setSettingInSection(lines, "[GUI]", "scaling factor", text)
     if (lines != original) {
         file.writeText(lines.joinToString("\n"))
-        Log.d("UITools", "GUI scaling for tier: base=$base applied=$appliedHeight/$nativeHeight -> $text")
+        Log.d("UITools", "GUI scaling for tier: base=$base applied=$appliedHeight/$nativeHeight size=$interfaceSize% -> $text")
     }
 }
 
