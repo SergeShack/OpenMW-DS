@@ -19,6 +19,9 @@ import java.io.File
  * v2: the companion's inventory cards Large (3 rows) where Card Size was never set. Framed on a
  *     phone the companion is lower than the bottom screen the cards are made for, and with 4 rows
  *     their text comes out very small.
+ * v3: the companion's Text size 105% and Page text size 105% where never set (120% and 115% on the
+ *     Duo Lite). A dp on a phone is larger than on the handhelds' bottom screens, and the framed
+ *     companion is lower, so at those sizes the pages crowded and the top stat bar wrapped.
  */
 internal object PhoneDefaults {
     private const val TAG = "PhoneDefaults"
@@ -39,7 +42,11 @@ internal object PhoneDefaults {
         if (nativeHeight > 0) nativeHeight / GUI_DESIGN_HEIGHT else 1f
     private const val PREFS = "phone_defaults"
     private const val KEY_VERSION = "version"
-    private const val VERSION = 2
+    private const val VERSION = 3
+
+    /** Companion Text size and Page text size on a phone. */
+    private const val TEXT_SIZE = 1.05f
+    private const val PAGE_TEXT_SIZE = 1.05f
 
     /** Card Size Large: the inventory card grid's row count. */
     private const val INV_CARD_ROWS_LARGE = 3
@@ -53,6 +60,11 @@ internal object PhoneDefaults {
             // UiPreferences' file and key; contains() tells a value the player set from the default.
             val ui = context.getSharedPreferences("companion_ui_settings", Context.MODE_PRIVATE)
             if (!ui.contains("inventory_card_rows")) UiPreferences.setInvCardRows(context, INV_CARD_ROWS_LARGE)
+        }
+        if (applied < 3) {
+            val ui = context.getSharedPreferences("companion_ui_settings", Context.MODE_PRIVATE)
+            if (!ui.contains("text_size")) UiPreferences.setTextSize(context, TEXT_SIZE)
+            if (!ui.contains("page_text_size")) UiPreferences.setPageTextSize(context, PAGE_TEXT_SIZE)
         }
         if (Constants.SETTINGS_FILE.isEmpty()) return
         val file = File(Constants.SETTINGS_FILE)
