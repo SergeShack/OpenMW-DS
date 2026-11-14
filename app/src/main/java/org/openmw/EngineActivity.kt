@@ -529,6 +529,7 @@ class EngineActivity : SDLActivity() {
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         launchGameDisplayId = PhoneExternal.pinnedGameDisplay(this)
+        PhoneExternal.fitGameWindows(this, launchGameDisplayId)
         enableEdgeToEdge()
         runCatching {
             initAlpha3()

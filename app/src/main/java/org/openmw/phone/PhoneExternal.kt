@@ -74,4 +74,15 @@ object PhoneExternal {
 
     /** Whether the side controller goes over the game: this profile, with the game on the phone. */
     fun wantsPadOverGame(pinnedGameDisplay: Int?): Boolean = pinnedGameDisplay == Display.DEFAULT_DISPLAY
+
+    /**
+     * Before the game starts: its windows go between the controller's sides when the controller is
+     * over the game, and back to the whole width on an external screen. See [PhoneWindows].
+     */
+    fun fitGameWindows(context: Context, pinnedGameDisplay: Int?) {
+        if (pinnedGameDisplay == null) return
+        val (left, right) = if (wantsPadOverGame(pinnedGameDisplay)) GameScreenPad.menuSideFractions(context) else 0f to 0f
+        runCatching { PhoneWindows.fit(context, left, right) }
+            .onFailure { android.util.Log.e("PhoneExternal", "windows not fitted", it) }
+    }
 }
