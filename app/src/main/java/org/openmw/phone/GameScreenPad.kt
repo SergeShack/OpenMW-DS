@@ -58,7 +58,8 @@ import org.libsdl.app.SDLActivity
  * In the game each part is where the player put it in the editor ([PadEditor], [PadLayout]); at
  * first they make the same two columns as beside the companion. While a menu is open the two sides
  * narrow to what menus use (the `menu` layout of [SidePadLeft] and [SidePadRight]), and the game's
- * windows are placed between the two ([PhoneWindows]).
+ * windows are placed between the two: the ones laid out from settings.cfg by [PhoneWindows], the
+ * controller menus by the engine ([PhoneExternal.controllerMenuSides]).
  *
  * It is one view over the whole screen, but only the parts take touches: a touch anywhere else goes
  * to the game, so its windows can be tapped directly.
@@ -125,6 +126,12 @@ object GameScreenPad {
         // Shown again over a real controller with the button; forgotten when the controller goes.
         var shownOverController by remember(controller) { mutableStateOf(false) }
         val hidden = if (controller) !shownOverController else hiddenByHand
+        // The controller menus are centred between the sides while they are shown; they take the
+        // new place the next time one opens.
+        LaunchedEffect(hidden) {
+            val (left, right) = if (hidden) 0f to 0f else menuSideFractions(context)
+            PhoneExternal.controllerMenuSides(left, right)
+        }
         var editing by remember { mutableStateOf(false) }
         var opacity by remember { mutableFloatStateOf(PadLayout.opacity(context)) }
         var saved by remember { mutableIntStateOf(0) }

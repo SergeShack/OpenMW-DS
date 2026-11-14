@@ -1272,6 +1272,26 @@ Java_org_openmw_phone_PhoneExternal_setControllerHintsAutoHide(JNIEnv* /*env*/, 
 {
     g_controllerHintsAutoHide.store(seconds);
 }
+// Phone app only: the shares of the screen width the touch controller's sides take while a menu is
+// open, 0 when it is not over the game or is hidden. Set by org.openmw.phone.PhoneExternal, read by
+// phone-controller-menu-sides.patch, which centres the controller menus between the two.
+static std::atomic<float> g_controllerMenuLeft{0.f};
+static std::atomic<float> g_controllerMenuRight{0.f};
+extern "C" void companionControllerMenuArea(int viewWidth, int* left, int* width)
+{
+    const int l = static_cast<int>(g_controllerMenuLeft.load() * viewWidth);
+    const int r = static_cast<int>(g_controllerMenuRight.load() * viewWidth);
+    if (l < 0 || r < 0 || l + r >= viewWidth)
+        return;
+    *left = l;
+    *width = viewWidth - l - r;
+}
+extern "C" JNIEXPORT void JNICALL
+Java_org_openmw_phone_PhoneExternal_setControllerMenuSides(JNIEnv* /*env*/, jclass /*cls*/, jfloat left, jfloat right)
+{
+    g_controllerMenuLeft.store(left);
+    g_controllerMenuRight.store(right);
+}
 // Read by the phone's touch controller (SidePad): true while a menu (GUI mode) is open. There the
 // look pad acts as the right stick, which scrolls lists, instead of turning the camera.
 extern "C" JNIEXPORT jboolean JNICALL

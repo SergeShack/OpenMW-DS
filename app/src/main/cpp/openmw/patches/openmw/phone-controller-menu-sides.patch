@@ -1,0 +1,139 @@
+diff -ru a/apps/openmw/mwgui/inventorywindow.cpp b/apps/openmw/mwgui/inventorywindow.cpp
+--- a/apps/openmw/mwgui/inventorywindow.cpp	2026-11-14 22:06:57.829246834 +0400
++++ b/apps/openmw/mwgui/inventorywindow.cpp	2026-11-14 22:07:21.287387261 +0400
+@@ -60,6 +60,12 @@
+ 
+ }
+ 
++#ifdef __ANDROID__
++// PHONE: the part of the screen width the controller menus are centred in, between the sides of
++// the touch controller drawn over the game. Defined in androidmain.cpp.
++extern "C" void companionControllerMenuArea(int viewWidth, int* left, int* width);
++#endif
++
+ namespace MWGui
+ {
+     namespace
+@@ -1085,9 +1091,16 @@
+             // Fill the screen, or limit to a certain size on large screens. Size chosen to
+             // match the size of the stats window.
+             MyGUI::IntSize viewSize = MyGUI::RenderManager::getInstance().getViewSize();
++#ifdef __ANDROID__
++            // PHONE: centred between the touch controller's sides, not on the whole screen.
++            int areaLeft = 0;
++            companionControllerMenuArea(viewSize.width, &areaLeft, &viewSize.width);
++#else
++            const int areaLeft = 0;
++#endif
+             int width = std::min(viewSize.width, 1600);
+             int height = std::min(winMgr->getControllerMenuHeight(), StatsWindow::getIdealHeight());
+-            int x = (viewSize.width - width) / 2;
++            int x = areaLeft + (viewSize.width - width) / 2;
+             int y = (viewSize.height - height) / 2;
+ 
+             MyGUI::Window* window = mMainWidget->castType<MyGUI::Window>();
+diff -ru a/apps/openmw/mwgui/mapwindow.cpp b/apps/openmw/mwgui/mapwindow.cpp
+--- a/apps/openmw/mwgui/mapwindow.cpp	2026-11-14 22:06:57.831246931 +0400
++++ b/apps/openmw/mwgui/mapwindow.cpp	2026-11-14 22:07:21.289387358 +0400
+@@ -112,6 +112,12 @@
+ }
+ #endif
+ 
++#ifdef __ANDROID__
++// PHONE: the part of the screen width the controller menus are centred in, between the sides of
++// the touch controller drawn over the game. Defined in androidmain.cpp.
++extern "C" void companionControllerMenuArea(int viewWidth, int* left, int* width);
++#endif
++
+ namespace MWGui
+ {
+     /// @brief A widget that changes its color when hovered.
+@@ -1535,12 +1541,19 @@
+             // Fill the screen, or limit to a certain size on large screens. Size chosen to
+             // show the entire local map without scrolling.
+             MyGUI::IntSize viewSize = MyGUI::RenderManager::getInstance().getViewSize();
++#ifdef __ANDROID__
++            // PHONE: centred between the touch controller's sides, not on the whole screen.
++            int areaLeft = 0;
++            companionControllerMenuArea(viewSize.width, &areaLeft, &viewSize.width);
++#else
++            const int areaLeft = 0;
++#endif
+             MyGUI::IntSize canvasSize = mLocalMap->getCanvasSize();
+             MyGUI::IntSize borderSize = mMainWidget->getSize() - mMainWidget->getClientWidget()->getSize();
+ 
+             int width = std::min(viewSize.width, canvasSize.width + borderSize.width);
+             int height = std::min(winMgr->getControllerMenuHeight(), canvasSize.height + borderSize.height);
+-            int x = (viewSize.width - width) / 2;
++            int x = areaLeft + (viewSize.width - width) / 2;
+             int y = (viewSize.height - height) / 2;
+ 
+             MyGUI::Window* window = mMainWidget->castType<MyGUI::Window>();
+diff -ru a/apps/openmw/mwgui/spellwindow.cpp b/apps/openmw/mwgui/spellwindow.cpp
+--- a/apps/openmw/mwgui/spellwindow.cpp	2026-11-14 22:06:57.833247028 +0400
++++ b/apps/openmw/mwgui/spellwindow.cpp	2026-11-14 22:07:21.289387358 +0400
+@@ -31,6 +31,12 @@
+ #include "spellview.hpp"
+ #include "statswindow.hpp"
+ 
++#ifdef __ANDROID__
++// PHONE: the part of the screen width the controller menus are centred in, between the sides of
++// the touch controller drawn over the game. Defined in androidmain.cpp.
++extern "C" void companionControllerMenuArea(int viewWidth, int* left, int* width);
++#endif
++
+ namespace MWGui
+ {
+ 
+@@ -367,9 +373,16 @@
+             // Fill the screen, or limit to a certain size on large screens. Size chosen to
+             // match the size of the stats window.
+             MyGUI::IntSize viewSize = MyGUI::RenderManager::getInstance().getViewSize();
++#ifdef __ANDROID__
++            // PHONE: centred between the touch controller's sides, not on the whole screen.
++            int areaLeft = 0;
++            companionControllerMenuArea(viewSize.width, &areaLeft, &viewSize.width);
++#else
++            const int areaLeft = 0;
++#endif
+             int width = std::min(viewSize.width, StatsWindow::getIdealWidth());
+             int height = std::min(winMgr->getControllerMenuHeight(), StatsWindow::getIdealHeight());
+-            int x = (viewSize.width - width) / 2;
++            int x = areaLeft + (viewSize.width - width) / 2;
+             int y = (viewSize.height - height) / 2;
+ 
+             MyGUI::Window* window = mMainWidget->castType<MyGUI::Window>();
+diff -ru a/apps/openmw/mwgui/statswindow.cpp b/apps/openmw/mwgui/statswindow.cpp
+--- a/apps/openmw/mwgui/statswindow.cpp	2026-11-14 22:06:57.835247125 +0400
++++ b/apps/openmw/mwgui/statswindow.cpp	2026-11-14 22:07:21.289387358 +0400
+@@ -34,6 +34,12 @@
+ 
+ #include "tooltips.hpp"
+ 
++#ifdef __ANDROID__
++// PHONE: the part of the screen width the controller menus are centred in, between the sides of
++// the touch controller drawn over the game. Defined in androidmain.cpp.
++extern "C" void companionControllerMenuArea(int viewWidth, int* left, int* width);
++#endif
++
+ namespace MWGui
+ {
+     StatsWindow::StatsWindow(DragAndDrop* drag)
+@@ -751,9 +757,16 @@
+             // Fill the screen, or limit to a certain size on large screens. Size chosen to
+             // show all stats.
+             MyGUI::IntSize viewSize = MyGUI::RenderManager::getInstance().getViewSize();
++#ifdef __ANDROID__
++            // PHONE: centred between the touch controller's sides, not on the whole screen.
++            int areaLeft = 0;
++            companionControllerMenuArea(viewSize.width, &areaLeft, &viewSize.width);
++#else
++            const int areaLeft = 0;
++#endif
+             int width = std::min(viewSize.width, getIdealWidth());
+             int height = std::min(winMgr->getControllerMenuHeight(), getIdealHeight());
+-            int x = (viewSize.width - width) / 2;
++            int x = areaLeft + (viewSize.width - width) / 2;
+             int y = (viewSize.height - height) / 2;
+ 
+             MyGUI::Window* window = mMainWidget->castType<MyGUI::Window>();

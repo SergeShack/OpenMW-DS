@@ -65,6 +65,20 @@ object PhoneExternal {
     @JvmStatic
     private external fun setControllerHintsAutoHide(seconds: Float)
 
+    /** Engine side: phone-controller-menu-sides.patch. Both 0 for the whole width. */
+    @JvmStatic
+    private external fun setControllerMenuSides(left: Float, right: Float)
+
+    /**
+     * The shares of the screen width the touch controller's sides take while a menu is open, so the
+     * game's controller menus (inventory, map, magic, stats) are centred between them rather than
+     * on the whole screen. Both 0 while the controller is hidden.
+     */
+    fun controllerMenuSides(left: Float, right: Float) {
+        runCatching { setControllerMenuSides(left, right) }
+            .onFailure { android.util.Log.e("PhoneExternal", "controller menu sides not set", it) }
+    }
+
     /** Called by the game activity at start. */
     fun onGameStart(context: Context) {
         if (!isActive(context)) return
