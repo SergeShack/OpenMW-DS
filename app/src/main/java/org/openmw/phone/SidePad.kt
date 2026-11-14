@@ -171,14 +171,14 @@ object PadHaptics {
 }
 
 /** Room left above the controller when it is over the game, for the corner buttons. */
-private val OVER_GAME_TOP = 52.dp
+internal val OVER_GAME_TOP = 52.dp
 
 /** Height of the face buttons in the menu layout: as wide as the left side's d-pad there. */
 private val MENU_FACE_BUTTONS = 88.dp
 
-private val PadBronze = Color(0xFFC8A062)
-private val PadFill = Color(0x402A2118)
-private val PadPressed = Color(0x80C8A062)
+internal val PadBronze = Color(0xFFC8A062)
+internal val PadFill = Color(0x402A2118)
+internal val PadPressed = Color(0x80C8A062)
 
 /**
  * Left side: triggers and shoulder, Back, the d-pad and the movement stick.
@@ -271,27 +271,27 @@ fun SidePadRight(overGame: Boolean = false, menu: Boolean = false) {
 }
 
 @Composable
-private fun LtButton(modifier: Modifier) =
+internal fun LtButton(modifier: Modifier) =
     PadButton("LT", modifier, haptic = PadHaptic.TRIGGER) { VirtualPad.trigger(VirtualPad.AXIS_LEFT_TRIGGER, it) }
 
 @Composable
-private fun LbButton(modifier: Modifier) =
+internal fun LbButton(modifier: Modifier) =
     PadButton("LB", modifier, haptic = PadHaptic.SHOULDER) { VirtualPad.button(KeyEvent.KEYCODE_BUTTON_L1, it) }
 
 @Composable
-private fun BackButton(modifier: Modifier) =
+internal fun BackButton(modifier: Modifier) =
     PadButton("⧉", modifier, haptic = PadHaptic.SYSTEM) { VirtualPad.button(KeyEvent.KEYCODE_BUTTON_SELECT, it) }
 
 @Composable
-private fun StartButton(modifier: Modifier) =
+internal fun StartButton(modifier: Modifier) =
     PadButton("≡", modifier, haptic = PadHaptic.SYSTEM) { VirtualPad.button(KeyEvent.KEYCODE_BUTTON_START, it) }
 
 @Composable
-private fun RbButton(modifier: Modifier) =
+internal fun RbButton(modifier: Modifier) =
     PadButton("RB", modifier, haptic = PadHaptic.SHOULDER) { VirtualPad.button(KeyEvent.KEYCODE_BUTTON_R1, it) }
 
 @Composable
-private fun RtButton(modifier: Modifier) =
+internal fun RtButton(modifier: Modifier) =
     PadButton("RT", modifier, haptic = PadHaptic.TRIGGER) { VirtualPad.trigger(VirtualPad.AXIS_RIGHT_TRIGGER, it) }
 
 /**
@@ -306,7 +306,7 @@ private fun RtButton(modifier: Modifier) =
  * a controller.
  */
 @Composable
-private fun LookPad(clickKey: Int, touchpadInMenus: Boolean, menu: Boolean, modifier: Modifier) {
+internal fun LookPad(clickKey: Int, touchpadInMenus: Boolean, menu: Boolean, modifier: Modifier) {
     var touching by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val touchpad = remember { MenuTouchpad() }
@@ -512,7 +512,7 @@ private class MenuTouchpad {
  * the finger while holding it aims as on the look pad, so you can attack and turn in one touch.
  */
 @Composable
-private fun AttackButton(modifier: Modifier) {
+internal fun AttackButton(modifier: Modifier) {
     var pressed by remember { mutableStateOf(false) }
     DisposableEffect(Unit) { onDispose { if (pressed) VirtualPad.button(KeyEvent.KEYCODE_BUTTON_R1, false) } }
     Box(
@@ -557,7 +557,7 @@ private fun PadRow(content: @Composable RowScope.() -> Unit) {
 
 /** Four direction buttons in a cross. */
 @Composable
-private fun DPad(modifier: Modifier) {
+internal fun DPad(modifier: Modifier) {
     Box(modifier, contentAlignment = Alignment.Center) {
         Box(Modifier.fillMaxHeight().aspectRatio(1f)) {
             val arm = Modifier.fillMaxSize(1f / 3f)
@@ -571,7 +571,7 @@ private fun DPad(modifier: Modifier) {
 
 /** A, B, X and Y in the usual diamond. */
 @Composable
-private fun FaceButtons(modifier: Modifier) {
+internal fun FaceButtons(modifier: Modifier) {
     Box(modifier, contentAlignment = Alignment.Center) {
         Box(Modifier.fillMaxHeight().aspectRatio(1f)) {
             val face = Modifier.fillMaxSize(0.36f)
@@ -639,7 +639,7 @@ private fun PadButton(
  * found by feel. A short tap without moving clicks the stick.
  */
 @Composable
-private fun PadStick(axisX: Int, axisY: Int, clickKey: Int, modifier: Modifier) {
+internal fun PadStick(axisX: Int, axisY: Int, clickKey: Int, modifier: Modifier) {
     var origin by remember { mutableStateOf<Offset?>(null) }
     var knob by remember { mutableStateOf(Offset.Zero) }
     val scope = rememberCoroutineScope()

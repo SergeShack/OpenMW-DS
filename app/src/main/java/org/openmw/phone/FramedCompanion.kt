@@ -30,7 +30,7 @@ import kotlin.math.roundToInt
  * The companion is laid out for the dual-screen handhelds' bottom panels (the Thor's is
  * 1240 x 1080). A phone held in landscape is about 2.2:1, and filling it stretches every panel
  * sideways. On a screen wider than [WIDE_ASPECT] the content is centred at [FRAMED_ASPECT], and the
- * touch controller takes the two sides.
+ * touch controller takes the two sides, unless a real controller is connected.
  *
  * The frame is a View, not a Compose box, so the companion's composition root is the framed area:
  * popups placed from `boundsInRoot` land where they should. [FramedLocals] reports the frame's size
@@ -123,7 +123,9 @@ object FramedCompanion {
         layoutParams = FrameLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, gravity)
         setContent {
             val shown by visible.collectAsState()
-            if (shown) content()
+            // A real controller takes over: the sides are left black.
+            val controller by rememberControllerConnected()
+            if (shown && !controller) content()
         }
     }
 
