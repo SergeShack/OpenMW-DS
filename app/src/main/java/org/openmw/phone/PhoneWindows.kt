@@ -108,7 +108,8 @@ internal object PhoneWindows {
             val shown = if (canvas > 0f) maxOf(w, minW / canvas) else w
             if (x >= left - SAME && x + shown <= end + SAME) return null
             val nw = minOf(shown, end - left)
-            return x.coerceIn(left, end - nw) to nw
+            // Not coerceIn: with the window as wide as the room, rounding can leave end - nw below left.
+            return maxOf(left, minOf(x, end - nw)) to nw
         }
     }
 
