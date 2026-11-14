@@ -45,17 +45,18 @@ index ff0754e..7de6bea 100644
  
          if (!mEnableShadows)
          {
-@@ -144,6 +150,9 @@ namespace SceneUtil
+@@ -144,6 +150,10 @@ namespace SceneUtil
          mShadowedScene->setNodeMask(sceneRoot->getNodeMask());
  
          mShadowSettings = mShadowedScene->getShadowSettings();
 +        mShadowMapsOff = new osg::Uniform("shadowMapsOff", 0.f);
-+        mShadowMapsOff->setDataVariance(osg::Object::DYNAMIC);
++        // Not marked dynamic: the viewer would then treat the whole scene below as dynamic, and every frame
++        // would wait until the last one was drawn. It only changes when shadows are switched on or off.
 +        mShadowedScene->getOrCreateStateSet()->addUniform(mShadowMapsOff);
          setupShadowSettings(settings, shaderManager);
  
          mShadowTechnique->setupCastingShader(shaderManager);
-@@ -221,16 +230,63 @@ namespace SceneUtil
+@@ -221,16 +231,63 @@ namespace SceneUtil
  
      void ShadowManager::enableIndoorMode(const Settings::ShadowsCategory& settings)
      {
