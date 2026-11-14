@@ -1,0 +1,56 @@
+diff --git a/components/settings/categories/terrain.hpp b/components/settings/categories/terrain.hpp
+index d366aad..d49086a 100644
+--- a/components/settings/categories/terrain.hpp
++++ b/components/settings/categories/terrain.hpp
+@@ -26,6 +26,7 @@ namespace Settings
+             makeMaxSanitizerInt(1) };
+         SettingValue<float> mMaxCompositeGeometrySize{ mIndex, "Terrain", "max composite geometry size",
+             makeMaxSanitizerFloat(1) };
++        SettingValue<bool> mCompositeMapUnderWater{ mIndex, "Terrain", "composite map under water" };
+         SettingValue<bool> mDebugChunks{ mIndex, "Terrain", "debug chunks" };
+         SettingValue<bool> mObjectPaging{ mIndex, "Terrain", "object paging" };
+         SettingValue<bool> mObjectPagingActiveGrid{ mIndex, "Terrain", "object paging active grid" };
+diff --git a/components/terrain/chunkmanager.cpp b/components/terrain/chunkmanager.cpp
+index f564ead..1fb8236 100644
+--- a/components/terrain/chunkmanager.cpp
++++ b/components/terrain/chunkmanager.cpp
+@@ -10,6 +10,7 @@
+ #include <components/resource/scenemanager.hpp>
+ 
+ #include <components/sceneutil/lightmanager.hpp>
++#include <components/settings/values.hpp>
+ 
+ #include "compositemaprenderer.hpp"
+ #include "material.hpp"
+@@ -258,6 +259,16 @@ namespace Terrain
+         geometry->addPrimitiveSet(mBufferCache.getIndexBuffer(numVerts, lodFlags));
+ 
+         bool useCompositeMap = chunkSize >= mCompositeMapLevel;
++        // The sea bottom is seen through the water, which hides the detail of the texture layers, so a chunk that lies
++        // entirely below the sea level (height 0) is drawn with one composite map instead of a pass per layer.
++        if (!useCompositeMap && !ESM::isEsm4Ext(mWorldspace) && Settings::terrain().mCompositeMapUnderWater)
++        {
++            float minHeight = 0.f;
++            float maxHeight = 0.f;
++            if (mStorage->getMinMaxHeights(chunkSize, chunkCenter, mWorldspace, minHeight, maxHeight)
++                && maxHeight < -16.f)
++                useCompositeMap = true;
++        }
+         unsigned int numUvSets = useCompositeMap ? 1 : 2;
+ 
+         geometry->setTexCoordArrayList(osg::Geometry::ArrayList(numUvSets, mBufferCache.getUVBuffer(numVerts)));
+diff --git a/files/settings-default.cfg b/files/settings-default.cfg
+index dc1d739..f6e383e 100644
+--- a/files/settings-default.cfg
++++ b/files/settings-default.cfg
+@@ -95,6 +95,10 @@ composite map level = 0
+ # Controls the resolution of composite maps.
+ composite map resolution = 512
+ 
++# Terrain that lies entirely under the water is drawn with a composite map at any distance, in one pass instead of
++# one per texture layer. The water above it hides the loss of detail.
++composite map under water = true
++
+ # Controls the maximum size of composite geometry, should be >= 1.0. With low values there will be many small chunks, with high values - lesser count of bigger chunks.
+ max composite geometry size = 4.0
+ 
