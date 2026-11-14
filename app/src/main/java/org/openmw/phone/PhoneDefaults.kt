@@ -19,6 +19,21 @@ import java.io.File
  */
 internal object PhoneDefaults {
     private const val TAG = "PhoneDefaults"
+
+    /** Screen height the shipped `[GUI] scaling factor` is meant for, in pixels. */
+    private const val GUI_DESIGN_HEIGHT = 1080f
+
+    /**
+     * How much larger the game's windows are drawn on a game screen [nativeHeight] pixels high.
+     *
+     * The shipped `[GUI] scaling factor` is meant for a 1080 pixel high screen, as the Duo Lite's is.
+     * Phones are about as high in centimetres but often have more pixels, 1440 or more, and at the
+     * same scaling the windows and their text come out a quarter smaller or worse. Scaled by the
+     * height, the windows take the same part of the screen on any phone, and the same on a 4K TV as
+     * on a 1080p one. Interface size in the launcher still applies on top.
+     */
+    fun guiScreenScale(nativeHeight: Int): Float =
+        if (nativeHeight > 0) nativeHeight / GUI_DESIGN_HEIGHT else 1f
     private const val PREFS = "phone_defaults"
     private const val KEY_VERSION = "version"
     private const val VERSION = 1
