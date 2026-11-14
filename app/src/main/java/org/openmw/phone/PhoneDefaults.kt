@@ -3,6 +3,7 @@ package org.openmw.phone
 import android.content.Context
 import android.util.Log
 import org.openmw.Constants
+import org.openmw.companion.UiPreferences
 import java.io.File
 
 /**
@@ -10,12 +11,14 @@ import java.io.File
  * (applyTunedPerformanceSettings in UITools.kt), which both builds share. Phones have more GPU to
  * spare than the Duo Lite.
  *
- * Written once into settings.cfg before the game starts, each only where it still has the Duo Lite's
- * value, so a value the player set is kept. [VERSION] is the last change applied; bump it with each
- * new one.
+ * Written once before the game starts, each only where it still has the Duo Lite's value, so a
+ * value the player set is kept. [VERSION] is the last change applied; bump it with each new one.
  *
  * v1: `[Water] reflection detail = 1` where it is 0: the land shows in water reflections, not only
  *     the sky.
+ * v2: the companion's inventory cards Large (3 rows) where Card Size was never set. Framed on a
+ *     phone the companion is lower than the bottom screen the cards are made for, and with 4 rows
+ *     their text comes out very small.
  */
 internal object PhoneDefaults {
     private const val TAG = "PhoneDefaults"
@@ -36,13 +39,21 @@ internal object PhoneDefaults {
         if (nativeHeight > 0) nativeHeight / GUI_DESIGN_HEIGHT else 1f
     private const val PREFS = "phone_defaults"
     private const val KEY_VERSION = "version"
-    private const val VERSION = 1
+    private const val VERSION = 2
+
+    /** Card Size Large: the inventory card grid's row count. */
+    private const val INV_CARD_ROWS_LARGE = 3
 
     /** Called by the game activity at start. */
     fun apply(context: Context) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val applied = prefs.getInt(KEY_VERSION, 0)
         if (applied >= VERSION) return
+        if (applied < 2) {
+            // UiPreferences' file and key; contains() tells a value the player set from the default.
+            val ui = context.getSharedPreferences("companion_ui_settings", Context.MODE_PRIVATE)
+            if (!ui.contains("inventory_card_rows")) UiPreferences.setInvCardRows(context, INV_CARD_ROWS_LARGE)
+        }
         if (Constants.SETTINGS_FILE.isEmpty()) return
         val file = File(Constants.SETTINGS_FILE)
         // Not there yet: tried again at the next start.
