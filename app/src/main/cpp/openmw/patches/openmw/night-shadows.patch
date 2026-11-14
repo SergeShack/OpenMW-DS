@@ -1,0 +1,276 @@
+diff --git a/apps/openmw/mwrender/renderingmanager.cpp b/apps/openmw/mwrender/renderingmanager.cpp
+index d9680a2..7aeceb3 100644
+--- a/apps/openmw/mwrender/renderingmanager.cpp
++++ b/apps/openmw/mwrender/renderingmanager.cpp
+@@ -548,6 +548,9 @@ namespace MWRender
+         mSunLight->setDiffuse(diffuse);
+         mSunLight->setSpecular(osg::Vec4f(specular.x(), specular.y(), specular.z(), specular.w() * sunVis));
+ 
++        const float brightness = 0.2126f * diffuse.r() + 0.7152f * diffuse.g() + 0.0722f * diffuse.b();
++        mShadowManager->setSunlight(brightness, mViewer->getFrameStamp()->getReferenceTime());
++
+         mPostProcessor->getStateUpdater()->setSunColor(diffuse);
+         mPostProcessor->getStateUpdater()->setSunVis(sunVis);
+     }
+diff --git a/components/sceneutil/shadow.cpp b/components/sceneutil/shadow.cpp
+index ff0754e..7de6bea 100644
+--- a/components/sceneutil/shadow.cpp
++++ b/components/sceneutil/shadow.cpp
+@@ -1,8 +1,10 @@
+ #include "shadow.hpp"
+ 
++#include <osg/Uniform>
+ #include <osgShadow/ShadowSettings>
+ #include <osgShadow/ShadowedScene>
+ 
++#include <components/debug/debuglog.hpp>
+ #include <components/misc/strings/algorithm.hpp>
+ #include <components/settings/categories/shadows.hpp>
+ #include <components/stereo/stereomanager.hpp>
+@@ -14,6 +16,7 @@ namespace SceneUtil
+     using namespace osgShadow;
+ 
+     ShadowManager* ShadowManager::sInstance = nullptr;
++    std::atomic<bool> ShadowManager::sShadowMapsDrawn{ true };
+ 
+     const ShadowManager& ShadowManager::instance()
+     {
+@@ -27,6 +30,9 @@ namespace SceneUtil
+         const Settings::ShadowsCategory& settings, Shader::ShaderManager& shaderManager)
+     {
+         mEnableShadows = settings.mEnableShadows;
++        mMinimumSunlight = settings.mMinimumSunlight;
++        if (mMinimumSunlight <= 0.f)
++            mSunShadows = true;
+ 
+         if (!mEnableShadows)
+         {
+@@ -144,6 +150,9 @@ namespace SceneUtil
+         mShadowedScene->setNodeMask(sceneRoot->getNodeMask());
+ 
+         mShadowSettings = mShadowedScene->getShadowSettings();
++        mShadowMapsOff = new osg::Uniform("shadowMapsOff", 0.f);
++        mShadowMapsOff->setDataVariance(osg::Object::DYNAMIC);
++        mShadowedScene->getOrCreateStateSet()->addUniform(mShadowMapsOff);
+         setupShadowSettings(settings, shaderManager);
+ 
+         mShadowTechnique->setupCastingShader(shaderManager);
+@@ -221,16 +230,63 @@ namespace SceneUtil
+ 
+     void ShadowManager::enableIndoorMode(const Settings::ShadowsCategory& settings)
+     {
++        mOutdoor = false;
+         if (settings.mEnableIndoorShadows)
++        {
+             mShadowSettings->setCastsShadowTraversalMask(mIndoorShadowCastingMask);
++            setShadowMapsDrawn(true);
++        }
+         else
++        {
+             mShadowTechnique->disableShadows(true);
++            setShadowMapsDrawn(false);
++        }
+     }
+ 
+     void ShadowManager::enableOutdoorMode()
+     {
+-        if (mEnableShadows)
+-            mShadowTechnique->enableShadows();
++        mOutdoor = true;
++        // decide from the next sunlight at once, without waiting for it to stay bright
++        mSunShadowsUndecided = true;
++        applyOutdoorShadows();
+         mShadowSettings->setCastsShadowTraversalMask(mOutdoorShadowCastingMask);
+     }
++
++    void ShadowManager::applyOutdoorShadows()
++    {
++        if (!mEnableShadows || !mOutdoor)
++            return;
++        if (mSunShadows)
++            mShadowTechnique->enableShadows();
++        else
++            mShadowTechnique->disableShadows(true);
++        setShadowMapsDrawn(mSunShadows);
++    }
++
++    void ShadowManager::setShadowMapsDrawn(bool drawn)
++    {
++        mShadowMapsOff->set(drawn ? 0.f : 1.f);
++        sShadowMapsDrawn = drawn;
++    }
++
++    void ShadowManager::setSunlight(float brightness, double time)
++    {
++        if (!mEnableShadows || !mOutdoor || mMinimumSunlight <= 0.f)
++            return;
++        // a little above the threshold to turn them on again, so they do not flicker at dusk
++        const bool bright = brightness >= mMinimumSunlight * (mSunShadows ? 1.f : 1.15f);
++        if (!bright)
++            mSunBrightSince = -1.0;
++        else if (mSunBrightSince < 0.0)
++            mSunBrightSince = time;
++        // off at once; on again only after the light has stayed bright for a second, so a lightning flash does not
++        // turn them on for a moment
++        const bool want = bright && (mSunShadows || mSunShadowsUndecided || time - mSunBrightSince >= 1.0);
++        mSunShadowsUndecided = false;
++        if (want == mSunShadows)
++            return;
++        mSunShadows = want;
++        Log(Debug::Info) << "Shadows " << (want ? "on" : "off") << " outdoors, sunlight " << brightness;
++        applyOutdoorShadows();
++    }
+ }
+diff --git a/components/sceneutil/shadow.hpp b/components/sceneutil/shadow.hpp
+index 71f9e67..45d3e9a 100644
+--- a/components/sceneutil/shadow.hpp
++++ b/components/sceneutil/shadow.hpp
+@@ -1,12 +1,15 @@
+ #ifndef COMPONENTS_SCENEUTIL_SHADOW_H
+ #define COMPONENTS_SCENEUTIL_SHADOW_H
+ 
++#include <atomic>
++
+ #include <components/shader/shadermanager.hpp>
+ 
+ namespace osg
+ {
+     class StateSet;
+     class Group;
++    class Uniform;
+ }
+ 
+ namespace osgShadow
+@@ -48,8 +51,19 @@ namespace SceneUtil
+         /// The casters that '[Shadows] object shadow distance' applies to.
+         void setObjectShadowMask(unsigned int objectMask, unsigned int otherCasterMask);
+ 
++        /// False while the shadow maps are not drawn (night, storm, interiors without shadows); a cull thread may ask.
++        static bool getShadowMapsDrawn() { return sShadowMapsDrawn; }
++
++        /// Name of the terrain pass that only multiplies in the shadows; it is skipped while the maps are not drawn.
++        static constexpr const char* sTerrainShadowPassName = "terrain shadow pass";
++
++        /// Brightness of the sunlight (0 to 1) at the given time in seconds. Outdoors, shadow maps are not drawn
++        /// while it is below '[Shadows] minimum sunlight'.
++        void setSunlight(float brightness, double time);
++
+     protected:
+         static ShadowManager* sInstance;
++        static std::atomic<bool> sShadowMapsDrawn;
+ 
+         bool mEnableShadows;
+ 
+@@ -59,6 +73,18 @@ namespace SceneUtil
+ 
+         unsigned int mOutdoorShadowCastingMask;
+         unsigned int mIndoorShadowCastingMask;
++
++        void applyOutdoorShadows();
++        void setShadowMapsDrawn(bool drawn);
++
++        /// 1 while the shadow maps are not drawn, so the shaders skip the lookup
++        osg::ref_ptr<osg::Uniform> mShadowMapsOff;
++
++        bool mOutdoor = true;
++        bool mSunShadows = true;
++        bool mSunShadowsUndecided = true;
++        float mMinimumSunlight = 0.f;
++        double mSunBrightSince = -1.0;
+     };
+ }
+ 
+diff --git a/components/settings/categories/shadows.hpp b/components/settings/categories/shadows.hpp
+index fd2ebc3..bc29fa6 100644
+--- a/components/settings/categories/shadows.hpp
++++ b/components/settings/categories/shadows.hpp
+@@ -45,6 +45,7 @@ namespace Settings
+         SettingValue<float> mObjectShadowDistance{ mIndex, "Shadows", "object shadow distance",
+             makeMaxSanitizerFloat(0) };
+         SettingValue<bool> mStableShadowMaps{ mIndex, "Shadows", "stable shadow maps" };
++        SettingValue<float> mMinimumSunlight{ mIndex, "Shadows", "minimum sunlight", makeMaxSanitizerFloat(0) };
+     };
+ }
+ 
+diff --git a/components/terrain/material.cpp b/components/terrain/material.cpp
+index 3c2bfdc..3efc478 100644
+--- a/components/terrain/material.cpp
++++ b/components/terrain/material.cpp
+@@ -9,6 +9,7 @@
+ 
+ #include <components/resource/scenemanager.hpp>
+ #include <components/sceneutil/depth.hpp>
++#include <components/sceneutil/shadow.hpp>
+ #include <components/sceneutil/util.hpp>
+ #include <components/shader/shadermanager.hpp>
+ #include <components/stereo/stereomanager.hpp>
+@@ -313,6 +314,7 @@ namespace Terrain
+         if (shadowPass)
+         {
+             osg::ref_ptr<osg::StateSet> stateset(new osg::StateSet);
++            stateset->setName(SceneUtil::ShadowManager::sTerrainShadowPassName);
+             stateset->setMode(GL_BLEND, osg::StateAttribute::ON);
+             if (sceneManager->getSupportsNormalsRT())
+                 stateset->setAttribute(new osg::Disablei(GL_BLEND, 1));
+diff --git a/components/terrain/terraindrawable.cpp b/components/terrain/terraindrawable.cpp
+index 20df85b..f541adb 100644
+--- a/components/terrain/terraindrawable.cpp
++++ b/components/terrain/terraindrawable.cpp
+@@ -4,6 +4,7 @@
+ #include <osgUtil/CullVisitor>
+ 
+ #include <components/sceneutil/lightmanager.hpp>
++#include <components/sceneutil/shadow.hpp>
+ 
+ #include "compositemaprenderer.hpp"
+ 
+@@ -102,8 +103,12 @@ namespace Terrain
+         if (stateset)
+             cv->pushStateSet(stateset);
+ 
++        const bool shadowMapsDrawn = SceneUtil::ShadowManager::getShadowMapsDrawn();
+         for (PassVector::const_iterator it = mPasses.begin(); it != mPasses.end(); ++it)
+         {
++            // without shadow maps the shadow pass would multiply by 1
++            if (!shadowMapsDrawn && (*it)->getName() == SceneUtil::ShadowManager::sTerrainShadowPassName)
++                continue;
+             cv->pushStateSet(*it);
+             cv->addDrawableAndDepth(this, &matrix, depth);
+             cv->popStateSet();
+diff --git a/files/settings-default.cfg b/files/settings-default.cfg
+index 33591ab..dc1d739 100644
+--- a/files/settings-default.cfg
++++ b/files/settings-default.cfg
+@@ -1070,6 +1070,10 @@ object shadow distance = 0.0
+ # Keep the shadow maps fixed in the world, so shadows do not shimmer or swim when the camera turns or moves. Shadows near the camera get a little less detail.
+ stable shadow maps = false
+ 
++# Outdoors, shadows are not drawn while the sunlight is fainter than this (brightness of the sun colour, 0 to 1),
++# as at night in rain, a storm or overcast weather, where they would hardly show. 0 always draws them.
++minimum sunlight = 0.3
++
+ [Physics]
+ # Set the number of background threads used for physics.
+ # If no background threads are used, physics calculations are processed in the main thread
+diff --git a/files/shaders/compatibility/shadows_fragment.glsl b/files/shaders/compatibility/shadows_fragment.glsl
+index e9b3577..e3ba16c 100644
+--- a/files/shaders/compatibility/shadows_fragment.glsl
++++ b/files/shaders/compatibility/shadows_fragment.glsl
+@@ -1,6 +1,7 @@
+ #define SHADOWS @shadows_enabled
+ 
+ #if SHADOWS
++    uniform float shadowMapsOff;
+     uniform float maximumShadowMapDistance;
+     uniform float shadowFadeStart;
+     @foreach shadow_texture_unit_index @shadow_texture_unit_list
+@@ -17,6 +18,9 @@ float unshadowedLightRatio(float distance)
+ {
+     float shadowing = 1.0;
+ #if SHADOWS
++    // the shadow maps are not drawn (night, storm, interiors without shadows): every pixel is lit
++    if (shadowMapsOff > 0.5)
++        return shadowing;
+ #if @limitShadowMapDistance
+     float fade = clamp((distance - shadowFadeStart) / (maximumShadowMapDistance - shadowFadeStart), 0.0, 1.0);
+     if (fade == 1.0)
