@@ -706,8 +706,10 @@ fun fixShadowSettingKeys() {
  *     `shadow fade start = 0.6`, `number of shadow maps = 1`, see [updateShadowDistances]. Each written
  *     only where the key is missing or still has the earlier value (1000, 8192, 0.9, 2), so a value the
  *     player set is kept.
+ * v11 (Nov 14 2026): `[Terrain] composite map level = -3`, see [useCompositeMapsNear]. Written only where
+ *     the key is missing or still has the engine default 0, so a value the player set is kept.
  */
-const val TUNED_PERF_SETTINGS_VERSION = 10
+const val TUNED_PERF_SETTINGS_VERSION = 11
 
 /**
  * Force this build's measured performance defaults into the user's `settings.cfg`.
@@ -846,6 +848,15 @@ const val TUNED_PERF_SETTINGS_VERSION = 10
  *   case: 2.0% of frames over 36 ms against 9.7% with two maps (13-15% with the v8 values, 0.2% without
  *   shadows); GPU busy 74% against 82%. Small casters such as characters get blockier shadows.
  *
+ * The v11 value, same device and cap:
+ * - `[Terrain] composite map level = -3` (engine default 0): every terrain chunk is drawn with one baked
+ *   composite texture instead of one pass per texture layer, which the near chunks used before. A terrain
+ *   chunk under several layers cost as much as the rest of the frame, in the GPU and in the draw thread
+ *   alike. Walking a fixed route for 4 min: frames over 36 ms 19% -> 6%, frames of 100 ms or more 5 -> 3;
+ *   a shallow shore seen from above 39 -> 33 ms. The smallest chunk's 512 composite map has about the
+ *   texel density of the original textures, so the ground at the feet looks the same, slightly softer.
+ *   The game's GPU memory grew from 168 to 318 MB.
+ *
  * Deliberately NOT included: `[Cells] prediction time = 3` measured as noise (26.5 -> 25.4 ms/s,
  * inside route variance) and did not fix what it was aimed at, so shipping it would put an
  * unjustified value in front of every user; `[Terrain] lod factor = 0.5` is a real +9.3% but raises
@@ -866,6 +877,7 @@ fun applyTunedPerformanceSettings(appliedVersion: Int) {
         if (appliedVersion < 8) seedShadowDefaults(lines)
         if (appliedVersion < BuildConfig.SHADOWS_ON_SINCE && BuildConfig.SHADOWS_ON_BY_DEFAULT) turnShadowsOn(lines)
         if (appliedVersion < 10) updateShadowDistances(lines)
+        if (appliedVersion < 11) useCompositeMapsNear(lines)
         if (lines != original) {
             file.writeText(lines.joinToString("\n"))
             Log.d("UITools", "Applied tuned defaults v${appliedVersion + 1}..v$TUNED_PERF_SETTINGS_VERSION")
@@ -888,6 +900,7 @@ fun applyTunedPerformanceSettings(appliedVersion: Int) {
     seedShadowDefaults(lines)
     if (BuildConfig.SHADOWS_ON_BY_DEFAULT) turnShadowsOn(lines)
     updateShadowDistances(lines)
+    useCompositeMapsNear(lines)
 
     if (lines != original) {
         file.writeText(lines.joinToString("\n"))
@@ -927,6 +940,17 @@ private fun updateShadowDistances(lines: MutableList<String>) {
         if (current == null || current == previous) {
             setSettingInSection(lines, "[Shadows]", key, value)
         }
+    }
+}
+
+/**
+ * The v11 value (see [TUNED_PERF_SETTINGS_VERSION]): composite maps for all terrain, written only where the
+ * key is missing or still has the engine default 0, so a value the player chose is kept.
+ */
+private fun useCompositeMapsNear(lines: MutableList<String>) {
+    val current = getSettingInSection(lines, "[Terrain]", "composite map level")
+    if (current == null || current == "0") {
+        setSettingInSection(lines, "[Terrain]", "composite map level", "-3")
     }
 }
 
