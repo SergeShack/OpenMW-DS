@@ -1,8 +1,7 @@
 diff --git a/apps/openmw/mwrender/water.cpp b/apps/openmw/mwrender/water.cpp
-index ba12c13..5200b31 100644
 --- a/apps/openmw/mwrender/water.cpp
 +++ b/apps/openmw/mwrender/water.cpp
-@@ -322,6 +322,14 @@ namespace MWRender
+@@ -322,6 +322,30 @@
              setInterior(isInterior);
              setDepthBufferInternalFormat(GL_DEPTH24_STENCIL8);
              mClipCullNode = new ClipCullNode;
@@ -10,26 +9,44 @@ index ba12c13..5200b31 100644
 +        }
 +
 +        // Drawing the reflection costs the draw thread as much as a second view of the terrain. Every other frame
-+        // the water shows the last one, a frame late, which its ripples hide.
-+        bool renderInFrame(unsigned int frameNumber) const override
++        // the water shows the last one, a frame late, which its ripples hide. While the camera turns, a frame-old
++        // reflection would jump back and forth, so then it is drawn in every frame. Decided once per frame, since
++        // both the culling of the reflection and the water's choice of texture ask.
++        bool renderInFrame(osgUtil::CullVisitor* cv) override
 +        {
-+            return !mEveryOtherFrame || frameNumber % 2 == 0;
++            if (!mEveryOtherFrame)
++                return true;
++            const unsigned int frameNumber = cv->getFrameStamp()->getFrameNumber();
++            if (frameNumber == mDecidedFrame)
++                return mRenderDecided;
++            const osg::Matrix& view = *cv->getModelViewMatrix();
++            osg::Vec3f dir(view(0, 2), view(1, 2), view(2, 2));
++            dir.normalize();
++            // about half a degree away from the view of the last drawn reflection
++            const bool turned = dir * mLastRenderedDir < 0.99996f;
++            mRenderDecided = frameNumber % 2 == 0 || turned;
++            mDecidedFrame = frameNumber;
++            if (mRenderDecided)
++                mLastRenderedDir = dir;
++            return mRenderDecided;
          }
  
          void setDefaults(osg::Camera* camera) override
-@@ -411,6 +419,7 @@ namespace MWRender
+@@ -411,6 +435,10 @@
          osg::Node::NodeMask mNodeMask;
          osg::Matrix mViewMatrix{ osg::Matrix::identity() };
          bool mInterior;
 +        bool mEveryOtherFrame = false;
++        unsigned int mDecidedFrame = ~0u;
++        bool mRenderDecided = true;
++        osg::Vec3f mLastRenderedDir;
      };
  
      /// DepthClampCallback enables GL_DEPTH_CLAMP for the current draw, if supported.
 diff --git a/components/sceneutil/rtt.cpp b/components/sceneutil/rtt.cpp
-index 54d53dd..e83e99d 100644
 --- a/components/sceneutil/rtt.cpp
 +++ b/components/sceneutil/rtt.cpp
-@@ -46,13 +46,14 @@ namespace SceneUtil
+@@ -46,13 +46,14 @@
              }
          }
          mViewDependentDataMap.clear();
@@ -41,11 +58,11 @@ index 54d53dd..e83e99d 100644
          auto frameNumber = cv->getFrameStamp()->getFrameNumber();
          auto* vdd = getViewDependentData(cv);
 -        if (frameNumber > vdd->mFrameNumber)
-+        if (frameNumber > vdd->mFrameNumber && (!vdd->mRendered || renderInFrame(frameNumber)))
++        if (frameNumber > vdd->mFrameNumber && (!vdd->mRendered || renderInFrame(cv)))
          {
              apply(vdd->mCamera);
              if (Stereo::getStereo())
-@@ -64,6 +65,8 @@ namespace SceneUtil
+@@ -64,6 +65,8 @@
                      applyRight(vdd->mCamera);
              }
              vdd->mCamera->accept(*cv);
@@ -54,7 +71,7 @@ index 54d53dd..e83e99d 100644
          }
          vdd->mFrameNumber = frameNumber;
      }
-@@ -155,14 +158,23 @@ namespace SceneUtil
+@@ -155,14 +158,23 @@
          return texture;
      }
  
@@ -62,7 +79,7 @@ index 54d53dd..e83e99d 100644
 +    {
 +        auto* vdd = getViewDependentData(cv);
 +        // In a frame this node does not render, show what it rendered last, which may be another view's data.
-+        if (vdd->mRendered && mLastRendered && !renderInFrame(cv->getFrameStamp()->getFrameNumber()))
++        if (vdd->mRendered && mLastRendered && !renderInFrame(cv))
 +            return mLastRendered.get();
 +        return vdd;
 +    }
@@ -81,21 +98,20 @@ index 54d53dd..e83e99d 100644
  
      osg::Camera* RTTNode::getCamera(osgUtil::CullVisitor* cv)
 diff --git a/components/sceneutil/rtt.hpp b/components/sceneutil/rtt.hpp
-index d2f43f7..0c865f7 100644
 --- a/components/sceneutil/rtt.hpp
 +++ b/components/sceneutil/rtt.hpp
-@@ -71,6 +71,10 @@ namespace SceneUtil
+@@ -71,6 +71,10 @@
          /// Apply any state specific to the Right view. Default implementation does nothing. Called after apply()
          virtual void applyRight(osg::Camera* camera) {}
  
 +        /// Whether to render in this frame. Without it the texture keeps the last image. The first frame of a view
 +        /// is always rendered.
-+        virtual bool renderInFrame(unsigned int frameNumber) const { return true; }
++        virtual bool renderInFrame(osgUtil::CullVisitor* cv) { return true; }
 +
          void cull(osgUtil::CullVisitor* cv);
  
          uint32_t width() const { return mTextureWidth; }
-@@ -96,12 +100,17 @@ namespace SceneUtil
+@@ -96,12 +100,17 @@
              osg::ref_ptr<osg::Texture> mColorTexture;
              osg::ref_ptr<osg::Texture> mDepthTexture;
              unsigned int mFrameNumber = 0;
@@ -114,10 +130,9 @@ index d2f43f7..0c865f7 100644
          uint32_t mTextureHeight;
          uint32_t mSamples;
 diff --git a/components/settings/categories/water.hpp b/components/settings/categories/water.hpp
-index 63adce4..3a30552 100644
 --- a/components/settings/categories/water.hpp
 +++ b/components/settings/categories/water.hpp
-@@ -22,6 +22,7 @@ namespace Settings
+@@ -22,6 +22,7 @@
          SettingValue<int> mRttSize{ mIndex, "Water", "rtt size", makeMaxSanitizerInt(1) };
          SettingValue<bool> mRefraction{ mIndex, "Water", "refraction" };
          SettingValue<int> mReflectionDetail{ mIndex, "Water", "reflection detail", makeClampSanitizerInt(0, 5) };
@@ -126,10 +141,9 @@ index 63adce4..3a30552 100644
          SettingValue<float> mSmallFeatureCullingPixelSize{ mIndex, "Water", "small feature culling pixel size",
              makeMaxStrictSanitizerFloat(0) };
 diff --git a/files/settings-default.cfg b/files/settings-default.cfg
-index f6e383e..3d55f89 100644
 --- a/files/settings-default.cfg
 +++ b/files/settings-default.cfg
-@@ -674,6 +674,9 @@ refraction = false
+@@ -674,6 +674,9 @@
  # Draw objects on water reflections.
  reflection detail = 2
  
