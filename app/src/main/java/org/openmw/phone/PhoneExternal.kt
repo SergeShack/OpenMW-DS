@@ -79,6 +79,18 @@ object PhoneExternal {
             .onFailure { android.util.Log.e("PhoneExternal", "controller menu sides not set", it) }
     }
 
+    /** Engine side: androidmain.cpp. */
+    @JvmStatic
+    private external fun gameMenuShown(): Boolean
+
+    /**
+     * Whether the open menu is drawn on the game screen: a game window shown there, or the console.
+     * False when nothing is open, or the menu is the companion's own screen (the game window is
+     * hidden for it). With an external screen, which cannot be touched, the look pad then moves the
+     * game's cursor ([LookPad]).
+     */
+    fun menuOnGameScreen(): Boolean = runCatching { gameMenuShown() }.getOrDefault(false)
+
     /** Called by the game activity at start. */
     fun onGameStart(context: Context) {
         if (!isActive(context)) return

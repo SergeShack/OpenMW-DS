@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -301,15 +302,26 @@ internal fun RtButton(modifier: Modifier) =
  * A short tap without moving clicks the right stick.
  *
  * While a menu is open over the game ([touchpadInMenus]) it is a touchpad for the game's cursor
- * instead, see [MenuTouchpad]. Beside the companion, where the menus are mostly the companion's own,
- * it is the right stick in a menu, held from where the finger landed, so lists scroll as they do on
- * a controller.
+ * instead, see [MenuTouchpad]. Beside the companion it is that touchpad too while the menu is a
+ * game window on the external screen, which cannot be touched ([PhoneExternal.menuOnGameScreen]).
+ * While the menu is the companion's own screen it is the right stick, held from where the finger
+ * landed, so the companion's lists scroll as they do on a controller.
  */
 @Composable
 internal fun LookPad(clickKey: Int, touchpadInMenus: Boolean, menu: Boolean, modifier: Modifier) {
     var touching by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val touchpad = remember { MenuTouchpad() }
+    // Beside the companion: whether the menu is on the external screen, for the label.
+    var mouseOnGameScreen by remember { mutableStateOf(false) }
+    if (!touchpadInMenus) {
+        LaunchedEffect(Unit) {
+            while (true) {
+                mouseOnGameScreen = PhoneExternal.menuOnGameScreen()
+                delay(LABEL_POLL_MS)
+            }
+        }
+    }
     Box(
         modifier = modifier
             .background(if (touching) PadPressed.copy(alpha = 0.2f) else PadFill, RoundedCornerShape(12.dp))
@@ -323,7 +335,7 @@ internal fun LookPad(clickKey: Int, touchpadInMenus: Boolean, menu: Boolean, mod
                     touching = true
                     // Decided per touch: a menu does not open mid-drag.
                     val inMenu = runCatching { SDLActivity.companionGuiModeActive() }.getOrDefault(false)
-                    if (inMenu && touchpadInMenus) {
+                    if (inMenu && (touchpadInMenus || PhoneExternal.menuOnGameScreen())) {
                         with(touchpad) { track(down, scope) }
                         touching = false
                         return@awaitEachGesture
@@ -367,7 +379,7 @@ internal fun LookPad(clickKey: Int, touchpadInMenus: Boolean, menu: Boolean, mod
         contentAlignment = Alignment.BottomCenter,
     ) {
         Text(
-            if (menu && touchpadInMenus) "MOUSE" else "LOOK",
+            if ((menu && touchpadInMenus) || mouseOnGameScreen) "MOUSE" else "LOOK",
             color = PadBronze.copy(alpha = 0.4f),
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
@@ -375,6 +387,9 @@ internal fun LookPad(clickKey: Int, touchpadInMenus: Boolean, menu: Boolean, mod
         )
     }
 }
+
+/** How often the look pad beside the companion asks where the menu is, for its label. */
+private const val LABEL_POLL_MS = 200L
 
 /** Mouse units per pixel of finger movement on the look pad. */
 private const val LOOK_SCALE = 1.0f

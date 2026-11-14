@@ -10,6 +10,7 @@ int stderr = 0; // Hack: fix linker error
 #include "mwbase/windowmanager.hpp"
 #include "mwbase/world.hpp"
 #include "mwdialogue/quest.hpp"
+#include "mwgui/windowbase.hpp"
 #include "mwdialogue/topic.hpp"
 #include "mwsound/soundbridge.hpp"
 #include "mwworld/ptr.hpp"
@@ -429,6 +430,28 @@ static void exportTopics()
     Log(Debug::Info) << "COMPANION_TOPICS_END";
 }
 
+// Phone app only: whether the open menu is drawn on the game screen, a game window being shown
+// there rather than hidden for the companion's own screen. With an external screen the phone's look
+// pad is a touchpad for the game's cursor then, and the right stick otherwise. Set every frame on
+// the engine thread, read from the UI thread (PhoneExternal.gameMenuShown).
+static std::atomic<bool> g_gameMenuShown{false};
+static void pollGameMenuShown()
+{
+    MWBase::WindowManager* wm = MWBase::Environment::get().getWindowManager();
+    bool shown = false;
+    if (wm && wm->isGuiMode())
+    {
+        MWGui::WindowBase* window = wm->getActiveControllerWindow();
+        shown = wm->isConsoleMode() || (window && window->isVisible());
+    }
+    g_gameMenuShown.store(shown);
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_org_openmw_phone_PhoneExternal_gameMenuShown(JNIEnv* /*env*/, jclass /*cls*/)
+{
+    return g_gameMenuShown.load() ? JNI_TRUE : JNI_FALSE;
+}
+
 // Called from InputWrapper::capture() every frame on the engine thread.
 void drainCompanionCommands()
 {
@@ -465,6 +488,8 @@ void drainCompanionCommands()
     // Same rationale: runs before the queue-empty early-return below, so it is a true per-frame
     // poll rather than something that only fires on frames carrying a command.
     companionApplyPendingInteriorBrightness();
+
+    pollGameMenuShown();
 
     std::deque<std::string> pending;
     {
