@@ -130,45 +130,7 @@ internal object PhoneWindows {
 
     private fun format(v: Float) = String.format(Locale.US, "%.6f", v)
 
-    private fun keyOf(line: String): String? {
-        val trimmed = line.trim()
-        if (trimmed.startsWith("#") || !trimmed.contains('=')) return null
-        return trimmed.substringBefore('=').trim()
-    }
+    private fun get(lines: List<String>, key: String): Float? = SettingsLines.get(lines, SECTION, key)?.toFloatOrNull()
 
-    private fun isSection(line: String): Boolean {
-        val trimmed = line.trim()
-        return trimmed.startsWith("[") && trimmed.endsWith("]")
-    }
-
-    private fun sectionStart(lines: List<String>) = lines.indexOfFirst { it.trim().equals(SECTION, ignoreCase = true) }
-
-    private fun get(lines: List<String>, key: String): Float? {
-        val start = sectionStart(lines)
-        if (start < 0) return null
-        for (i in start + 1 until lines.size) {
-            if (isSection(lines[i])) break
-            if (keyOf(lines[i]).equals(key, ignoreCase = true)) {
-                return lines[i].substringAfter('=').trim().toFloatOrNull()
-            }
-        }
-        return null
-    }
-
-    private fun set(lines: MutableList<String>, key: String, value: String) {
-        var start = sectionStart(lines)
-        if (start < 0) {
-            if (lines.isNotEmpty() && lines.last().isNotBlank()) lines.add("")
-            lines.add(SECTION)
-            start = lines.lastIndex
-        }
-        for (i in start + 1 until lines.size) {
-            if (isSection(lines[i])) break
-            if (keyOf(lines[i]).equals(key, ignoreCase = true)) {
-                lines[i] = "$key = $value"
-                return
-            }
-        }
-        lines.add(start + 1, "$key = $value")
-    }
+    private fun set(lines: MutableList<String>, key: String, value: String) = SettingsLines.set(lines, SECTION, key, value)
 }
