@@ -1,0 +1,107 @@
+--- a/apps/openmw/mwinput/controllermanager.hpp
++++ b/apps/openmw/mwinput/controllermanager.hpp
+@@ -58,6 +58,8 @@
+ 
+         void enableGyroSensor();
+ 
++        static bool isGuiDpadButton(int button);
++
+         int getControllerType();
+ 
+         BindingsManager* mBindingsManager;
+@@ -70,6 +72,12 @@
+         bool mGamepadMousePressed;
+         bool mLeftTriggerGuiPressed;
+         bool mRightTriggerGuiPressed;
++
++        // The d-pad direction held down in a menu, -1 if none, and when it repeats next.
++        int mHeldGuiDpadButton;
++        int mHeldGuiDpadDevice;
++        float mGuiDpadRepeatTimer;
++        int mGuiDpadRepeatCount;
+     };
+ }
+ #endif
+--- a/apps/openmw/mwinput/controllermanager.cpp
++++ b/apps/openmw/mwinput/controllermanager.cpp
+@@ -79,6 +79,10 @@
+         , mGamepadMousePressed(false)
+         , mLeftTriggerGuiPressed(false)
+         , mRightTriggerGuiPressed(false)
++        , mHeldGuiDpadButton(-1)
++        , mHeldGuiDpadDevice(0)
++        , mGuiDpadRepeatTimer(0.f)
++        , mGuiDpadRepeatCount(0)
+     {
+         if (!controllerBindingsFile.empty())
+         {
+@@ -130,6 +134,31 @@
+ 
+     void ControllerManager::update(float dt)
+     {
++        // A d-pad direction held in a menu keeps moving the selection, as in console games: after a short
++        // pause it repeats, and after a few steps it goes faster, so a long list can be scrolled through
++        // without pressing again and again.
++        if (mHeldGuiDpadButton != -1)
++        {
++            if (!MWBase::Environment::get().getWindowManager()->isGuiMode()
++                || MWBase::Environment::get().getInputManager()->controlsDisabled())
++                mHeldGuiDpadButton = -1;
++            else
++            {
++                mGuiDpadRepeatTimer -= dt;
++                if (mGuiDpadRepeatTimer <= 0.f)
++                {
++                    mGuiDpadRepeatTimer = mGuiDpadRepeatCount < 10 ? 0.08f : 0.04f;
++                    ++mGuiDpadRepeatCount;
++                    SDL_ControllerButtonEvent repeat{};
++                    repeat.type = SDL_CONTROLLERBUTTONDOWN;
++                    repeat.which = mHeldGuiDpadDevice;
++                    repeat.button = static_cast<Uint8>(mHeldGuiDpadButton);
++                    repeat.state = SDL_PRESSED;
++                    gamepadToGuiControl(repeat);
++                }
++            }
++        }
++
+ #ifdef __ANDROID__
+         // COMPANION (FIX 1, generalized): while ANY pausing menu is open, a held stick's RELEASE event
+         // is SWALLOWED before it reaches the ICS movement/look channels — by our companionNavActive()
+@@ -488,6 +517,14 @@
+         mJoystickLastUsed = true;
+         if (MWBase::Environment::get().getWindowManager()->isGuiMode())
+         {
++            if (isGuiDpadButton(arg.button))
++            {
++                mHeldGuiDpadButton = arg.button;
++                mHeldGuiDpadDevice = arg.which;
++                mGuiDpadRepeatTimer = 0.4f;
++                mGuiDpadRepeatCount = 0;
++            }
++
+             if (gamepadToGuiControl(arg))
+                 return;
+ 
+@@ -524,6 +561,9 @@
+ 
+     void ControllerManager::buttonReleased(int deviceID, const SDL_ControllerButtonEvent& arg)
+     {
++        if (arg.button == mHeldGuiDpadButton)
++            mHeldGuiDpadButton = -1;
++
+         if (mBindingsManager->isDetectingBindingState())
+         {
+             mBindingsManager->controllerButtonReleased(deviceID, arg);
+@@ -881,6 +921,12 @@
+         return 0;
+     }
+ 
++    bool ControllerManager::isGuiDpadButton(int button)
++    {
++        return button == SDL_CONTROLLER_BUTTON_DPAD_UP || button == SDL_CONTROLLER_BUTTON_DPAD_DOWN
++            || button == SDL_CONTROLLER_BUTTON_DPAD_LEFT || button == SDL_CONTROLLER_BUTTON_DPAD_RIGHT;
++    }
++
+     bool ControllerManager::isButtonPressed(SDL_GameControllerButton button) const
+     {
+         SDL_GameController* cntrl = mBindingsManager->getControllerOrNull();
