@@ -176,67 +176,9 @@ object PadHaptics {
 /** Room left above the controller when it is over the game, for the corner buttons. */
 internal val OVER_GAME_TOP = 52.dp
 
-/** Height of the face buttons in the menu layout: as wide as the left side's d-pad there. */
-private val MENU_FACE_BUTTONS = 88.dp
-
 internal val PadBronze = Color(0xFFC8A062)
 internal val PadFill = Color(0x402A2118)
 internal val PadPressed = Color(0x80C8A062)
-
-/**
- * Left side of the controller over the game while a menu is open (see [GameScreenPad]): only what
- * menus use, so the game's windows fit between the two sides. The stick goes, since the cursor is
- * moved on the right side's touchpad, and Start moves over here beside Back. The top is left free
- * for the keyboard and quick slot buttons.
- */
-@Composable
-fun MenuSideLeft() {
-    val context = LocalContext.current
-    remember(context) { PadHaptics.init(context.applicationContext); true }
-    Column(
-        modifier = Modifier.fillMaxSize().padding(8.dp).padding(top = OVER_GAME_TOP),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        PadRow {
-            LtButton(Modifier.weight(1f))
-            LbButton(Modifier.weight(1f))
-        }
-        PadRow {
-            BackButton(Modifier.weight(1f))
-            StartButton(Modifier.weight(1f))
-        }
-        DPad(Modifier.fillMaxWidth().aspectRatio(1f))
-    }
-}
-
-/**
- * Right side of the controller over the game while a menu is open. See [MenuSideLeft].
- *
- * The attack button goes and the look pad is a touchpad for the game's cursor. This side is wider
- * than the left one, and the face buttons keep the size they have on the left side's width, so the
- * extra width goes to the touchpad.
- */
-@Composable
-fun MenuSideRight() {
-    val context = LocalContext.current
-    remember(context) { PadHaptics.init(context.applicationContext); true }
-    Column(
-        modifier = Modifier.fillMaxSize().padding(8.dp).padding(top = OVER_GAME_TOP),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        PadRow {
-            RbButton(Modifier.weight(1f))
-            RtButton(Modifier.weight(1f))
-        }
-        FaceButtons(Modifier.fillMaxWidth().height(MENU_FACE_BUTTONS))
-        LookPad(
-            clickKey = KeyEvent.KEYCODE_BUTTON_THUMBR,
-            touchpadInMenus = true,
-            menu = true,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-        )
-    }
-}
 
 @Composable
 internal fun LtButton(modifier: Modifier) =

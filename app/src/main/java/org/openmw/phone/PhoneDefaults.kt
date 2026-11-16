@@ -2,8 +2,10 @@ package org.openmw.phone
 
 import android.content.Context
 import android.util.Log
+import android.view.Display
 import org.openmw.Constants
 import org.openmw.companion.UiPreferences
+import org.openmw.utils.DisplayRoles
 import java.io.File
 
 /**
@@ -37,9 +39,30 @@ internal object PhoneDefaults {
      * same scaling the windows and their text come out a quarter smaller or worse. Scaled by the
      * height, the windows take the same part of the screen on any phone, and the same on a 4K TV as
      * on a 1080p one. Interface size in the launcher still applies on top.
+     *
+     * On the device's own screen they are also kept to about the size they have on a phone, in
+     * centimetres ([MAX_DP_PER_GUI_UNIT]): a tablet's screen is much larger, and the same part of
+     * it made the windows twice as large as on a phone, too large for two of them side by side.
+     * Never smaller than at the shipped scaling. A TV or monitor is seen from further away, so
+     * there the height alone counts.
      */
-    fun guiScreenScale(nativeHeight: Int): Float =
-        if (nativeHeight > 0) nativeHeight / GUI_DESIGN_HEIGHT else 1f
+    fun guiScreenScale(context: Context, nativeHeight: Int): Float {
+        if (nativeHeight <= 0) return 1f
+        val byHeight = nativeHeight / GUI_DESIGN_HEIGHT
+        if (DisplayRoles.gameDisplayId(context) != Display.DEFAULT_DISPLAY) return byHeight
+        val density = context.resources.displayMetrics.density
+        val bySize = MAX_DP_PER_GUI_UNIT * density / SHIPPED_GUI_SCALING
+        return minOf(byHeight, maxOf(bySize, 1f))
+    }
+
+    /** The shipped `[GUI] scaling factor`, which [MAX_DP_PER_GUI_UNIT] is measured at. */
+    private const val SHIPPED_GUI_SCALING = 2f
+
+    /**
+     * The largest a unit of the game's windows is drawn on the device's own screen, in dp, at the
+     * shipped scaling and Interface size 100%. Phones come out at about this or less.
+     */
+    private const val MAX_DP_PER_GUI_UNIT = 0.9f
     private const val PREFS = "phone_defaults"
     private const val KEY_VERSION = "version"
     private const val VERSION = 3

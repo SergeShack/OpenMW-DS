@@ -56,10 +56,11 @@ import org.libsdl.app.SDLActivity
  * (see [PhoneExternal]).
  *
  * In the game each part is where the player put it in the editor ([PadEditor], [PadLayout]); at
- * first they make two columns at the sides. While a menu is open the two sides narrow to what menus
- * use ([MenuSideLeft] and [MenuSideRight]), and the game's
- * windows are placed between the two: the ones laid out from settings.cfg by [PhoneWindows], the
- * controller menus by the engine ([PhoneExternal.controllerMenuSides]).
+ * first they make two columns at the sides. While a menu is open the controller has a layout of its
+ * own ([PadSurface.OVER_GAME_MENU]): at first two narrow sides, and the
+ * editor opened then arranges that one. The game's windows are placed between its sides: the ones
+ * laid out from settings.cfg by [PhoneWindows], the controller menus by the engine
+ * ([PhoneExternal.controllerMenuSides]).
  *
  * It is one view over the whole screen, but only the parts take touches: a touch anywhere else goes
  * to the game, so its windows can be tapped directly.
@@ -71,15 +72,6 @@ import org.libsdl.app.SDLActivity
  * not hide them, since it has no keys for the mods they are made for; the hide button does.
  */
 object GameScreenPad {
-
-    /** Width of the left side while a menu is open, in dp. */
-    private const val MENU_LEFT_WIDTH_DP = 104
-
-    /** Width of the right side while a menu is open, in dp: wider, for the touchpad. */
-    private const val MENU_RIGHT_WIDTH_DP = 144
-
-    /** Room kept between a side and the game's windows while a menu is open, in dp. */
-    private const val MENU_WINDOW_GAP_DP = 4
 
     /** How often the game is asked whether a menu is open. */
     private const val MENU_POLL_MS = 100L
@@ -97,20 +89,29 @@ object GameScreenPad {
     }
 
     /**
-     * The part of the screen's width the left and the right side take while a menu is open, with
-     * the gap, as fractions of the phone's longer side (the game runs in landscape).
+     * The part of the screen's width left of the game's windows and right of them while a menu is
+     * open, as fractions of the phone's longer side (the game runs in landscape): as far as the menu
+     * layout reaches in from each side ([PadLayout.menuSides]).
      */
     fun menuSideFractions(context: Context): Pair<Float, Float> {
-        val none = 0f to 0f
         val display = context.getSystemService(DisplayManager::class.java)?.getDisplay(Display.DEFAULT_DISPLAY)
-            ?: return none
+            ?: return 0f to 0f
         val metrics = DisplayMetrics()
         @Suppress("DEPRECATION")
         display.getRealMetrics(metrics)
-        val width = maxOf(metrics.widthPixels, metrics.heightPixels)
-        if (width <= 0) return none
-        val px = metrics.density / width
-        return (MENU_LEFT_WIDTH_DP + MENU_WINDOW_GAP_DP) * px to (MENU_RIGHT_WIDTH_DP + MENU_WINDOW_GAP_DP) * px
+        val density = metrics.density.takeIf { it > 0f } ?: return 0f to 0f
+        val width = maxOf(metrics.widthPixels, metrics.heightPixels) / density
+        val height = minOf(metrics.widthPixels, metrics.heightPixels) / density
+        return menuSideFractions(context, PadArea(0f, 0f, width, height))
+    }
+
+    private fun menuSideFractions(context: Context, screen: PadArea): Pair<Float, Float> {
+        val areas = listOf(screen)
+        return PadLayout.menuSides(
+            PadLayout.load(context, PadSurface.OVER_GAME_MENU, areas),
+            KeyButtonLayout.load(context, PadSurface.OVER_GAME_MENU, areas),
+            screen,
+        )
     }
 
     @Composable
@@ -133,15 +134,10 @@ object GameScreenPad {
         // Shown again over a real controller with the button; forgotten when the controller goes.
         var shownOverController by remember(controller) { mutableStateOf(false) }
         val hidden = if (controller) !shownOverController else hiddenByHand
-        // The controller menus are centred between the sides while they are shown; they take the
-        // new place the next time one opens.
-        LaunchedEffect(hidden) {
-            val (left, right) = if (hidden) 0f to 0f else menuSideFractions(context)
-            PhoneExternal.controllerMenuSides(left, right)
-        }
         // The key buttons stay over a real controller; only the hide button hides them.
         val keysHidden = !controller && hiddenByHand
-        var editing by remember { mutableStateOf(false) }
+        // The layout being edited: the one for menus when the editor was opened in a menu.
+        var editing by remember { mutableStateOf<PadSurface?>(null) }
         var opacity by remember { mutableFloatStateOf(PadLayout.opacity(context)) }
         var saved by remember { mutableIntStateOf(0) }
 
@@ -149,40 +145,55 @@ object GameScreenPad {
             val width = maxWidth.value
             val height = maxHeight.value
             val areas = remember(width, height) { listOf(PadArea(0f, 0f, width, height)) }
-            val places = remember(areas, saved) { PadLayout.load(context, PadSurface.OVER_GAME, areas) }
-            val keys = remember(areas, saved) { KeyButtonLayout.load(context, PadSurface.OVER_GAME, areas) }
+            val surface = if (menuOpen.value) PadSurface.OVER_GAME_MENU else PadSurface.OVER_GAME
+            val places = remember(areas, saved, surface) { PadLayout.load(context, surface, areas) }
+            val keys = remember(areas, saved, surface) { KeyButtonLayout.load(context, surface, areas) }
+            // The controller menus are centred between the menu layout's sides while it is shown;
+            // they take the new place the next time one opens.
+            LaunchedEffect(hidden, saved, areas) {
+                val (left, right) = if (hidden) 0f to 0f else menuSideFractions(context, areas.first())
+                PhoneExternal.controllerMenuSides(left, right)
+            }
 
-            if (editing) {
+            val edited = editing
+            if (edited != null) {
+                val startParts = remember(edited, saved) { PadLayout.load(context, edited, areas) }
+                val startKeys = remember(edited, saved) { KeyButtonLayout.load(context, edited, areas) }
                 PadEditor(
                     areas = areas,
-                    startParts = places,
-                    startKeys = keys,
+                    startParts = startParts,
+                    startKeys = startKeys,
                     startOpacity = opacity,
                     startLookSpeed = LookSpeed.value,
-                    defaults = { PadLayout.defaults(PadSurface.OVER_GAME, areas) },
-                    onSave = { edited ->
-                        PadLayout.save(context, PadSurface.OVER_GAME, edited.parts, areas)
-                        PadLayout.saveOpacity(context, edited.opacity)
-                        LookSpeed.save(context, edited.lookSpeed)
-                        KeyButtonLayout.save(context, PadSurface.OVER_GAME, edited.keys, areas)
+                    defaults = { PadLayout.defaults(edited, areas) },
+                    onSave = { result ->
+                        PadLayout.save(context, edited, result.parts, areas)
+                        PadLayout.saveOpacity(context, result.opacity)
+                        LookSpeed.save(context, result.lookSpeed)
+                        KeyButtonLayout.save(context, edited, result.keys, areas)
                     },
                 ) { reload ->
                     // Read back what was kept, or the saved layout that was loaded.
                     if (reload) LookSpeed.load(context)
                     opacity = PadLayout.opacity(context)
                     saved++
-                    editing = false
+                    editing = null
+                    // The game's windows follow the menu layout's sides at once.
+                    if (!hidden) {
+                        val (left, right) = menuSideFractions(context, areas.first())
+                        PhoneExternal.refitWindows(context, left, right)
+                    }
                 }
             } else {
                 if (!hidden) {
                     Box(Modifier.fillMaxSize().alpha(opacity)) {
-                        if (menuOpen.value) MenuSides() else PlacedParts(places, besideCompanion = false)
+                        PlacedParts(places, besideCompanion = false, menu = surface == PadSurface.OVER_GAME_MENU)
                     }
                 }
                 if (!keysHidden) {
                     Box(Modifier.fillMaxSize().alpha(opacity)) { PlacedKeys(keys) }
                 }
-                Tools(places.getValue(PadPart.TOOLS), hidden, canEdit = !keysHidden, onEdit = { editing = true }) {
+                Tools(places.getValue(PadPart.TOOLS), hidden, canEdit = !keysHidden, onEdit = { editing = surface }) {
                     if (controller) {
                         shownOverController = !shownOverController
                     } else {
@@ -203,19 +214,6 @@ object GameScreenPad {
             onEdit = onEdit,
             onToggle = onToggle,
         )
-    }
-
-    /** The two narrow sides used while a menu is open. They are not part of the editor's layout. */
-    @Composable
-    private fun MenuSides() {
-        Box(Modifier.fillMaxSize()) {
-            Box(Modifier.align(Alignment.TopStart).fillMaxHeight().width(MENU_LEFT_WIDTH_DP.dp)) {
-                MenuSideLeft()
-            }
-            Box(Modifier.align(Alignment.TopEnd).fillMaxHeight().width(MENU_RIGHT_WIDTH_DP.dp)) {
-                MenuSideRight()
-            }
-        }
     }
 
     /**
@@ -276,14 +274,14 @@ object GameScreenPad {
     }
 }
 
-/** Every part but the tool buttons, each where the layout puts it. */
+/** Every part but the tool buttons, each where the layout puts it. [menu]: the menu layout over the game. */
 @Composable
-internal fun PlacedParts(places: Map<PadPart, PartPlace>, besideCompanion: Boolean) {
+internal fun PlacedParts(places: Map<PadPart, PartPlace>, besideCompanion: Boolean, menu: Boolean = false) {
     Box(Modifier.fillMaxSize()) {
         for ((part, place) in places) {
             if (part == PadPart.TOOLS || place.hidden) continue
             key(part) {
-                PadPartContent(part, Modifier.offset(place.x.dp, place.y.dp).size(place.w.dp, place.h.dp), besideCompanion)
+                PadPartContent(part, Modifier.offset(place.x.dp, place.y.dp).size(place.w.dp, place.h.dp), besideCompanion, menu)
             }
         }
     }
@@ -291,10 +289,11 @@ internal fun PlacedParts(places: Map<PadPart, PartPlace>, besideCompanion: Boole
 
 /**
  * One part of the controller, filling [modifier]. [besideCompanion]: the look pad is the right stick
- * in the companion's own menus there, see [LookPad].
+ * in the companion's own menus there, see [LookPad]. [menu]: the menu layout over the game, where the
+ * look pad is the touchpad for the game's cursor and says so.
  */
 @Composable
-internal fun PadPartContent(part: PadPart, modifier: Modifier, besideCompanion: Boolean = false) {
+internal fun PadPartContent(part: PadPart, modifier: Modifier, besideCompanion: Boolean = false, menu: Boolean = false) {
     when (part) {
         PadPart.LT -> LtButton(modifier)
         PadPart.LB -> LbButton(modifier)
@@ -314,7 +313,7 @@ internal fun PadPartContent(part: PadPart, modifier: Modifier, besideCompanion: 
         PadPart.LOOK -> LookPad(
             clickKey = KeyEvent.KEYCODE_BUTTON_THUMBR,
             touchpadInMenus = !besideCompanion,
-            menu = false,
+            menu = menu,
             modifier = modifier,
         )
         PadPart.TOOLS -> GameScreenPad.ToolButtons(modifier, hidden = false, onEdit = null, onToggle = null)

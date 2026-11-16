@@ -1145,7 +1145,7 @@ private suspend fun applyGuiScalingForTier(context: Context, appliedHeight: Int,
     // Interface size scales the base on top of the tier. It is applied here and never stored into
     // the base, so changing it back to 100% gives exactly the old value.
     val interfaceSize = GameFilesPreferences.loadInterfaceSize(context).first()
-    val scaling = (base * appliedHeight / nativeHeight * interfaceSize / 100f * PhoneDefaults.guiScreenScale(nativeHeight))
+    val scaling = (base * appliedHeight / nativeHeight * interfaceSize / 100f * PhoneDefaults.guiScreenScale(context, nativeHeight))
         .coerceIn(GUI_SCALING_MIN, GUI_SCALING_MAX)
 
     val file = File(Constants.SETTINGS_FILE)

@@ -146,22 +146,28 @@ internal object PhoneWindows {
      */
     fun refit(context: Context, left: Float, right: Float, renderWidth: Int) {
         val file = settingsFile() ?: return
-        val lines = runCatching { file.readLines() }.getOrElse { return }
+        val lines = runCatching { file.readLines() }.getOrElse { return }.toMutableList()
+        // What was sent before in this run is what the engine has now, not what the file says.
+        for ((key, value) in sent) set(lines, key, format(value))
         val sides = Sides(left, right, canvasWidth(lines, renderWidth.toFloat()))
         val changes = changes(context, lines, sides) ?: return
         if (changes.isNotEmpty()) {
-            val sent = runCatching {
+            val delivered = runCatching {
                 sendPlaces(
                     changes.map { it.key }.toTypedArray(),
                     changes.map { it.from }.toFloatArray(),
                     changes.map { it.to }.toFloatArray(),
                 )
             }.onFailure { Log.e(TAG, "window places not sent", it) }.isSuccess
-            if (!sent) return
+            if (!delivered) return
+            for (c in changes) sent[c.key] = c.to
             Log.i(TAG, "windows moved between the sides: $left of the width left, $right right")
         }
         remember(context, sides)
     }
+
+    /** The places sent to the engine in this run, by key. The engine writes them to settings.cfg when it closes. */
+    private val sent = mutableMapOf<String, Float>()
 
     /** Engine side: androidmain.cpp, applied by phone-window-places.patch. */
     @JvmStatic
@@ -196,7 +202,41 @@ internal object PhoneWindows {
             fitPair(lines, changes, "$name x", "$name w", engine.x, engine.w, base.x, base.w, minW, last, sides)
             fitPair(lines, changes, "$name maximized x", "$name maximized w", engine.maxX, engine.maxW, base.maxX, base.maxW, minW, last, sides)
         }
-        return changes
+        for ((left, right) in SIDE_BY_SIDE) keepApart(lines, changes, left, right)
+        return changes.filter { abs(it.from - it.to) >= SAME }
+    }
+
+    /**
+     * Windows shown side by side, the inventory on the left: bartering, a container and a companion's
+     * pack. Between narrow sides the right one, kept at its minimum width, can reach over the
+     * inventory; the inventory, which has no minimum, is then made narrower to end where it starts.
+     */
+    private val SIDE_BY_SIDE = listOf(
+        "inventory barter" to "barter",
+        "inventory container" to "container",
+        "inventory companion" to "companion",
+    )
+
+    /** Room kept between two windows side by side, as a share of the width. */
+    private const val APART = 0.005f
+
+    /** The narrowest the inventory is made next to another window, as a share of the width. */
+    private const val INVENTORY_MIN = 0.2f
+
+    /**
+     * Makes the [left] window narrower where the [right] one reaches over it, if this placed the
+     * left one (a window the player placed is left alone). [fitPair] always lists the left one's
+     * place when it placed it, so this sees it even where nothing else changes.
+     */
+    private fun keepApart(lines: List<String>, changes: MutableList<Change>, left: String, right: String) {
+        val leftW = changes.indexOfFirst { it.key == "$left w" }
+        if (leftW < 0) return
+        fun value(key: String, engine: Float) = changes.lastOrNull { it.key == key }?.to ?: get(lines, key) ?: engine
+        val lx = value("$left x", ENGINE.getValue(left).x)
+        val rx = value("$right x", ENGINE.getValue(right).x)
+        val lw = changes[leftW].to
+        if (rx <= lx || lx + lw + APART <= rx) return
+        changes[leftW] = Change("$left w", changes[leftW].from, maxOf(INVENTORY_MIN, rx - APART - lx))
     }
 
     /** The GUI canvas width in the engine's units, or 0 when the file does not say. */
@@ -212,7 +252,8 @@ internal object PhoneWindows {
     /**
      * Moves one window's `x` and `w` between [sides], if both are still at the engine's or the
      * app's value, or where [last] put them, adding the change to [changes]. Missing keys are at
-     * the engine's default.
+     * the engine's default. The inventory beside another window may also be narrower than where
+     * [last] put it ([keepApart] made it so) and still count as placed here.
      */
     private fun fitPair(
         lines: List<String>, changes: MutableList<Change>, keyX: String, keyW: String,
@@ -221,13 +262,14 @@ internal object PhoneWindows {
     ) {
         val x = get(lines, keyX) ?: engineX
         val w = get(lines, keyW) ?: engineW
+        val narrowable = SIDE_BY_SIDE.any { "${it.first} x" == keyX }
         val untouched = listOf(
             engineX to engineW,
             baseX to baseW,
             last.place(baseX, baseW, minW),
-        ).any { (ux, uw) -> abs(x - ux) < SAME && abs(w - uw) < SAME }
+        ).any { (ux, uw) -> abs(x - ux) < SAME && (abs(w - uw) < SAME || (narrowable && w < uw)) }
         val (newX, newW) = if (untouched) sides.place(baseX, baseW, minW) else sides.keepClear(x, w, minW) ?: return
-        if (abs(x - newX) < SAME && abs(w - newW) < SAME) return
+        if (!(untouched && narrowable) && abs(x - newX) < SAME && abs(w - newW) < SAME) return
         changes.add(Change(keyX, x, newX))
         changes.add(Change(keyW, w, newW))
     }

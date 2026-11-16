@@ -167,9 +167,15 @@ object PhoneExternal {
         if (container != null) GameScreenPad.install(activity, container)
         if (!PadVisibility.hiddenAtStart(activity)) {
             val (left, right) = GameScreenPad.menuSideFractions(activity)
-            runCatching { PhoneWindows.refit(activity, left, right, EngineActivity.resolutionX) }
-                .onFailure { Log.e(TAG, "windows not moved", it) }
+            refitWindows(activity, left, right)
         }
+    }
+
+    /** Moves the game's windows between new sides while it runs ([PhoneWindows.refit]). */
+    @OptIn(InternalCoroutinesApi::class)
+    fun refitWindows(context: Context, left: Float, right: Float) {
+        runCatching { PhoneWindows.refit(context, left, right, EngineActivity.resolutionX) }
+            .onFailure { Log.e(TAG, "windows not moved", it) }
     }
 
     private fun findSurface(view: View): SDLSurface? {
