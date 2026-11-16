@@ -8,7 +8,7 @@ import org.openmw.utils.DisplayRoles
 /**
  * The Phone + external screen profile: a phone with a TV or monitor, on a cable or a wireless
  * cast. The game goes on the external screen and the companion on the phone, which is the only one
- * of the two that can be touched, with a touch controller beside it ([SidePadLeft], [SidePadRight]).
+ * of the two that can be touched, with a touch controller beside it ([CompanionSidePad]).
  *
  * Everything the profile does lives in this package. The shared code only asks it questions at a
  * few points (display roles, the companion host, the game activity, the launcher), so the rest of

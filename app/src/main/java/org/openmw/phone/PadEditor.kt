@@ -68,7 +68,7 @@ internal class PadEditResult(
 
 /**
  * The touch controller's layout editor: over the game ([GameScreenPad]) with the controller's parts
- * and the key buttons, or beside the companion ([CompanionSideKeys]) with the key buttons only.
+ * and the key buttons, or beside the companion ([CompanionSidePad]), within its two sides.
  *
  * Everything is drawn where it is now, with a frame over it: drag it to move it, drag its bottom
  * right corner to resize it. It stays inside [areas] (the whole screen, or the two sides beside the

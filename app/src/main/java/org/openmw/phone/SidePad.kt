@@ -59,7 +59,8 @@ import org.libsdl.app.SDLControllerManager
 import kotlin.math.hypot
 
 /**
- * A controller drawn on the phone, beside the framed companion ([FramedCompanion]).
+ * The touch controller as the game sees it: drawn on the phone beside the framed companion
+ * ([CompanionSidePad]) or over the game ([GameScreenPad]).
  *
  * It is registered with SDL as an ordinary gamepad with two sticks, two triggers and the usual
  * buttons, so the game treats it exactly like a real one: the same bindings, the same menu
@@ -183,92 +184,57 @@ internal val PadFill = Color(0x402A2118)
 internal val PadPressed = Color(0x80C8A062)
 
 /**
- * Left side: triggers and shoulder, Back, the d-pad and the movement stick.
- *
- * [overGame] is the phone-alone layout, drawn over the game: it leaves the top corners free for
- * the keyboard and quick slot buttons.
- *
- * [menu] is the narrow layout used over the game while a menu is open (see [GameScreenPad]): only
- * what menus use, so the game's windows fit between the two sides. The stick goes, since the
- * cursor is moved on the right side's touchpad, and Start moves over here beside Back.
+ * Left side of the controller over the game while a menu is open (see [GameScreenPad]): only what
+ * menus use, so the game's windows fit between the two sides. The stick goes, since the cursor is
+ * moved on the right side's touchpad, and Start moves over here beside Back. The top is left free
+ * for the keyboard and quick slot buttons.
  */
 @Composable
-fun SidePadLeft(overGame: Boolean = false, menu: Boolean = false) {
+fun MenuSideLeft() {
     val context = LocalContext.current
     remember(context) { PadHaptics.init(context.applicationContext); true }
     Column(
-        modifier = Modifier.fillMaxSize().padding(8.dp).padding(top = if (overGame) OVER_GAME_TOP else 0.dp),
+        modifier = Modifier.fillMaxSize().padding(8.dp).padding(top = OVER_GAME_TOP),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (menu) {
-            PadRow {
-                LtButton(Modifier.weight(1f))
-                LbButton(Modifier.weight(1f))
-            }
-            PadRow {
-                BackButton(Modifier.weight(1f))
-                StartButton(Modifier.weight(1f))
-            }
-            DPad(Modifier.fillMaxWidth().aspectRatio(1f))
-        } else {
-            PadRow {
-                LtButton(Modifier.weight(1f))
-                LbButton(Modifier.weight(1f))
-                BackButton(Modifier.weight(1f))
-            }
-            DPad(Modifier.weight(1f).fillMaxWidth())
-            PadStick(
-                axisX = VirtualPad.AXIS_LEFT_X,
-                axisY = VirtualPad.AXIS_LEFT_Y,
-                clickKey = KeyEvent.KEYCODE_BUTTON_THUMBL,
-                modifier = Modifier.weight(1.3f).fillMaxWidth(),
-            )
+        PadRow {
+            LtButton(Modifier.weight(1f))
+            LbButton(Modifier.weight(1f))
         }
+        PadRow {
+            BackButton(Modifier.weight(1f))
+            StartButton(Modifier.weight(1f))
+        }
+        DPad(Modifier.fillMaxWidth().aspectRatio(1f))
     }
 }
 
 /**
- * Right side: Start, shoulder and trigger, the face buttons and the look pad. See [SidePadLeft].
+ * Right side of the controller over the game while a menu is open. See [MenuSideLeft].
  *
- * In the [menu] layout the attack button goes and the look pad is a touchpad for the game's cursor.
- * This side is wider than the left one there, and the face buttons keep the size they have on the
- * left side's width, so the extra width goes to the touchpad.
+ * The attack button goes and the look pad is a touchpad for the game's cursor. This side is wider
+ * than the left one, and the face buttons keep the size they have on the left side's width, so the
+ * extra width goes to the touchpad.
  */
 @Composable
-fun SidePadRight(overGame: Boolean = false, menu: Boolean = false) {
+fun MenuSideRight() {
     val context = LocalContext.current
     remember(context) { PadHaptics.init(context.applicationContext); true }
     Column(
-        modifier = Modifier.fillMaxSize().padding(8.dp).padding(top = if (overGame) OVER_GAME_TOP else 0.dp),
+        modifier = Modifier.fillMaxSize().padding(8.dp).padding(top = OVER_GAME_TOP),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (menu) {
-            PadRow {
-                RbButton(Modifier.weight(1f))
-                RtButton(Modifier.weight(1f))
-            }
-            FaceButtons(Modifier.fillMaxWidth().height(MENU_FACE_BUTTONS))
-            LookPad(
-                clickKey = KeyEvent.KEYCODE_BUTTON_THUMBR,
-                touchpadInMenus = overGame,
-                menu = true,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            )
-        } else {
-            PadRow {
-                StartButton(Modifier.weight(1f))
-                RbButton(Modifier.weight(1f))
-                RtButton(Modifier.weight(1f))
-            }
-            FaceButtons(Modifier.weight(1f).fillMaxWidth())
-            AttackButton(Modifier.fillMaxWidth().height(60.dp))
-            LookPad(
-                clickKey = KeyEvent.KEYCODE_BUTTON_THUMBR,
-                touchpadInMenus = overGame,
-                menu = false,
-                modifier = Modifier.weight(1.1f).fillMaxWidth(),
-            )
+        PadRow {
+            RbButton(Modifier.weight(1f))
+            RtButton(Modifier.weight(1f))
         }
+        FaceButtons(Modifier.fillMaxWidth().height(MENU_FACE_BUTTONS))
+        LookPad(
+            clickKey = KeyEvent.KEYCODE_BUTTON_THUMBR,
+            touchpadInMenus = true,
+            menu = true,
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+        )
     }
 }
 

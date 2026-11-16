@@ -24,13 +24,17 @@ internal object PadVisibility {
     private const val PREFS = "phone_pad"
     private const val KEY_HIDDEN = "hidden"
 
-    /** Hidden with the hide button. */
-    fun hiddenByHand(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_HIDDEN, false)
+    /** Hidden with the hide button, kept per [surface]: over the game, or beside the companion. */
+    fun hiddenByHand(context: Context, surface: PadSurface = PadSurface.OVER_GAME): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(hiddenKey(surface), false)
 
-    fun setHiddenByHand(context: Context, hidden: Boolean) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_HIDDEN, hidden).apply()
+    fun setHiddenByHand(context: Context, hidden: Boolean, surface: PadSurface = PadSurface.OVER_GAME) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(hiddenKey(surface), hidden).apply()
     }
+
+    // Over the game the key it had before there were other surfaces.
+    private fun hiddenKey(surface: PadSurface) =
+        if (surface == PadSurface.OVER_GAME) KEY_HIDDEN else "$KEY_HIDDEN.${surface.key}"
 
     /** Whether the controller over the game starts hidden: by hand, or a real controller is connected. */
     fun hiddenAtStart(context: Context): Boolean = hiddenByHand(context) || isControllerConnected(context)

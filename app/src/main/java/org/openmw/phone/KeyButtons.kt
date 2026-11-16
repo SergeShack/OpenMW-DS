@@ -3,8 +3,14 @@ package org.openmw.phone
 import android.content.Context
 import android.util.Log
 import android.view.KeyEvent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import org.json.JSONArray
 import org.json.JSONObject
 import org.libsdl.app.SDLActivity
@@ -20,16 +26,7 @@ import kotlin.math.abs
 internal data class KeyButton(val id: Long, val keyCode: Int, val place: PartPlace)
 
 /**
- * Where key buttons are shown. Each has a layout of its own, since the room there is different:
- * over the game the whole screen, beside the companion only the two sides.
- */
-internal enum class KeySurface(val key: String) {
-    OVER_GAME("over_game"),
-    BESIDE_COMPANION("beside_companion"),
-}
-
-/**
- * The key buttons the player made, kept per [KeySurface].
+ * The key buttons the player made, kept per [PadSurface].
  *
  * A button is kept as the area of the surface it is in, its centre as a share of that area and its
  * size in dp, so the same layout fits a phone with another screen size, as [PadLayout] does.
@@ -46,7 +43,7 @@ internal object KeyButtonLayout {
     /** Room kept around a new key button, and the step its place is looked for in, in dp. */
     private const val NEW_GAP = 8f
 
-    fun load(context: Context, surface: KeySurface, areas: List<PadArea>): List<KeyButton> {
+    fun load(context: Context, surface: PadSurface, areas: List<PadArea>): List<KeyButton> {
         if (areas.isEmpty()) return emptyList()
         val text = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(surface.key, null)
             ?: return emptyList()
@@ -55,7 +52,7 @@ internal object KeyButtonLayout {
             .getOrDefault(emptyList())
     }
 
-    fun save(context: Context, surface: KeySurface, buttons: List<KeyButton>, areas: List<PadArea>) {
+    fun save(context: Context, surface: PadSurface, buttons: List<KeyButton>, areas: List<PadArea>) {
         if (areas.isEmpty()) return
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(surface.key, toJson(buttons, areas).toString())
@@ -120,6 +117,21 @@ internal object KeyButtonLayout {
             val cx = area.x + o.optDouble("cx", 0.5).toFloat() * area.w
             val cy = area.y + o.optDouble("cy", 0.5).toFloat() * area.h
             KeyButton(o.optLong("id", i + 1L), keyCode, PartPlace(cx - w / 2, cy - h / 2, w, h).inside(area))
+        }
+    }
+}
+
+/** The key buttons, each where the player put it. */
+@Composable
+internal fun PlacedKeys(keys: List<KeyButton>) {
+    Box(Modifier.fillMaxSize()) {
+        for (button in keys) {
+            key(button.id) {
+                KeyButtonView(
+                    button.keyCode,
+                    Modifier.offset(button.place.x.dp, button.place.y.dp).size(button.place.w.dp, button.place.h.dp),
+                )
+            }
         }
     }
 }

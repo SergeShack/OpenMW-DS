@@ -56,8 +56,8 @@ import org.libsdl.app.SDLActivity
  * (see [PhoneExternal]).
  *
  * In the game each part is where the player put it in the editor ([PadEditor], [PadLayout]); at
- * first they make the same two columns as beside the companion. While a menu is open the two sides
- * narrow to what menus use (the `menu` layout of [SidePadLeft] and [SidePadRight]), and the game's
+ * first they make two columns at the sides. While a menu is open the two sides narrow to what menus
+ * use ([MenuSideLeft] and [MenuSideRight]), and the game's
  * windows are placed between the two: the ones laid out from settings.cfg by [PhoneWindows], the
  * controller menus by the engine ([PhoneExternal.controllerMenuSides]).
  *
@@ -145,8 +145,8 @@ object GameScreenPad {
             val width = maxWidth.value
             val height = maxHeight.value
             val areas = remember(width, height) { listOf(PadArea(0f, 0f, width, height)) }
-            val places = remember(width, height, saved) { PadLayout.load(context, width, height) }
-            val keys = remember(areas, saved) { KeyButtonLayout.load(context, KeySurface.OVER_GAME, areas) }
+            val places = remember(areas, saved) { PadLayout.load(context, PadSurface.OVER_GAME, areas) }
+            val keys = remember(areas, saved) { KeyButtonLayout.load(context, PadSurface.OVER_GAME, areas) }
 
             if (editing) {
                 PadEditor(
@@ -154,12 +154,12 @@ object GameScreenPad {
                     startParts = places,
                     startKeys = keys,
                     startOpacity = opacity,
-                    defaults = { PadLayout.defaults(width, height) },
+                    defaults = { PadLayout.defaults(PadSurface.OVER_GAME, areas) },
                     onCancel = { editing = false },
                 ) { edited ->
-                    PadLayout.save(context, edited.parts, width, height)
+                    PadLayout.save(context, PadSurface.OVER_GAME, edited.parts, areas)
                     PadLayout.saveOpacity(context, edited.opacity)
-                    KeyButtonLayout.save(context, KeySurface.OVER_GAME, edited.keys, areas)
+                    KeyButtonLayout.save(context, PadSurface.OVER_GAME, edited.keys, areas)
                     opacity = edited.opacity
                     saved++
                     editing = false
@@ -167,11 +167,11 @@ object GameScreenPad {
             } else {
                 if (!hidden) {
                     Box(Modifier.fillMaxSize().alpha(opacity)) {
-                        if (menuOpen.value) MenuSides() else Parts(places)
+                        if (menuOpen.value) MenuSides() else PlacedParts(places, besideCompanion = false)
                     }
                 }
                 if (!keysHidden) {
-                    Box(Modifier.fillMaxSize().alpha(opacity)) { KeyButtons(keys) }
+                    Box(Modifier.fillMaxSize().alpha(opacity)) { PlacedKeys(keys) }
                 }
                 Tools(places.getValue(PadPart.TOOLS), hidden, canEdit = !keysHidden, onEdit = { editing = true }) {
                     if (controller) {
@@ -196,43 +196,15 @@ object GameScreenPad {
         )
     }
 
-    /** The player's key buttons, each where they put it. */
-    @Composable
-    private fun KeyButtons(keys: List<KeyButton>) {
-        Box(Modifier.fillMaxSize()) {
-            for (button in keys) {
-                key(button.id) {
-                    KeyButtonView(
-                        button.keyCode,
-                        Modifier.offset(button.place.x.dp, button.place.y.dp).size(button.place.w.dp, button.place.h.dp),
-                    )
-                }
-            }
-        }
-    }
-
-    /** Every part but the tool buttons, each where the layout puts it. */
-    @Composable
-    private fun Parts(places: Map<PadPart, PartPlace>) {
-        Box(Modifier.fillMaxSize()) {
-            for ((part, place) in places) {
-                if (part == PadPart.TOOLS || place.hidden) continue
-                key(part) {
-                    PadPartContent(part, Modifier.offset(place.x.dp, place.y.dp).size(place.w.dp, place.h.dp))
-                }
-            }
-        }
-    }
-
     /** The two narrow sides used while a menu is open. They are not part of the editor's layout. */
     @Composable
     private fun MenuSides() {
         Box(Modifier.fillMaxSize()) {
             Box(Modifier.align(Alignment.TopStart).fillMaxHeight().width(MENU_LEFT_WIDTH_DP.dp)) {
-                SidePadLeft(overGame = true, menu = true)
+                MenuSideLeft()
             }
             Box(Modifier.align(Alignment.TopEnd).fillMaxHeight().width(MENU_RIGHT_WIDTH_DP.dp)) {
-                SidePadRight(overGame = true, menu = true)
+                MenuSideRight()
             }
         }
     }
@@ -295,9 +267,25 @@ object GameScreenPad {
     }
 }
 
-/** One part of the controller, filling [modifier]. */
+/** Every part but the tool buttons, each where the layout puts it. */
 @Composable
-internal fun PadPartContent(part: PadPart, modifier: Modifier) {
+internal fun PlacedParts(places: Map<PadPart, PartPlace>, besideCompanion: Boolean) {
+    Box(Modifier.fillMaxSize()) {
+        for ((part, place) in places) {
+            if (part == PadPart.TOOLS || place.hidden) continue
+            key(part) {
+                PadPartContent(part, Modifier.offset(place.x.dp, place.y.dp).size(place.w.dp, place.h.dp), besideCompanion)
+            }
+        }
+    }
+}
+
+/**
+ * One part of the controller, filling [modifier]. [besideCompanion]: the look pad is the right stick
+ * in the companion's own menus there, see [LookPad].
+ */
+@Composable
+internal fun PadPartContent(part: PadPart, modifier: Modifier, besideCompanion: Boolean = false) {
     when (part) {
         PadPart.LT -> LtButton(modifier)
         PadPart.LB -> LbButton(modifier)
@@ -316,7 +304,7 @@ internal fun PadPartContent(part: PadPart, modifier: Modifier) {
         PadPart.ATTACK -> AttackButton(modifier)
         PadPart.LOOK -> LookPad(
             clickKey = KeyEvent.KEYCODE_BUTTON_THUMBR,
-            touchpadInMenus = true,
+            touchpadInMenus = !besideCompanion,
             menu = false,
             modifier = modifier,
         )

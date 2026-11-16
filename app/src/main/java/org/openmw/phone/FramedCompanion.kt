@@ -31,8 +31,8 @@ import kotlin.math.roundToInt
  * The companion is laid out for the dual-screen handhelds' bottom panels (the Thor's is
  * 1240 x 1080). A phone held in landscape is about 2.2:1, and filling it stretches every panel
  * sideways. On a screen wider than [WIDE_ASPECT] the content is centred at [FRAMED_ASPECT], and the
- * touch controller takes the two sides. While a real controller is connected the player's key
- * buttons take them instead ([CompanionSideKeys]).
+ * touch controller, or with a real controller connected the player's key buttons, take the two
+ * sides ([CompanionSidePad]).
  *
  * The frame is a View, not a Compose box, so the companion's composition root is the framed area:
  * popups placed from `boundsInRoot` land where they should. [FramedLocals] reports the frame's size
@@ -73,12 +73,8 @@ object FramedCompanion {
                 Gravity.CENTER
             )
         )
-        val padLeft = sidePadView(activity, visible, Gravity.START) { SidePadLeft() }
-        val padRight = sidePadView(activity, visible, Gravity.END) { SidePadRight() }
-        root.addView(padLeft)
-        root.addView(padRight)
         root.addView(
-            CompanionSideKeys.view(activity, visible, sideWidth),
+            CompanionSidePad.view(activity, visible, sideWidth),
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
         root.addOnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
@@ -93,13 +89,7 @@ object FramedCompanion {
             val side = if (framed) (w - width) / 2 else 0
             sideWidth.intValue = side
             // A layout request made during layout is dropped; post it.
-            root.post {
-                setWidth(companionView, width)
-                for (pad in listOf(padLeft, padRight)) {
-                    setWidth(pad, side)
-                    pad.visibility = if (side > 0) View.VISIBLE else View.GONE
-                }
-            }
+            root.post { setWidth(companionView, width) }
         }
         activity.setContentView(root)
     }
@@ -118,22 +108,6 @@ object FramedCompanion {
         lp.gravity = Gravity.CENTER
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-        }
-    }
-
-    private fun sidePadView(
-        activity: ComponentActivity,
-        visible: StateFlow<Boolean>,
-        gravity: Int,
-        content: @Composable () -> Unit,
-    ): ComposeView = ComposeView(activity).apply {
-        visibility = View.GONE
-        layoutParams = FrameLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, gravity)
-        setContent {
-            val shown by visible.collectAsState()
-            // A real controller takes over: the sides are left black.
-            val controller by rememberControllerConnected()
-            if (shown && !controller) content()
         }
     }
 
