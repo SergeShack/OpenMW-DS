@@ -22,16 +22,47 @@ internal enum class PadPart(val key: String) {
 
 /** Where a part is on the screen: its top left corner and its size, in dp. */
 internal data class PartPlace(val x: Float, val y: Float, val w: Float, val h: Float, val hidden: Boolean = false) {
+    val centerX get() = x + w / 2
+    val centerY get() = y + h / 2
+
     /** Kept whole and inside a screen of [width] x [height] dp. */
-    fun inside(width: Float, height: Float): PartPlace {
-        val nw = w.coerceIn(PadLayout.MIN_SIZE_DP, maxOf(PadLayout.MIN_SIZE_DP, width))
-        val nh = h.coerceIn(PadLayout.MIN_SIZE_DP, maxOf(PadLayout.MIN_SIZE_DP, height))
+    fun inside(width: Float, height: Float): PartPlace = inside(PadArea(0f, 0f, width, height))
+
+    /** Kept whole and inside [area]. */
+    fun inside(area: PadArea): PartPlace {
+        val nw = w.coerceIn(PadLayout.MIN_SIZE_DP, maxOf(PadLayout.MIN_SIZE_DP, area.w))
+        val nh = h.coerceIn(PadLayout.MIN_SIZE_DP, maxOf(PadLayout.MIN_SIZE_DP, area.h))
         return copy(
-            x = x.coerceIn(0f, maxOf(0f, width - nw)),
-            y = y.coerceIn(0f, maxOf(0f, height - nh)),
+            x = x.coerceIn(area.x, maxOf(area.x, area.right - nw)),
+            y = y.coerceIn(area.y, maxOf(area.y, area.bottom - nh)),
             w = nw,
             h = nh,
         )
+    }
+
+    /** Kept whole and inside the one of [areas] its centre is in, or the nearest one. */
+    fun within(areas: List<PadArea>): PartPlace = inside(PadArea.nearest(areas, centerX, centerY))
+}
+
+/**
+ * A part of the screen the controller may be placed in, in dp: the whole screen over the game, or
+ * one of the two sides beside the companion.
+ */
+internal data class PadArea(val x: Float, val y: Float, val w: Float, val h: Float) {
+    val right get() = x + w
+    val bottom get() = y + h
+
+    /** How far the point ([px], [py]) is from this area; 0 inside it. */
+    fun distanceTo(px: Float, py: Float): Float {
+        val dx = maxOf(x - px, 0f, px - right)
+        val dy = maxOf(y - py, 0f, py - bottom)
+        return dx * dx + dy * dy
+    }
+
+    companion object {
+        /** The one of [areas] the point is in, or the nearest one. [areas] must not be empty. */
+        fun nearest(areas: List<PadArea>, px: Float, py: Float): PadArea =
+            areas.minBy { it.distanceTo(px, py) }
     }
 }
 

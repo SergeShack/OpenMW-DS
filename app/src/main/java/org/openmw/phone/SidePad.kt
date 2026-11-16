@@ -48,6 +48,7 @@ import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
@@ -611,12 +612,13 @@ internal fun FaceButtons(modifier: Modifier) {
  * finger is let go of on cancel too, so nothing stays pressed.
  */
 @Composable
-private fun PadButton(
+internal fun PadButton(
     label: String,
     modifier: Modifier,
     shape: Shape = RoundedCornerShape(8.dp),
     labelColor: Color = PadBronze,
     haptic: PadHaptic = PadHaptic.FACE,
+    labelSize: TextUnit = 16.sp,
     onPress: (Boolean) -> Unit,
 ) {
     val press by rememberUpdatedState(onPress)
@@ -645,7 +647,7 @@ private fun PadButton(
             },
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = labelColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = labelColor, fontSize = labelSize, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
 

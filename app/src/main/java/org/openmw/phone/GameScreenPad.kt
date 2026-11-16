@@ -66,6 +66,9 @@ import org.libsdl.app.SDLActivity
  *
  * Two small buttons, a part like the others, open the editor and hide the controller. Hidden, only
  * the button that shows it again is left. A real controller hides it too ([PadVisibility]).
+ *
+ * The player's key buttons ([KeyButton]) are drawn over the game as well. A real controller does
+ * not hide them, since it has no keys for the mods they are made for; the hide button does.
  */
 object GameScreenPad {
 
@@ -132,6 +135,8 @@ object GameScreenPad {
             val (left, right) = if (hidden) 0f to 0f else menuSideFractions(context)
             PhoneExternal.controllerMenuSides(left, right)
         }
+        // The key buttons stay over a real controller; only the hide button hides them.
+        val keysHidden = !controller && hiddenByHand
         var editing by remember { mutableStateOf(false) }
         var opacity by remember { mutableFloatStateOf(PadLayout.opacity(context)) }
         var saved by remember { mutableIntStateOf(0) }
@@ -139,19 +144,23 @@ object GameScreenPad {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val width = maxWidth.value
             val height = maxHeight.value
+            val areas = remember(width, height) { listOf(PadArea(0f, 0f, width, height)) }
             val places = remember(width, height, saved) { PadLayout.load(context, width, height) }
+            val keys = remember(areas, saved) { KeyButtonLayout.load(context, KeySurface.OVER_GAME, areas) }
 
             if (editing) {
                 PadEditor(
-                    start = places,
+                    areas = areas,
+                    startParts = places,
+                    startKeys = keys,
                     startOpacity = opacity,
-                    width = width,
-                    height = height,
                     defaults = { PadLayout.defaults(width, height) },
-                ) { edited, editedOpacity ->
-                    PadLayout.save(context, edited, width, height)
-                    PadLayout.saveOpacity(context, editedOpacity)
-                    opacity = editedOpacity
+                    onCancel = { editing = false },
+                ) { edited ->
+                    PadLayout.save(context, edited.parts, width, height)
+                    PadLayout.saveOpacity(context, edited.opacity)
+                    KeyButtonLayout.save(context, KeySurface.OVER_GAME, edited.keys, areas)
+                    opacity = edited.opacity
                     saved++
                     editing = false
                 }
@@ -161,7 +170,10 @@ object GameScreenPad {
                         if (menuOpen.value) MenuSides() else Parts(places)
                     }
                 }
-                Tools(places.getValue(PadPart.TOOLS), hidden, onEdit = { editing = true }) {
+                if (!keysHidden) {
+                    Box(Modifier.fillMaxSize().alpha(opacity)) { KeyButtons(keys) }
+                }
+                Tools(places.getValue(PadPart.TOOLS), hidden, canEdit = !keysHidden, onEdit = { editing = true }) {
                     if (controller) {
                         shownOverController = !shownOverController
                     } else {
@@ -174,13 +186,29 @@ object GameScreenPad {
     }
 
     @Composable
-    private fun Tools(tools: PartPlace, hidden: Boolean, onEdit: () -> Unit, onToggle: () -> Unit) {
+    private fun Tools(tools: PartPlace, hidden: Boolean, canEdit: Boolean, onEdit: () -> Unit, onToggle: () -> Unit) {
         ToolButtons(
             modifier = Modifier.offset(tools.x.dp, tools.y.dp).size(tools.w.dp, tools.h.dp),
             hidden = hidden,
+            canEdit = canEdit,
             onEdit = onEdit,
             onToggle = onToggle,
         )
+    }
+
+    /** The player's key buttons, each where they put it. */
+    @Composable
+    private fun KeyButtons(keys: List<KeyButton>) {
+        Box(Modifier.fillMaxSize()) {
+            for (button in keys) {
+                key(button.id) {
+                    KeyButtonView(
+                        button.keyCode,
+                        Modifier.offset(button.place.x.dp, button.place.y.dp).size(button.place.w.dp, button.place.h.dp),
+                    )
+                }
+            }
+        }
     }
 
     /** Every part but the tool buttons, each where the layout puts it. */
@@ -211,13 +239,15 @@ object GameScreenPad {
 
     /**
      * The edit and hide buttons, side by side at the right of their place. Hidden, only the button
-     * that shows the controller again is left. Without [onEdit] and [onToggle] (in the editor)
-     * they only show where they are.
+     * that shows the controller again is left, and the edit button while there are key buttons to
+     * edit ([canEdit]: hidden by a real controller rather than by hand). Without [onEdit] and
+     * [onToggle] (in the editor) they only show where they are.
      */
     @Composable
     internal fun ToolButtons(
         modifier: Modifier,
         hidden: Boolean,
+        canEdit: Boolean = !hidden,
         onEdit: (() -> Unit)?,
         onToggle: (() -> Unit)?,
     ) {
@@ -228,7 +258,7 @@ object GameScreenPad {
                 horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (!hidden) ToolButton(Icons.Filled.Edit, "Edit touch controls", Modifier.size(size), onEdit)
+                if (canEdit) ToolButton(Icons.Filled.Edit, "Edit touch controls", Modifier.size(size), onEdit)
                 ToolButton(
                     if (hidden) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
                     if (hidden) "Show touch controls" else "Hide touch controls",
@@ -240,7 +270,7 @@ object GameScreenPad {
     }
 
     @Composable
-    private fun ToolButton(icon: ImageVector, description: String, modifier: Modifier, onClick: (() -> Unit)?) {
+    internal fun ToolButton(icon: ImageVector, description: String, modifier: Modifier, onClick: (() -> Unit)?) {
         val click by rememberUpdatedState(onClick)
         Box(
             modifier

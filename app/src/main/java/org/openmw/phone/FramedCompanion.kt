@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.ComposeView
@@ -30,7 +31,8 @@ import kotlin.math.roundToInt
  * The companion is laid out for the dual-screen handhelds' bottom panels (the Thor's is
  * 1240 x 1080). A phone held in landscape is about 2.2:1, and filling it stretches every panel
  * sideways. On a screen wider than [WIDE_ASPECT] the content is centred at [FRAMED_ASPECT], and the
- * touch controller takes the two sides, unless a real controller is connected.
+ * touch controller takes the two sides. While a real controller is connected the player's key
+ * buttons take them instead ([CompanionSideKeys]).
  *
  * The frame is a View, not a Compose box, so the companion's composition root is the framed area:
  * popups placed from `boundsInRoot` land where they should. [FramedLocals] reports the frame's size
@@ -55,6 +57,7 @@ object FramedCompanion {
     /** Set the companion host activity's content: the framed companion and the side controller. */
     fun install(activity: ComponentActivity, visible: StateFlow<Boolean>, content: @Composable () -> Unit) {
         val frameSize = mutableStateOf(IntSize.Zero)
+        val sideWidth = mutableIntStateOf(0)
         val companionView = ComposeView(activity).apply {
             setContent {
                 val shown by visible.collectAsState()
@@ -74,6 +77,10 @@ object FramedCompanion {
         val padRight = sidePadView(activity, visible, Gravity.END) { SidePadRight() }
         root.addView(padLeft)
         root.addView(padRight)
+        root.addView(
+            CompanionSideKeys.view(activity, visible, sideWidth),
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
         root.addOnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
             val w = right - left
             val h = bottom - top
@@ -84,6 +91,7 @@ object FramedCompanion {
             framedWidthPx = if (framed) width else 0
             if (framed) drawUnderCutout(activity)
             val side = if (framed) (w - width) / 2 else 0
+            sideWidth.intValue = side
             // A layout request made during layout is dropped; post it.
             root.post {
                 setWidth(companionView, width)
