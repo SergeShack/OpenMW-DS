@@ -1,8 +1,11 @@
 package org.openmw.phone
 
+import android.app.Activity
 import android.content.Context
 import android.hardware.display.DisplayManager
+import android.util.Log
 import android.view.Display
+import org.openmw.CompanionActivity
 import org.openmw.utils.DisplayRoles
 
 /**
@@ -18,6 +21,7 @@ import org.openmw.utils.DisplayRoles
  */
 object PhoneExternal {
     const val PROFILE = "phone_external"
+    private const val TAG = "PhoneExternal"
 
     fun isActive(context: Context): Boolean = DisplayRoles.profile(context) == PROFILE
 
@@ -96,6 +100,28 @@ object PhoneExternal {
         if (!isActive(context)) return
         runCatching { setControllerHintsAutoHide(CONTROLLER_HINTS_SECONDS) }
             .onFailure { android.util.Log.e("PhoneExternal", "controller hints auto-hide not set", it) }
+    }
+
+    /**
+     * Called by the game activity when its configuration changes, which is also how it learns that
+     * Android moved it to another display. Returns the display the game is to stay on.
+     *
+     * When the external screen goes away (the cast is turned off, the cable pulled), Android moves
+     * the game to the phone. The game stays there then, instead of being sent back to a screen that
+     * is gone, and the companion, which was on the phone, is closed so the game can be seen.
+     */
+    fun onConfigurationChanged(activity: Activity, pinnedGameDisplay: Int?): Int? {
+        val current = activity.display?.displayId ?: return pinnedGameDisplay
+        val dm = activity.getSystemService(DisplayManager::class.java)
+        Log.w(
+            TAG, "game configuration changed on display $current (pinned $pinnedGameDisplay, " +
+                "displays ${dm?.displays?.joinToString { "${it.displayId}" }})"
+        )
+        if (pinnedGameDisplay == null || pinnedGameDisplay == current) return pinnedGameDisplay
+        if (dm?.getDisplay(pinnedGameDisplay) != null) return pinnedGameDisplay
+        Log.w(TAG, "game moved from display $pinnedGameDisplay, which is gone, to $current: staying here")
+        CompanionActivity.finishIfRunning()
+        return current
     }
 
     /** Whether the side controller goes over the game: this profile, with the game on the phone. */

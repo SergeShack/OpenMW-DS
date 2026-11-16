@@ -149,7 +149,7 @@
 
         <activity
             android:name="org.openmw.EngineActivity"
-            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode|smallestScreenSize|density"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode|smallestScreenSize|density|touchscreen|colorMode|navigation|fontScale|fontWeightAdjustment|layoutDirection"
             android:exported="true"
             android:screenOrientation="landscape"
             android:windowLayoutInDisplayCutoutMode="shortEdges"

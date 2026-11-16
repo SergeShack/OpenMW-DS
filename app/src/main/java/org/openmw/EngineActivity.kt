@@ -329,6 +329,7 @@ class EngineActivity : SDLActivity() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         // Keep SDLActivity's own handling (it resizes the top-screen game surface).
         super.onConfigurationChanged(newConfig)
+        launchGameDisplayId = PhoneExternal.onConfigurationChanged(this, launchGameDisplayId)
         updateCompanionForWindowState("onConfigurationChanged")
         // A move between displays arrives here (the two panels differ in size and density). Coming
         // back to the game display is also where the companion is brought up again, since
