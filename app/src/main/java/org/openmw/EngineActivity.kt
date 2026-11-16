@@ -668,7 +668,7 @@ class EngineActivity : SDLActivity() {
                         // keyboard preference. The profile cannot change while the game is running
                         // (it is a launcher setting, applied on the next Play), so it is read once
                         // from the same cache startCompanionScreen used.
-                        val singleScreen = remember { DisplayRoles.singleScreen(this@EngineActivity) }
+                        val singleScreen = remember(PhoneExternal.gameMovedToPhone.value) { DisplayRoles.singleScreen(this@EngineActivity) }
                         val virtualKeyboard by GameFilesPreferences
                             .useVirtualKeyboard(this@EngineActivity)
                             .collectAsState(initial = true)

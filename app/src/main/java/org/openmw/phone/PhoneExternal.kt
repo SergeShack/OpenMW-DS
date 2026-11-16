@@ -8,6 +8,7 @@ import android.view.Display
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.compose.runtime.mutableStateOf
 import kotlinx.coroutines.InternalCoroutinesApi
 import org.libsdl.app.SDLSurface
 import org.openmw.CompanionActivity
@@ -135,6 +136,13 @@ object PhoneExternal {
     }
 
     /**
+     * True once the game came over to the phone from a screen that went away ([moveGameToPhone]).
+     * The game activity then shows what it shows on the phone alone, like the keyboard and quick slot
+     * buttons in the corner, though it started with two screens.
+     */
+    val gameMovedToPhone = mutableStateOf(false)
+
+    /**
      * The game came over to the phone from a screen that went away: it goes on as on the phone alone.
      *
      * - The companion, which was on the phone, is closed, and the game shows its own windows and HUD
@@ -143,12 +151,14 @@ object PhoneExternal {
      * - The game renders at the phone's shape. It keeps its render height, so the game's windows keep
      *   their size (the launcher made the GUI scaling for that height), and only gets wider.
      *   The engine takes a new window size as it comes and lays its windows out again.
+     * - The keyboard and quick slot buttons come up in the corner ([gameMovedToPhone]).
      * - The touch controller goes over the game, as when the game starts on the phone, and the
      *   game's windows are moved between its sides ([PhoneWindows.refit]).
      */
     // EngineActivity is marked with the coroutines opt-in; its render size is only read and set here.
     @OptIn(InternalCoroutinesApi::class)
     private fun moveGameToPhone(activity: Activity) {
+        gameMovedToPhone.value = true
         CompanionActivity.finishIfRunning()
         UiPreferences.useGameWindowsUntilRestart()
         hideSystemBars(activity)
