@@ -1,0 +1,50 @@
+--- a/apps/openmw/mwgui/windowmanagerimp.cpp
++++ b/apps/openmw/mwgui/windowmanagerimp.cpp
+@@ -1193,11 +1193,47 @@
+     }
+ #endif
+ 
++#ifdef __ANDROID__
++    // PHONE: new places for the game's windows, sent by the phone app while the game runs: when the
++    // game comes over to the phone from a screen that went away, its windows go between the touch
++    // controller's sides as they do when it starts there. Each is a setting of [Windows] by name,
++    // the value it should have now and its new value. Defined in androidmain.cpp.
++    bool companionTakeWindowPlaces(std::vector<std::string>& keys, std::vector<float>& from, std::vector<float>& to);
++#endif
++
+     void WindowManager::update(float frameDuration)
+     {
+         handleScheduledMessageBoxes();
+ 
+ #ifdef __ANDROID__
++        // PHONE: apply the window places the app sent, then lay the windows out again as for a new
++        // window size. A window the player moved since the game started has another value than the
++        // app expected, and keeps its place.
++        {
++            std::vector<std::string> keys;
++            std::vector<float> from;
++            std::vector<float> to;
++            if (companionTakeWindowPlaces(keys, from, to))
++            {
++                for (const auto& [window, settings] : mTrackedWindows)
++                {
++                    for (Settings::SettingValue<float>* value : { &settings.mRegular.mX, &settings.mRegular.mW,
++                             &settings.mMaximized.mX, &settings.mMaximized.mW })
++                    {
++                        for (size_t i = 0; i < keys.size(); ++i)
++                        {
++                            const float difference = value->get() - from[i];
++                            if (value->mName == keys[i] && difference < 0.0005f && difference > -0.0005f)
++                                value->set(to[i]);
++                        }
++                    }
++                }
++                windowResized(Settings::video().mResolutionX, Settings::video().mResolutionY);
++            }
++        }
++#endif
++
++#ifdef __ANDROID__
+         // PHONE: hide the controller button hints a while after they came up for a window. They
+         // come back with the next window. The console and post-processing hints are not affected:
+         // they have no window here (sControllerHintsWindow is null) and are the only thing on

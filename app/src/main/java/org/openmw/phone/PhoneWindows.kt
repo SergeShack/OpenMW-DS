@@ -28,7 +28,8 @@ import kotlin.math.abs
  * are kept in the app's preferences, so the windows can be told apart and moved again on another
  * phone or with other widths of the sides.
  *
- * Written before the game starts, which is when the engine reads them.
+ * Written before the game starts, which is when the engine reads them ([fit]). When the game comes
+ * over to the phone while it runs, the same places are sent to the engine instead ([refit]).
  */
 internal object PhoneWindows {
     private const val TAG = "PhoneWindows"
@@ -113,52 +114,108 @@ internal object PhoneWindows {
         }
     }
 
+    /** A setting of `[Windows]` that is to change: its value now and its new value. */
+    private class Change(val key: String, val from: Float, val to: Float)
+
     /**
      * Called by the game activity at start. [left] and [right] are the sides' shares of the width,
      * both 0 for the whole width.
      */
     fun fit(context: Context, left: Float, right: Float) {
-        if (Constants.SETTINGS_FILE.isEmpty()) return
-        val file = File(Constants.SETTINGS_FILE)
-        if (!file.exists()) return
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val oldSide = prefs.getFloat(KEY_SIDE, 0f)
-        val last = Sides(prefs.getFloat(KEY_LEFT, oldSide), prefs.getFloat(KEY_RIGHT, oldSide), prefs.getFloat(KEY_CANVAS, 0f))
-
+        val file = settingsFile() ?: return
         val original = runCatching { file.readLines() }.getOrElse { return }
         val sides = Sides(left, right, canvasWidth(original))
-        if (sides.none && last.none) return
-        val lines = original.toMutableList()
-        for ((name, engine) in ENGINE) {
-            val base = APP[name] ?: engine
-            val minW = engine.minW
-            fitPair(lines, "$name x", "$name w", engine.x, engine.w, base.x, base.w, minW, last, sides)
-            fitPair(lines, "$name maximized x", "$name maximized w", engine.maxX, engine.maxW, base.maxX, base.maxW, minW, last, sides)
-        }
-        if (lines != original) {
+        val changes = changes(context, original, sides) ?: return
+        if (changes.isNotEmpty()) {
+            val lines = original.toMutableList()
+            for (c in changes) set(lines, c.key, format(c.to))
             val written = runCatching { file.writeText(lines.joinToString("\n")) }
                 .onFailure { Log.e(TAG, "could not write ${file.path}", it) }
                 .isSuccess
             if (!written) return
             Log.i(TAG, "windows fitted between the sides: $left of the width left, $right right")
         }
-        prefs.edit().putFloat(KEY_LEFT, left).putFloat(KEY_RIGHT, right).putFloat(KEY_CANVAS, sides.canvas)
+        remember(context, sides)
+    }
+
+    /**
+     * Called when the game has come over to the phone while it runs, with the sides it has there and
+     * its new render width. The places are worked out from settings.cfg as the
+     * game read it at start, and sent to the engine, which moves each window that is still there.
+     * The engine writes them to settings.cfg when the game closes.
+     */
+    fun refit(context: Context, left: Float, right: Float, renderWidth: Int) {
+        val file = settingsFile() ?: return
+        val lines = runCatching { file.readLines() }.getOrElse { return }
+        val sides = Sides(left, right, canvasWidth(lines, renderWidth.toFloat()))
+        val changes = changes(context, lines, sides) ?: return
+        if (changes.isNotEmpty()) {
+            val sent = runCatching {
+                sendPlaces(
+                    changes.map { it.key }.toTypedArray(),
+                    changes.map { it.from }.toFloatArray(),
+                    changes.map { it.to }.toFloatArray(),
+                )
+            }.onFailure { Log.e(TAG, "window places not sent", it) }.isSuccess
+            if (!sent) return
+            Log.i(TAG, "windows moved between the sides: $left of the width left, $right right")
+        }
+        remember(context, sides)
+    }
+
+    /** Engine side: androidmain.cpp, applied by phone-window-places.patch. */
+    @JvmStatic
+    private external fun sendPlaces(keys: Array<String>, from: FloatArray, to: FloatArray)
+
+    private fun settingsFile(): File? {
+        if (Constants.SETTINGS_FILE.isEmpty()) return null
+        return File(Constants.SETTINGS_FILE).takeIf { it.exists() }
+    }
+
+    /** The sides the windows were placed for last time. */
+    private fun lastSides(context: Context): Sides {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val oldSide = prefs.getFloat(KEY_SIDE, 0f)
+        return Sides(prefs.getFloat(KEY_LEFT, oldSide), prefs.getFloat(KEY_RIGHT, oldSide), prefs.getFloat(KEY_CANVAS, 0f))
+    }
+
+    private fun remember(context: Context, sides: Sides) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putFloat(KEY_LEFT, sides.left).putFloat(KEY_RIGHT, sides.right).putFloat(KEY_CANVAS, sides.canvas)
             .remove(KEY_SIDE).apply()
     }
 
+    /** What changes in [lines] to place the windows for [sides]; null when there is nothing to do. */
+    private fun changes(context: Context, lines: List<String>, sides: Sides): List<Change>? {
+        val last = lastSides(context)
+        if (sides.none && last.none) return null
+        val changes = mutableListOf<Change>()
+        for ((name, engine) in ENGINE) {
+            val base = APP[name] ?: engine
+            val minW = engine.minW
+            fitPair(lines, changes, "$name x", "$name w", engine.x, engine.w, base.x, base.w, minW, last, sides)
+            fitPair(lines, changes, "$name maximized x", "$name maximized w", engine.maxX, engine.maxW, base.maxX, base.maxW, minW, last, sides)
+        }
+        return changes
+    }
+
     /** The GUI canvas width in the engine's units, or 0 when the file does not say. */
-    private fun canvasWidth(lines: List<String>): Float {
-        val width = SettingsLines.get(lines, "[Video]", "resolution x")?.toFloatOrNull() ?: return 0f
+    private fun canvasWidth(lines: List<String>): Float =
+        canvasWidth(lines, SettingsLines.get(lines, "[Video]", "resolution x")?.toFloatOrNull() ?: 0f)
+
+    /** The GUI canvas width in the engine's units at a render [width], or 0 when the file does not say. */
+    private fun canvasWidth(lines: List<String>, width: Float): Float {
         val scaling = SettingsLines.get(lines, "[GUI]", "scaling factor")?.toFloatOrNull() ?: return 0f
         return if (width > 0f && scaling > 0f) width / scaling else 0f
     }
 
     /**
      * Moves one window's `x` and `w` between [sides], if both are still at the engine's or the
-     * app's value, or where [last] put them. Missing keys are at the engine's default.
+     * app's value, or where [last] put them, adding the change to [changes]. Missing keys are at
+     * the engine's default.
      */
     private fun fitPair(
-        lines: MutableList<String>, keyX: String, keyW: String,
+        lines: List<String>, changes: MutableList<Change>, keyX: String, keyW: String,
         engineX: Float, engineW: Float, baseX: Float, baseW: Float, minW: Float,
         last: Sides, sides: Sides,
     ) {
@@ -171,8 +228,8 @@ internal object PhoneWindows {
         ).any { (ux, uw) -> abs(x - ux) < SAME && abs(w - uw) < SAME }
         val (newX, newW) = if (untouched) sides.place(baseX, baseW, minW) else sides.keepClear(x, w, minW) ?: return
         if (abs(x - newX) < SAME && abs(w - newW) < SAME) return
-        set(lines, keyX, format(newX))
-        set(lines, keyW, format(newW))
+        changes.add(Change(keyX, x, newX))
+        changes.add(Change(keyW, w, newW))
     }
 
     private fun format(v: Float) = String.format(Locale.US, "%.6f", v)

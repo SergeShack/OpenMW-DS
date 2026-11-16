@@ -1317,6 +1317,57 @@ Java_org_openmw_phone_PhoneExternal_setControllerMenuSides(JNIEnv* /*env*/, jcla
     g_controllerMenuLeft.store(left);
     g_controllerMenuRight.store(right);
 }
+// Phone app only: new places for the game's windows, sent by org.openmw.phone.PhoneWindows while the
+// game runs, and taken by the window manager on its next update (phone-window-places.patch). Each is
+// a setting of [Windows] by name, the value it should have now and its new value.
+static std::mutex g_windowPlacesMutex;
+static std::vector<std::string> g_windowPlaceKeys;
+static std::vector<float> g_windowPlaceFrom;
+static std::vector<float> g_windowPlaceTo;
+// In MWGui, where the window manager declares it.
+namespace MWGui
+{
+bool companionTakeWindowPlaces(std::vector<std::string>& keys, std::vector<float>& from, std::vector<float>& to)
+{
+    std::lock_guard lock(g_windowPlacesMutex);
+    if (g_windowPlaceKeys.empty())
+        return false;
+    keys.swap(g_windowPlaceKeys);
+    from.swap(g_windowPlaceFrom);
+    to.swap(g_windowPlaceTo);
+    g_windowPlaceKeys.clear();
+    g_windowPlaceFrom.clear();
+    g_windowPlaceTo.clear();
+    return true;
+}
+}
+extern "C" JNIEXPORT void JNICALL
+Java_org_openmw_phone_PhoneWindows_sendPlaces(
+    JNIEnv* env, jclass /*cls*/, jobjectArray keys, jfloatArray from, jfloatArray to)
+{
+    const jsize count = env->GetArrayLength(keys);
+    if (env->GetArrayLength(from) != count || env->GetArrayLength(to) != count)
+        return;
+    std::vector<std::string> names;
+    names.reserve(count);
+    for (jsize i = 0; i < count; ++i)
+    {
+        auto name = static_cast<jstring>(env->GetObjectArrayElement(keys, i));
+        const char* chars = env->GetStringUTFChars(name, nullptr);
+        names.emplace_back(chars ? chars : "");
+        if (chars)
+            env->ReleaseStringUTFChars(name, chars);
+        env->DeleteLocalRef(name);
+    }
+    std::vector<float> fromValues(count);
+    std::vector<float> toValues(count);
+    env->GetFloatArrayRegion(from, 0, count, fromValues.data());
+    env->GetFloatArrayRegion(to, 0, count, toValues.data());
+    std::lock_guard lock(g_windowPlacesMutex);
+    g_windowPlaceKeys = std::move(names);
+    g_windowPlaceFrom = std::move(fromValues);
+    g_windowPlaceTo = std::move(toValues);
+}
 // Read by the phone's touch controller (SidePad): true while a menu (GUI mode) is open. There the
 // look pad acts as the right stick, which scrolls lists, instead of turning the camera.
 extern "C" JNIEXPORT jboolean JNICALL

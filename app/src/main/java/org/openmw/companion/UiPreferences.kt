@@ -1127,6 +1127,19 @@ object UiPreferences {
      *  versions default Off. */
     private fun hudDefaultOn(key: String): Boolean = key == "hud_crosshair"
 
+    /**
+     * The game lost its second screen while running (the phone app, when the TV goes away): it goes
+     * on as the Single Screen profile plays, with the game's own windows, HUD and cursor. Only the
+     * values in memory change and nothing is written, so the player's choices are back on the next
+     * start. Everything that pushes these to the engine or shows a DS window follows the flows.
+     */
+    fun useGameWindowsUntilRestart() {
+        gameUiModeFlows.values.forEach { it.value = GameUiMode.VANILLA }
+        hudFlows.values.forEach { it.value = true }
+        gameCursorFlow.value = true
+        touchInputFlow.value = true
+    }
+
     /** Load persisted values into the flows. Idempotent — safe to call on every compose. */
     fun init(context: Context) {
         if (prefs != null) return

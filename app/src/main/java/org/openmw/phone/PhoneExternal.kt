@@ -13,6 +13,7 @@ import org.libsdl.app.SDLSurface
 import org.openmw.CompanionActivity
 import org.openmw.EngineActivity
 import org.openmw.R
+import org.openmw.companion.UiPreferences
 import org.openmw.hideSystemBars
 import org.openmw.ui.view.resolveTieredGameResolution
 import org.openmw.utils.DisplayRoles
@@ -136,19 +137,20 @@ object PhoneExternal {
     /**
      * The game came over to the phone from a screen that went away: it goes on as on the phone alone.
      *
-     * - The companion, which was on the phone, is closed.
+     * - The companion, which was on the phone, is closed, and the game shows its own windows and HUD
+     *   again instead of the companion's (UiPreferences.useGameWindowsUntilRestart), as when it
+     *   starts on the phone alone.
      * - The game renders at the phone's shape. It keeps its render height, so the game's windows keep
      *   their size (the launcher made the GUI scaling for that height), and only gets wider.
      *   The engine takes a new window size as it comes and lays its windows out again.
-     * - The touch controller goes over the game, as when the game starts on the phone.
-     *
-     * The game's windows laid out from settings.cfg ([PhoneWindows]) are not moved clear of the
-     * controller's sides until the next start.
+     * - The touch controller goes over the game, as when the game starts on the phone, and the
+     *   game's windows are moved between its sides ([PhoneWindows.refit]).
      */
     // EngineActivity is marked with the coroutines opt-in; its render size is only read and set here.
     @OptIn(InternalCoroutinesApi::class)
     private fun moveGameToPhone(activity: Activity) {
         CompanionActivity.finishIfRunning()
+        UiPreferences.useGameWindowsUntilRestart()
         hideSystemBars(activity)
         val container = activity.findViewById<FrameLayout>(R.id.sdl_container)
         val surface = container?.let { findSurface(it) }
@@ -163,6 +165,11 @@ object PhoneExternal {
             Log.e(TAG, "game surface not found, it keeps its size")
         }
         if (container != null) GameScreenPad.install(activity, container)
+        if (!PadVisibility.hiddenAtStart(activity)) {
+            val (left, right) = GameScreenPad.menuSideFractions(activity)
+            runCatching { PhoneWindows.refit(activity, left, right, EngineActivity.resolutionX) }
+                .onFailure { Log.e(TAG, "windows not moved", it) }
+        }
     }
 
     private fun findSurface(view: View): SDLSurface? {
