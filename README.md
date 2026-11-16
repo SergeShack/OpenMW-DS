@@ -64,6 +64,7 @@ The game runs at a 30 fps limit, and most of the work went into frames that miss
 - Use (attack, cast) on R1 and Quick Save on R2, since the Duo Lite's triggers sit in line with the shoulder buttons.
 - L2 opens the quick keys menu: move with the D-pad, R1 uses the slot, A assigns it, R3 shows its tooltip.
 - An action you leave without a button stays unbound after a restart.
+- A D-pad direction held in a menu keeps moving the selection, faster after a few steps, so long lists scroll by.
 
 ### Fixes
 - A crash while walking, in the vibration code.
