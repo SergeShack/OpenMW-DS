@@ -80,11 +80,13 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
@@ -125,24 +127,30 @@ fun MouseIcon(
     val context = LocalContext.current
     val offsetXMouse by getOffsetXMouse(context).collectAsState(initial = 0f)
     val offsetYMouse by getOffsetYMouse(context).collectAsState(initial = 0f)
-    val sdlWidth = EngineActivity.resolutionX.toFloat()
-    val sdlHeight = EngineActivity.resolutionY.toFloat()
-
     var xPos by remember { mutableFloatStateOf(0f) }
     var yPos by remember { mutableFloatStateOf(0f) }
+    // The size the pointer is drawn over, as laid out now. The container size passed in is the one
+    // at start, and the game's render size can change while it runs (a game moved to another
+    // screen), so both are read again on every frame.
+    var drawnSize by remember { mutableStateOf(IntSize.Zero) }
 
-    LaunchedEffect(containerWidth, containerHeight, sdlWidth, sdlHeight) {
+    LaunchedEffect(Unit) {
         while (true) {
             withFrameNanos {
+                val width = if (drawnSize.width > 0) drawnSize.width.toFloat() else containerWidth
+                val height = if (drawnSize.height > 0) drawnSize.height.toFloat() else containerHeight
+                val sdlWidth = EngineActivity.resolutionX.toFloat()
+                val sdlHeight = EngineActivity.resolutionY.toFloat()
+                if (sdlWidth <= 0f || sdlHeight <= 0f) return@withFrameNanos
                 val rawX = SDLActivity.getMouseX().toFloat()
                 val rawY = SDLActivity.getMouseY().toFloat()
-                xPos = (rawX * (containerWidth / sdlWidth)) + (offsetXMouse ?: 0f)
-                yPos = (rawY * (containerHeight / sdlHeight)) + (offsetYMouse ?: 0f)
+                xPos = (rawX * (width / sdlWidth)) + (offsetXMouse ?: 0f)
+                yPos = (rawY * (height / sdlHeight)) + (offsetYMouse ?: 0f)
             }
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().onSizeChanged { drawnSize = it }) {
         Image(
             painter = rememberAsyncImagePainter(model = "file:${userUI}/pointer_arrow.png"),
             contentDescription = "Pointer Icon",
