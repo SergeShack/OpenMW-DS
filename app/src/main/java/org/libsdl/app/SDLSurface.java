@@ -75,6 +75,15 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         mIsSurfaceReady = false;
     }
 
+    // OpenMW-DS: render at another size from now on, for a game moved to another screen while
+    // running. Laid out as at start: as large as fits, keeping the aspect.
+    public void setFixedRenderSize(int width, int height) {
+        fixedWidth = width;
+        fixedHeight = height;
+        getHolder().setFixedSize(width, height);
+        requestLayout();
+    }
+
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int widthSize = MeasureSpec.getSize(widthMeasureSpec);

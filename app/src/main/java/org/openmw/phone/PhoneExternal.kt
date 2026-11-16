@@ -5,7 +5,16 @@ import android.content.Context
 import android.hardware.display.DisplayManager
 import android.util.Log
 import android.view.Display
+import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import kotlinx.coroutines.InternalCoroutinesApi
+import org.libsdl.app.SDLSurface
 import org.openmw.CompanionActivity
+import org.openmw.EngineActivity
+import org.openmw.R
+import org.openmw.hideSystemBars
+import org.openmw.ui.view.resolveTieredGameResolution
 import org.openmw.utils.DisplayRoles
 
 /**
@@ -108,7 +117,7 @@ object PhoneExternal {
      *
      * When the external screen goes away (the cast is turned off, the cable pulled), Android moves
      * the game to the phone. The game stays there then, instead of being sent back to a screen that
-     * is gone, and the companion, which was on the phone, is closed so the game can be seen.
+     * is gone, and goes on as on the phone alone ([moveGameToPhone]).
      */
     fun onConfigurationChanged(activity: Activity, pinnedGameDisplay: Int?): Int? {
         val current = activity.display?.displayId ?: return pinnedGameDisplay
@@ -120,8 +129,47 @@ object PhoneExternal {
         if (pinnedGameDisplay == null || pinnedGameDisplay == current) return pinnedGameDisplay
         if (dm?.getDisplay(pinnedGameDisplay) != null) return pinnedGameDisplay
         Log.w(TAG, "game moved from display $pinnedGameDisplay, which is gone, to $current: staying here")
-        CompanionActivity.finishIfRunning()
+        moveGameToPhone(activity)
         return current
+    }
+
+    /**
+     * The game came over to the phone from a screen that went away: it goes on as on the phone alone.
+     *
+     * - The companion, which was on the phone, is closed.
+     * - The game renders at the phone's shape. It keeps its render height, so the game's windows keep
+     *   their size (the launcher made the GUI scaling for that height), and only gets wider.
+     *   The engine takes a new window size as it comes and lays its windows out again.
+     * - The touch controller goes over the game, as when the game starts on the phone.
+     *
+     * The game's windows laid out from settings.cfg ([PhoneWindows]) are not moved clear of the
+     * controller's sides until the next start.
+     */
+    // EngineActivity is marked with the coroutines opt-in; its render size is only read and set here.
+    @OptIn(InternalCoroutinesApi::class)
+    private fun moveGameToPhone(activity: Activity) {
+        CompanionActivity.finishIfRunning()
+        hideSystemBars(activity)
+        val container = activity.findViewById<FrameLayout>(R.id.sdl_container)
+        val surface = container?.let { findSurface(it) }
+        val metrics = activity.resources.displayMetrics
+        val (width, height) = resolveTieredGameResolution(metrics.widthPixels, metrics.heightPixels, EngineActivity.resolutionY)
+        if (surface != null && width > 0 && height > 0) {
+            Log.w(TAG, "game renders at ${width}x$height on the phone")
+            EngineActivity.resolutionX = width
+            EngineActivity.resolutionY = height
+            surface.setFixedRenderSize(width, height)
+        } else {
+            Log.e(TAG, "game surface not found, it keeps its size")
+        }
+        if (container != null) GameScreenPad.install(activity, container)
+    }
+
+    private fun findSurface(view: View): SDLSurface? {
+        if (view is SDLSurface) return view
+        if (view !is ViewGroup) return null
+        for (i in 0 until view.childCount) findSurface(view.getChildAt(i))?.let { return it }
+        return null
     }
 
     /** Whether the side controller goes over the game: this profile, with the game on the phone. */
