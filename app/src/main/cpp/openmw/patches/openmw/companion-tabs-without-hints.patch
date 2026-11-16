@@ -1,0 +1,19 @@
+--- a/apps/openmw/mwgui/windowmanagerimp.cpp
++++ b/apps/openmw/mwgui/windowmanagerimp.cpp
+@@ -3302,6 +3302,16 @@
+         {
+             if (mControllerButtonsOverlay)
+                 mControllerButtonsOverlay->setVisible(false);
++            // The inventory tabs stay: they are not hints but how the controller menus are switched,
++            // and those menus leave room for them at the top. Shown as with the hints on.
++            if (mInventoryTabsOverlay && Settings::gui().mControllerMenus && !mWindows.empty())
++            {
++                WindowBase* topWin = getActiveControllerWindow();
++                const bool tabs = getMode() == GM_Inventory && topWin && topWin->isVisible();
++                mInventoryTabsOverlay->setVisible(tabs);
++                if (tabs)
++                    mInventoryTabsOverlay->setTab(mActiveControllerWindows[GM_Inventory]);
++            }
+             return;
+         }
+ #endif
