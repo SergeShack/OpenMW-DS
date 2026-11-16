@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -57,13 +58,19 @@ private sealed interface EditTarget {
 private const val UNDO_STEPS = 50
 
 /** The editor's state at one moment, for Undo. */
-private class EditSnapshot(val parts: Map<PadPart, PartPlace>, val keys: List<KeyButton>, val opacity: Float)
+private class EditSnapshot(
+    val parts: Map<PadPart, PartPlace>,
+    val keys: List<KeyButton>,
+    val opacity: Float,
+    val lookSpeed: Float,
+)
 
 /** What the editor hands back when it is closed. */
 internal class PadEditResult(
     val parts: Map<PadPart, PartPlace>,
     val keys: List<KeyButton>,
     val opacity: Float,
+    val lookSpeed: Float,
 )
 
 /**
@@ -72,10 +79,12 @@ internal class PadEditResult(
  *
  * Everything is drawn where it is now, with a frame over it: drag it to move it, drag its bottom
  * right corner to resize it. It stays inside [areas] (the whole screen, or the two sides beside the
- * companion) and can be dragged from one area to another. A tapped part or button is selected, and
+ * companion) and can be dragged from one area to another: it goes to the area the finger is over.
+ * A tapped part or button is selected, and
  * the bar in the middle can hide a part or show it again, change a key button's key or delete it.
  * A hidden part stays in the editor, faint. The bar also adds key buttons, sets how see-through the
- * controller is ([startOpacity], when given), puts the controller's parts back where they were at
+ * controller is ([startOpacity], when given) and how fast the look pad turns the camera
+ * ([startLookSpeed], when given, see [LookSpeed]), puts the controller's parts back where they were at
  * first ([defaults], when given; key buttons are left where they are), takes back the last changes
  * one by one (Undo), and closes the editor, keeping the changes (Done) or not (Cancel).
  *
@@ -88,6 +97,7 @@ internal fun PadEditor(
     startParts: Map<PadPart, PartPlace>,
     startKeys: List<KeyButton>,
     startOpacity: Float?,
+    startLookSpeed: Float?,
     defaults: (() -> Map<PadPart, PartPlace>)?,
     onCancel: () -> Unit,
     onDone: (PadEditResult) -> Unit,
@@ -97,6 +107,9 @@ internal fun PadEditor(
     val density = LocalDensity.current.density
     var selected by remember { mutableStateOf<EditTarget?>(null) }
     var opacity by remember { mutableFloatStateOf(startOpacity ?: PadLayout.OPACITY_DEFAULT) }
+    var lookSpeed by remember { mutableFloatStateOf(startLookSpeed ?: LookSpeed.DEFAULT) }
+    // Where the part or button being dragged was when the drag started.
+    var dragFrom by remember { mutableStateOf<PartPlace?>(null) }
     // The key picker is open: for a new button (null target) or for the selected one.
     var picking by remember { mutableStateOf(false) }
     var pickingFor by remember { mutableStateOf<Long?>(null) }
@@ -107,7 +120,7 @@ internal fun PadEditor(
     val history = remember { mutableStateListOf<EditSnapshot>() }
 
     fun checkpoint() {
-        history.add(EditSnapshot(parts.toMap(), keys.toList(), opacity))
+        history.add(EditSnapshot(parts.toMap(), keys.toList(), opacity, lookSpeed))
         if (history.size > UNDO_STEPS) history.removeAt(0)
     }
 
@@ -118,14 +131,20 @@ internal fun PadEditor(
         keys.clear()
         keys.addAll(last.keys)
         opacity = last.opacity
+        lookSpeed = last.lookSpeed
         selected = null
     }
 
     fun keyIndex(id: Long) = keys.indexOfFirst { it.id == id }
 
-    fun move(place: PartPlace, dx: Float, dy: Float) = place.copy(x = place.x + dx, y = place.y + dy).within(areas)
+    // A drag is applied to where the part was when it started, not step by step, so the part
+    // follows the finger: kept inside the area it was in, it would stop at that area's edge and
+    // never get over to another one.
+    fun move(dx: Float, dy: Float): PartPlace? =
+        dragFrom?.let { it.copy(x = it.x + dx, y = it.y + dy).within(areas) }
 
-    fun resize(place: PartPlace, dw: Float, dh: Float): PartPlace {
+    fun resize(dw: Float, dh: Float): PartPlace? {
+        val place = dragFrom ?: return null
         // Grows towards the bottom right, as far as its area goes.
         val area = PadArea.nearest(areas, place.centerX, place.centerY)
         val w = (place.w + dw).coerceIn(PadLayout.MIN_SIZE_DP, maxOf(PadLayout.MIN_SIZE_DP, area.right - place.x))
@@ -159,9 +178,12 @@ internal fun PadEditor(
                     opacity = if (place.hidden) 0.25f else opacity,
                     label = if (place.hidden) "hidden" else null,
                     onSelect = { selected = EditTarget.Part(part) },
-                    onChangeStart = ::checkpoint,
-                    onMove = { dx, dy -> parts[part]?.let { parts[part] = move(it, dx, dy) } },
-                    onResize = { dw, dh -> parts[part]?.let { parts[part] = resize(it, dw, dh) } },
+                    onChangeStart = {
+                        checkpoint()
+                        dragFrom = parts[part]
+                    },
+                    onMove = { dx, dy -> move(dx, dy)?.let { parts[part] = it } },
+                    onResize = { dw, dh -> resize(dw, dh)?.let { parts[part] = it } },
                 ) { PadPartContent(part, Modifier.fillMaxSize()) }
             }
         }
@@ -173,14 +195,19 @@ internal fun PadEditor(
                     opacity = opacity,
                     label = null,
                     onSelect = { selected = EditTarget.Key(button.id) },
-                    onChangeStart = ::checkpoint,
+                    onChangeStart = {
+                        checkpoint()
+                        dragFrom = keys.getOrNull(keyIndex(button.id))?.place
+                    },
                     onMove = { dx, dy ->
                         val i = keyIndex(button.id)
-                        if (i >= 0) keys[i] = keys[i].copy(place = move(keys[i].place, dx, dy))
+                        val p = move(dx, dy)
+                        if (i >= 0 && p != null) keys[i] = keys[i].copy(place = p)
                     },
                     onResize = { dw, dh ->
                         val i = keyIndex(button.id)
-                        if (i >= 0) keys[i] = keys[i].copy(place = resize(keys[i].place, dw, dh))
+                        val p = resize(dw, dh)
+                        if (i >= 0 && p != null) keys[i] = keys[i].copy(place = p)
                     },
                 ) { KeyButtonView(button.keyCode, Modifier.fillMaxSize()) }
             }
@@ -237,6 +264,11 @@ internal fun PadEditor(
                     checkpoint()
                     opacity = it.coerceIn(PadLayout.OPACITY_MIN, 1f)
                 },
+                lookSpeed = if (startLookSpeed != null) lookSpeed else null,
+                onLookSpeed = {
+                    checkpoint()
+                    lookSpeed = it.coerceIn(LookSpeed.MIN, LookSpeed.MAX)
+                },
                 onAddKey = {
                     pickingFor = null
                     picking = true
@@ -268,7 +300,7 @@ internal fun PadEditor(
                 canUndo = history.isNotEmpty(),
                 onUndo = ::undo,
                 onCancel = onCancel,
-                onDone = { onDone(PadEditResult(parts.toMap(), keys.toList(), opacity)) },
+                onDone = { onDone(PadEditResult(parts.toMap(), keys.toList(), opacity, lookSpeed)) },
             )
         }
     }
@@ -287,6 +319,7 @@ private fun EditedItem(
     onResize: (Float, Float) -> Unit,
     content: @Composable () -> Unit,
 ) {
+    // [onMove] and [onResize] get how far the finger has gone since the drag started, in dp.
     val select by rememberUpdatedState(onSelect)
     val changeStart by rememberUpdatedState(onChangeStart)
     val move by rememberUpdatedState(onMove)
@@ -309,14 +342,15 @@ private fun EditedItem(
                         down.consume()
                         select()
                         var started = false
+                        var total = Offset.Zero
                         drag(down.id) { change ->
-                            val d = change.positionChange()
+                            total += change.positionChange()
                             change.consume()
                             if (!started) {
                                 started = true
                                 changeStart()
                             }
-                            move(d.x / density, d.y / density)
+                            move(total.x / density, total.y / density)
                         }
                     }
                 }
@@ -337,14 +371,15 @@ private fun EditedItem(
                         down.consume()
                         select()
                         var started = false
+                        var total = Offset.Zero
                         drag(down.id) { change ->
-                            val d = change.positionChange()
+                            total += change.positionChange()
                             change.consume()
                             if (!started) {
                                 started = true
                                 changeStart()
                             }
-                            resize(d.x / density, d.y / density)
+                            resize(total.x / density, total.y / density)
                         }
                     }
                 },
@@ -366,6 +401,8 @@ private fun EditorBar(
     selectedHidden: Boolean,
     opacity: Float?,
     onOpacity: (Float) -> Unit,
+    lookSpeed: Float?,
+    onLookSpeed: (Float) -> Unit,
     onAddKey: () -> Unit,
     onChangeKey: () -> Unit,
     onDeleteKey: () -> Unit,
@@ -390,18 +427,10 @@ private fun EditorBar(
             fontSize = 12.sp,
         )
         if (opacity != null) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Opacity", color = PadBronze, fontSize = 14.sp)
-                BarButton("−", enabled = opacity > PadLayout.OPACITY_MIN + 0.01f) { onOpacity(opacity - OPACITY_STEP) }
-                Text(
-                    "${(opacity * 100).roundToInt()}%",
-                    color = PadBronze,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.width(44.dp),
-                )
-                BarButton("+", enabled = opacity < 0.99f) { onOpacity(opacity + OPACITY_STEP) }
-            }
+            StepRow("Opacity", opacity, PadLayout.OPACITY_MIN, 1f, OPACITY_STEP, onOpacity)
+        }
+        if (lookSpeed != null) {
+            StepRow("Look speed", lookSpeed, LookSpeed.MIN, LookSpeed.MAX, LookSpeed.STEP, onLookSpeed)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             BarButton("Add key", onClick = onAddKey)
@@ -424,6 +453,23 @@ private fun EditorBar(
             BarButton("Cancel", onClick = onCancel)
             BarButton("Done", onClick = onDone)
         }
+    }
+}
+
+/** A value set with − and + in [step]s between [min] and [max], shown in percent. */
+@Composable
+private fun StepRow(label: String, value: Float, min: Float, max: Float, step: Float, onChange: (Float) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(label, color = PadBronze, fontSize = 14.sp, modifier = Modifier.width(86.dp))
+        BarButton("−", enabled = value > min + 0.01f) { onChange(value - step) }
+        Text(
+            "${(value * 100).roundToInt()}%",
+            color = PadBronze,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.width(52.dp),
+        )
+        BarButton("+", enabled = value < max - 0.01f) { onChange(value + step) }
     }
 }
 

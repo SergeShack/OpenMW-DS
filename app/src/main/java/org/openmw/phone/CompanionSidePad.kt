@@ -63,7 +63,11 @@ internal object CompanionSidePad {
     @Composable
     private fun Sides(sideWidthPx: Int) {
         val context = LocalContext.current
-        remember(context) { PadHaptics.init(context.applicationContext); true }
+        remember(context) {
+            PadHaptics.init(context.applicationContext)
+            LookSpeed.load(context)
+            true
+        }
         val side = sideWidthPx / LocalDensity.current.density
         val controller by rememberControllerConnected()
         val surface = if (controller) PadSurface.BESIDE_COMPANION else PadSurface.BESIDE_COMPANION_TOUCH
@@ -89,10 +93,14 @@ internal object CompanionSidePad {
                     startParts = parts,
                     startKeys = keys,
                     startOpacity = null,
+                    startLookSpeed = if (surface.hasParts) LookSpeed.value else null,
                     defaults = if (surface.hasParts) ({ PadLayout.defaults(surface, areas) }) else null,
                     onCancel = { editing = false },
                 ) { edited ->
-                    if (surface.hasParts) PadLayout.save(context, surface, edited.parts, areas)
+                    if (surface.hasParts) {
+                        PadLayout.save(context, surface, edited.parts, areas)
+                        LookSpeed.save(context, edited.lookSpeed)
+                    }
                     KeyButtonLayout.save(context, surface, edited.keys, areas)
                     saved++
                     editing = false

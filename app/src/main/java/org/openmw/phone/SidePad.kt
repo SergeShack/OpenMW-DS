@@ -358,13 +358,44 @@ internal fun LookPad(clickKey: Int, touchpadInMenus: Boolean, menu: Boolean, mod
 /** How often the look pad beside the companion asks where the menu is, for its label. */
 private const val LABEL_POLL_MS = 200L
 
-/** Mouse units per pixel of finger movement on the look pad. */
+/** Mouse units per pixel of finger movement on the look pad, at a [LookSpeed] of 100%. */
 private const val LOOK_SCALE = 1.0f
 
 private fun sendLook(d: Offset) {
     if (d.x == 0f && d.y == 0f) return
+    val scale = LOOK_SCALE * LookSpeed.value
     runCatching {
-        SDLActivity.onNativeMouse(0, MotionEvent.ACTION_MOVE, d.x * LOOK_SCALE, d.y * LOOK_SCALE, true)
+        SDLActivity.onNativeMouse(0, MotionEvent.ACTION_MOVE, d.x * scale, d.y * scale, true)
+    }
+}
+
+/**
+ * How fast the look pad, and aiming with the attack button, turn the camera, set in the editor.
+ *
+ * The game turns the camera by its Camera Sensitivity for the mouse, which the look pad is to it,
+ * and for a controller's right stick alike. This speed is on top of that and only for the look
+ * pad, so the sensitivity can be set for a real controller and the look pad kept as fast as wanted.
+ */
+internal object LookSpeed {
+    private const val PREFS = "phone_pad"
+    private const val KEY = "look_speed"
+
+    const val DEFAULT = 1f
+    const val MIN = 0.25f
+    const val MAX = 4f
+    const val STEP = 0.25f
+
+    @Volatile
+    var value = DEFAULT
+        private set
+
+    fun load(context: Context) {
+        value = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getFloat(KEY, DEFAULT).coerceIn(MIN, MAX)
+    }
+
+    fun save(context: Context, speed: Float) {
+        value = speed.coerceIn(MIN, MAX)
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putFloat(KEY, value).apply()
     }
 }
 

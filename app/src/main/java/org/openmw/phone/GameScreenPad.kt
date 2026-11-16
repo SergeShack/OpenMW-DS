@@ -116,7 +116,11 @@ object GameScreenPad {
     @Composable
     private fun Pad() {
         val context = LocalContext.current
-        remember(context) { PadHaptics.init(context.applicationContext); true }
+        remember(context) {
+            PadHaptics.init(context.applicationContext)
+            LookSpeed.load(context)
+            true
+        }
         LaunchedEffect(Unit) {
             while (true) {
                 menuOpen.value = runCatching { SDLActivity.companionGuiModeActive() }.getOrDefault(false)
@@ -154,11 +158,13 @@ object GameScreenPad {
                     startParts = places,
                     startKeys = keys,
                     startOpacity = opacity,
+                    startLookSpeed = LookSpeed.value,
                     defaults = { PadLayout.defaults(PadSurface.OVER_GAME, areas) },
                     onCancel = { editing = false },
                 ) { edited ->
                     PadLayout.save(context, PadSurface.OVER_GAME, edited.parts, areas)
                     PadLayout.saveOpacity(context, edited.opacity)
+                    LookSpeed.save(context, edited.lookSpeed)
                     KeyButtonLayout.save(context, PadSurface.OVER_GAME, edited.keys, areas)
                     opacity = edited.opacity
                     saved++
