@@ -1,0 +1,12 @@
+--- a/apps/openmw/mwgui/windowmanagerimp.cpp
++++ b/apps/openmw/mwgui/windowmanagerimp.cpp
+@@ -2226,6 +2226,9 @@
+             return;
+         MyGUI::EditBox* field = gCompanionTextInput;
+         field->setCaption(MyGUI::UString(utf8));
++        // setCaption does not raise the change event that typing does, and some fields act on it,
++        // like the inventory's name filter. Raised here as typing would.
++        field->eventEditTextChange(field);
+ 
+         // A MULTI-LINE field (the class-description box) takes Return as a literal newline, so
+         // injecting it there types into the box instead of accepting - and because nothing
