@@ -4,7 +4,7 @@ A phone build of **[OpenMW-DS Duo Lite](https://github.com/SergeShack/OpenMW-DS)
 **[OpenMW-DS](https://github.com/Josh-Daniels/OpenMW-DS)**. OpenMW-DS plays Morrowind (through OpenMW) on one screen and
 puts the character sheet, inventory, magic, journal, map and many of the game's menus on a second one. This build brings
 that to a phone: with a TV or monitor as the game screen and the companion on the phone, or on the phone alone with a
-touch controller.
+touch controller. It also runs on tablets.
 
 All credit for OpenMW-DS goes to its author.
 
@@ -40,6 +40,8 @@ The default device profile (Settings > Device).
   (Miracast, "Cast" or "Screen mirroring" in the phone's quick settings).
 - Connect the screen before pressing Play. The game resolution follows the external screen.
 - While a game window is shown on the TV, the look pad on the phone moves the game's cursor there.
+- If the TV or monitor goes away while you play (the cast is turned off, the cable pulled), the game comes over to the
+  phone and goes on there, with the game's own windows and the touch controller over it, until you quit.
 
 **Without one**
 - The game runs on the phone alone, with the menus as in the original game, and the touch controller over the edges of
@@ -61,20 +63,27 @@ controls menu. The default layout:
 | | LOOK: drag to look around. In menus it scrolls. Tap to switch view |
 
 - The stick starts wherever your thumb lands in its area. Push it all the way to run.
-- **Your own layout**: the pencil button in the top right corner opens an editor. Drag any part to move it, drag its
-  corner to resize it, hide the parts you do not need, and set how see-through the controller is. Reset puts everything
-  back.
-- **Hide**: the eye button next to it hides the whole controller, leaving a small button to show it again.
-- **Gamepad**: while a real gamepad is connected, the touch controller hides by itself.
-- **Menus**: while a menu is open, the controller narrows to the buttons menus use, and its right side becomes a touchpad
-  for the game's cursor: move to point, tap to click, tap and then drag to hold, two fingers to scroll. The game's windows
-  are placed between the two sides.
+- **Your own layout**: the pencil button opens an editor. Drag any part to move it, drag its corner to resize it, hide
+  the parts you do not need, and set how see-through the controller is and how fast the look pad turns the camera.
+  Undo takes back the last changes, Cancel leaves without keeping them, Reset puts the parts back.
+- **Menus**: while a menu is open over the game, the controller has a narrower layout of its own, and its look pad is a
+  touchpad for the game's cursor: move to point, tap to click, tap and then drag to hold, two fingers to scroll. The
+  editor opened in a menu arranges that layout. The game's windows are placed between its two sides.
+- **Key buttons**: in the editor, Add key makes a button that presses a keyboard key, for mods played with keys of their
+  own. It is placed like the other parts, and holds the key for as long as your finger is on it.
+- **Beside the companion** the controller can be arranged the same way, within the two sides.
+- **Hide**: the eye button hides the whole controller, leaving a small button to show it again.
+- **Gamepad**: while a real gamepad is connected, the touch controller hides by itself. Key buttons stay, over the game
+  and beside the companion, since a gamepad has no keys for those mods; they have a layout of their own for that case.
+- **Saved layouts**: Layouts in the editor saves the whole controller under a name and loads it again. Each layout is a
+  file in `OpenMW-DS-Phone/layouts`, so you can copy layouts to another phone or share them.
+- **Tablets**: on a tall screen the controller is larger, sits at the bottom within reach of the thumbs, and leaves the
+  game's bars in the bottom left corner free. The game's windows keep about the size they have on a phone.
 
 ---
 ## Known issues
 
 - A wireless cast adds a noticeable delay to the picture. A cable does not, where the phone supports it.
-- Turning the cast off while playing closes the game. Save first.
 - To move the game to an external screen you connected while playing, quit the game and press Play again.
 - If the phone gets hot, a frame rate limit (`framerate limit` in the Video section of the settings editor, for example
   30 or 45) keeps it cooler.
