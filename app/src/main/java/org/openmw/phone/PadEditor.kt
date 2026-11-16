@@ -36,6 +36,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -65,7 +66,7 @@ private class EditSnapshot(
     val lookSpeed: Float,
 )
 
-/** What the editor hands back when it is closed. */
+/** What the editor hands over to be kept: on Done, and before the layout is saved under a name. */
 internal class PadEditResult(
     val parts: Map<PadPart, PartPlace>,
     val keys: List<KeyButton>,
@@ -86,7 +87,11 @@ internal class PadEditResult(
  * controller is ([startOpacity], when given) and how fast the look pad turns the camera
  * ([startLookSpeed], when given, see [LookSpeed]), puts the controller's parts back where they were at
  * first ([defaults], when given; key buttons are left where they are), takes back the last changes
- * one by one (Undo), and closes the editor, keeping the changes (Done) or not (Cancel).
+ * one by one (Undo), opens the saved layouts ([LayoutsPanel], [PadPresets]), and closes the editor,
+ * keeping the changes (Done) or not (Cancel).
+ *
+ * [onSave] keeps the edited layout as the one in use; [onClose] closes the editor, with `true` when
+ * a saved layout was loaded and everything has to be read again.
  *
  * Nothing works while the editor is open: the frame over each part takes its touches, and the
  * editor covers the rest of the screen so nothing reaches the game or the companion either.
@@ -99,9 +104,10 @@ internal fun PadEditor(
     startOpacity: Float?,
     startLookSpeed: Float?,
     defaults: (() -> Map<PadPart, PartPlace>)?,
-    onCancel: () -> Unit,
-    onDone: (PadEditResult) -> Unit,
+    onSave: (PadEditResult) -> Unit,
+    onClose: (reload: Boolean) -> Unit,
 ) {
+    val context = LocalContext.current
     val parts = remember { mutableStateMapOf<PadPart, PartPlace>().apply { putAll(startParts) } }
     val keys = remember { mutableStateListOf<KeyButton>().apply { addAll(startKeys) } }
     val density = LocalDensity.current.density
@@ -113,6 +119,10 @@ internal fun PadEditor(
     // The key picker is open: for a new button (null target) or for the selected one.
     var picking by remember { mutableStateOf(false) }
     var pickingFor by remember { mutableStateOf<Long?>(null) }
+    // The saved layouts are shown, with a line about the last thing done there.
+    var layoutsOpen by remember { mutableStateOf(false) }
+    var layoutNames by remember { mutableStateOf(emptyList<String>()) }
+    var layoutStatus by remember { mutableStateOf<String?>(null) }
     // Where the bar is, in dp, so a new key button is not put under it.
     var barPlace by remember { mutableStateOf<PartPlace?>(null) }
 
@@ -136,6 +146,15 @@ internal fun PadEditor(
     }
 
     fun keyIndex(id: Long) = keys.indexOfFirst { it.id == id }
+
+    fun result() = PadEditResult(parts.toMap(), keys.toList(), opacity, lookSpeed)
+
+    fun saveLayout(name: String) {
+        // What is on screen is what gets saved, so it is kept as the layout in use first.
+        onSave(result())
+        layoutStatus = if (PadPresets.save(context, name)) "Saved as “$name”." else "Could not save “$name”."
+        layoutNames = PadPresets.names()
+    }
 
     // A drag is applied to where the part was when it started, not step by step, so the part
     // follows the finger: kept inside the area it was in, it would stop at that area's edge and
@@ -213,8 +232,8 @@ internal fun PadEditor(
             }
         }
 
-        if (picking) {
-            // Covers the parts, so a touch beside the picker's keys does not reach one of them.
+        if (picking || layoutsOpen) {
+            // Covers the parts, so a touch beside the panel's buttons does not reach one of them.
             Box(
                 Modifier.fillMaxSize().pointerInput(Unit) {
                     awaitEachGesture {
@@ -226,6 +245,54 @@ internal fun PadEditor(
                     }
                 }
             )
+        }
+        if (layoutsOpen) {
+            LayoutsPanel(
+                modifier = Modifier.align(Alignment.Center),
+                names = layoutNames,
+                status = layoutStatus,
+                onSaveAs = {
+                    PadPresets.askName(context, "Save layout as", "") { name ->
+                        if (PadPresets.exists(name)) {
+                            PadPresets.confirm(context, "Replace the saved layout “$name”?", "Replace") { saveLayout(name) }
+                        } else {
+                            saveLayout(name)
+                        }
+                    }
+                },
+                onLoad = { name ->
+                    PadPresets.confirm(
+                        context,
+                        "Use the layout “$name”? It replaces the layout in use; save that first to keep it.",
+                        "Use it",
+                    ) {
+                        if (PadPresets.load(context, name)) {
+                            onClose(true)
+                        } else {
+                            layoutStatus = "Could not read “$name”."
+                        }
+                    }
+                },
+                onRename = { name ->
+                    PadPresets.askName(context, "Rename layout", name) { newName ->
+                        layoutStatus = when {
+                            newName == name -> null
+                            PadPresets.exists(newName) -> "There is already a layout called “$newName”."
+                            PadPresets.rename(name, newName) -> "Renamed to “$newName”."
+                            else -> "Could not rename “$name”."
+                        }
+                        layoutNames = PadPresets.names()
+                    }
+                },
+                onDelete = { name ->
+                    PadPresets.confirm(context, "Delete the saved layout “$name”?", "Delete") {
+                        layoutStatus = if (PadPresets.delete(name)) "Deleted “$name”." else "Could not delete “$name”."
+                        layoutNames = PadPresets.names()
+                    }
+                },
+                onClose = { layoutsOpen = false },
+            )
+        } else if (picking) {
             val current = pickingFor?.let { id -> keys.firstOrNull { it.id == id }?.keyCode }
             KeyPicker(
                 modifier = Modifier.align(Alignment.Center),
@@ -273,6 +340,11 @@ internal fun PadEditor(
                     pickingFor = null
                     picking = true
                 },
+                onLayouts = {
+                    layoutNames = PadPresets.names()
+                    layoutStatus = null
+                    layoutsOpen = true
+                },
                 onChangeKey = {
                     pickingFor = (target as? EditTarget.Key)?.id ?: return@EditorBar
                     picking = true
@@ -299,8 +371,11 @@ internal fun PadEditor(
                 },
                 canUndo = history.isNotEmpty(),
                 onUndo = ::undo,
-                onCancel = onCancel,
-                onDone = { onDone(PadEditResult(parts.toMap(), keys.toList(), opacity, lookSpeed)) },
+                onCancel = { onClose(false) },
+                onDone = {
+                    onSave(result())
+                    onClose(false)
+                },
             )
         }
     }
@@ -404,6 +479,7 @@ private fun EditorBar(
     lookSpeed: Float?,
     onLookSpeed: (Float) -> Unit,
     onAddKey: () -> Unit,
+    onLayouts: () -> Unit,
     onChangeKey: () -> Unit,
     onDeleteKey: () -> Unit,
     onToggleHidden: () -> Unit,
@@ -434,6 +510,7 @@ private fun EditorBar(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             BarButton("Add key", onClick = onAddKey)
+            BarButton("Layouts", onClick = onLayouts)
             when (selected) {
                 is EditTarget.Key -> {
                     BarButton("Change key", onClick = onChangeKey)
@@ -474,7 +551,7 @@ private fun StepRow(label: String, value: Float, min: Float, max: Float, step: F
 }
 
 @Composable
-private fun BarButton(label: String, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun BarButton(label: String, enabled: Boolean = true, onClick: () -> Unit) {
     val click by rememberUpdatedState(onClick)
     Box(
         Modifier

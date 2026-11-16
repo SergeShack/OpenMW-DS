@@ -160,13 +160,16 @@ object GameScreenPad {
                     startOpacity = opacity,
                     startLookSpeed = LookSpeed.value,
                     defaults = { PadLayout.defaults(PadSurface.OVER_GAME, areas) },
-                    onCancel = { editing = false },
-                ) { edited ->
-                    PadLayout.save(context, PadSurface.OVER_GAME, edited.parts, areas)
-                    PadLayout.saveOpacity(context, edited.opacity)
-                    LookSpeed.save(context, edited.lookSpeed)
-                    KeyButtonLayout.save(context, PadSurface.OVER_GAME, edited.keys, areas)
-                    opacity = edited.opacity
+                    onSave = { edited ->
+                        PadLayout.save(context, PadSurface.OVER_GAME, edited.parts, areas)
+                        PadLayout.saveOpacity(context, edited.opacity)
+                        LookSpeed.save(context, edited.lookSpeed)
+                        KeyButtonLayout.save(context, PadSurface.OVER_GAME, edited.keys, areas)
+                    },
+                ) { reload ->
+                    // Read back what was kept, or the saved layout that was loaded.
+                    if (reload) LookSpeed.load(context)
+                    opacity = PadLayout.opacity(context)
                     saved++
                     editing = false
                 }

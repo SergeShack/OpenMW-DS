@@ -95,13 +95,15 @@ internal object CompanionSidePad {
                     startOpacity = null,
                     startLookSpeed = if (surface.hasParts) LookSpeed.value else null,
                     defaults = if (surface.hasParts) ({ PadLayout.defaults(surface, areas) }) else null,
-                    onCancel = { editing = false },
-                ) { edited ->
-                    if (surface.hasParts) {
-                        PadLayout.save(context, surface, edited.parts, areas)
-                        LookSpeed.save(context, edited.lookSpeed)
-                    }
-                    KeyButtonLayout.save(context, surface, edited.keys, areas)
+                    onSave = { edited ->
+                        if (surface.hasParts) {
+                            PadLayout.save(context, surface, edited.parts, areas)
+                            LookSpeed.save(context, edited.lookSpeed)
+                        }
+                        KeyButtonLayout.save(context, surface, edited.keys, areas)
+                    },
+                ) { reload ->
+                    if (reload) LookSpeed.load(context)
                     saved++
                     editing = false
                 }

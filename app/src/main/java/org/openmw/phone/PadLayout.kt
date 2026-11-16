@@ -1,6 +1,7 @@
 package org.openmw.phone
 
 import android.content.Context
+import org.json.JSONObject
 
 /** The parts of the touch controller, each moved, resized and hidden on its own. */
 internal enum class PadPart(val key: String) {
@@ -224,6 +225,37 @@ internal object PadLayout {
                 .putFloat("$k.cy", (place.centerY - area.y) / area.h)
                 .putFloat("$k.w", place.w)
                 .putFloat("$k.h", place.h)
+        }
+        edit.apply()
+    }
+
+    /** The stored layout of [surface] as it is kept, for a saved layout ([PadPresets]). */
+    fun toJson(context: Context, surface: PadSurface): JSONObject {
+        val prefs = context.getSharedPreferences(prefsName(surface), Context.MODE_PRIVATE)
+        val json = JSONObject()
+        for (part in PadPart.entries) {
+            val k = part.key
+            val o = JSONObject().put("hidden", prefs.getBoolean("$k.hidden", false))
+            if (prefs.contains("$k.cx")) {
+                o.put("area", prefs.getInt("$k.area", 0))
+                for (field in listOf("cx", "cy", "w", "h")) o.put(field, prefs.getFloat("$k.$field", 0f).toDouble())
+            }
+            json.put(k, o)
+        }
+        return json
+    }
+
+    /** Stores [json] (from [toJson]) as the layout of [surface]; without it every part is where the defaults put it. */
+    fun fromJson(context: Context, surface: PadSurface, json: JSONObject?) {
+        val edit = context.getSharedPreferences(prefsName(surface), Context.MODE_PRIVATE).edit()
+        for (part in PadPart.entries) {
+            val k = part.key
+            edit.remove("$k.hidden").remove("$k.area").remove("$k.cx").remove("$k.cy").remove("$k.w").remove("$k.h")
+            val o = json?.optJSONObject(k) ?: continue
+            edit.putBoolean("$k.hidden", o.optBoolean("hidden", false))
+            if (!o.has("cx")) continue
+            edit.putInt("$k.area", o.optInt("area", 0))
+            for (field in listOf("cx", "cy", "w", "h")) edit.putFloat("$k.$field", o.optDouble(field, 0.0).toFloat())
         }
         edit.apply()
     }

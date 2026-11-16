@@ -59,6 +59,18 @@ internal object KeyButtonLayout {
             .apply()
     }
 
+    /** The stored buttons of [surface] as they are kept, for a saved layout ([PadPresets]); null if none. */
+    fun toJson(context: Context, surface: PadSurface): JSONObject? =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(surface.key, null)
+            ?.let { runCatching { JSONObject(it) }.getOrNull() }
+
+    /** Stores [json] (from [toJson]) as the buttons of [surface]; without it there are none. */
+    fun fromJson(context: Context, surface: PadSurface, json: JSONObject?) {
+        val edit = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+        if (json == null) edit.remove(surface.key) else edit.putString(surface.key, json.toString())
+        edit.apply()
+    }
+
     /**
      * A new button for [keyCode] in [area], where it covers none of [taken]: the free place nearest
      * the top of the area, and of those the one nearest its middle. In the middle if there is none.
