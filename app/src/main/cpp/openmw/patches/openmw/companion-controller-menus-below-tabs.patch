@@ -1,0 +1,143 @@
+--- a/apps/openmw/mwgui/inventorytabsoverlay.cpp
++++ b/apps/openmw/mwgui/inventorytabsoverlay.cpp
+@@ -8,11 +8,24 @@
+ #include "../mwbase/inputmanager.hpp"
+ #include "../mwbase/windowmanager.hpp"
+ 
++#ifdef __ANDROID__
++// COMPANION: read by the controller menus to stay below the tabs. There is one tabs overlay, made
++// with the window manager and kept for as long as it lives.
++static MyGUI::Widget* sCompanionTabsWidget = nullptr;
++extern "C" int companionInventoryTabsBottom()
++{
++    return sCompanionTabsWidget != nullptr && sCompanionTabsWidget->getVisible() ? sCompanionTabsWidget->getBottom() : 0;
++}
++#endif
++
+ namespace MWGui
+ {
+     InventoryTabsOverlay::InventoryTabsOverlay()
+         : WindowBase("openmw_inventory_tabs.layout")
+     {
++#ifdef __ANDROID__
++        sCompanionTabsWidget = mMainWidget;
++#endif
+         MyGUI::Button* tab;
+         constexpr std::string_view kTabIds[] = { "TabMap", "TabInventory", "TabSpells", "TabStats" };
+ 
+--- a/apps/openmw/mwgui/inventorywindow.cpp
++++ b/apps/openmw/mwgui/inventorywindow.cpp
+@@ -60,6 +60,11 @@
+ 
+ }
+ 
++#ifdef __ANDROID__
++// COMPANION: the bottom of the inventory tabs while they are shown, else 0 (inventorytabsoverlay.cpp).
++extern "C" int companionInventoryTabsBottom();
++#endif
++
+ namespace MWGui
+ {
+     namespace
+@@ -1088,7 +1093,14 @@
+             int width = std::min(viewSize.width, 1600);
+             int height = std::min(winMgr->getControllerMenuHeight(), StatsWindow::getIdealHeight());
+             int x = (viewSize.width - width) / 2;
++#ifdef __ANDROID__
++            // COMPANION: below the tabs, in the room getControllerMenuHeight leaves. Centred on the
++            // whole height, the window covers half the tabs and leaves a gap at the bottom when the
++            // button hints there are hidden.
++            int y = companionInventoryTabsBottom() + (winMgr->getControllerMenuHeight() - height) / 2;
++#else
+             int y = (viewSize.height - height) / 2;
++#endif
+ 
+             MyGUI::Window* window = mMainWidget->castType<MyGUI::Window>();
+             window->setCoord(x, active ? y : viewSize.height + 1, width, height);
+--- a/apps/openmw/mwgui/mapwindow.cpp
++++ b/apps/openmw/mwgui/mapwindow.cpp
+@@ -112,6 +112,11 @@
+ }
+ #endif
+ 
++#ifdef __ANDROID__
++// COMPANION: the bottom of the inventory tabs while they are shown, else 0 (inventorytabsoverlay.cpp).
++extern "C" int companionInventoryTabsBottom();
++#endif
++
+ namespace MWGui
+ {
+     /// @brief A widget that changes its color when hovered.
+@@ -1541,7 +1546,14 @@
+             int width = std::min(viewSize.width, canvasSize.width + borderSize.width);
+             int height = std::min(winMgr->getControllerMenuHeight(), canvasSize.height + borderSize.height);
+             int x = (viewSize.width - width) / 2;
++#ifdef __ANDROID__
++            // COMPANION: below the tabs, in the room getControllerMenuHeight leaves. Centred on the
++            // whole height, the window covers half the tabs and leaves a gap at the bottom when the
++            // button hints there are hidden.
++            int y = companionInventoryTabsBottom() + (winMgr->getControllerMenuHeight() - height) / 2;
++#else
+             int y = (viewSize.height - height) / 2;
++#endif
+ 
+             MyGUI::Window* window = mMainWidget->castType<MyGUI::Window>();
+             window->setCoord(x, active ? y : viewSize.height + 1, width, height);
+--- a/apps/openmw/mwgui/spellwindow.cpp
++++ b/apps/openmw/mwgui/spellwindow.cpp
+@@ -31,6 +31,11 @@
+ #include "spellview.hpp"
+ #include "statswindow.hpp"
+ 
++#ifdef __ANDROID__
++// COMPANION: the bottom of the inventory tabs while they are shown, else 0 (inventorytabsoverlay.cpp).
++extern "C" int companionInventoryTabsBottom();
++#endif
++
+ namespace MWGui
+ {
+ 
+@@ -370,7 +375,14 @@
+             int width = std::min(viewSize.width, StatsWindow::getIdealWidth());
+             int height = std::min(winMgr->getControllerMenuHeight(), StatsWindow::getIdealHeight());
+             int x = (viewSize.width - width) / 2;
++#ifdef __ANDROID__
++            // COMPANION: below the tabs, in the room getControllerMenuHeight leaves. Centred on the
++            // whole height, the window covers half the tabs and leaves a gap at the bottom when the
++            // button hints there are hidden.
++            int y = companionInventoryTabsBottom() + (winMgr->getControllerMenuHeight() - height) / 2;
++#else
+             int y = (viewSize.height - height) / 2;
++#endif
+ 
+             MyGUI::Window* window = mMainWidget->castType<MyGUI::Window>();
+             window->setCoord(x, active ? y : viewSize.height + 1, width, height);
+--- a/apps/openmw/mwgui/statswindow.cpp
++++ b/apps/openmw/mwgui/statswindow.cpp
+@@ -34,6 +34,11 @@
+ 
+ #include "tooltips.hpp"
+ 
++#ifdef __ANDROID__
++// COMPANION: the bottom of the inventory tabs while they are shown, else 0 (inventorytabsoverlay.cpp).
++extern "C" int companionInventoryTabsBottom();
++#endif
++
+ namespace MWGui
+ {
+     StatsWindow::StatsWindow(DragAndDrop* drag)
+@@ -754,7 +759,14 @@
+             int width = std::min(viewSize.width, getIdealWidth());
+             int height = std::min(winMgr->getControllerMenuHeight(), getIdealHeight());
+             int x = (viewSize.width - width) / 2;
++#ifdef __ANDROID__
++            // COMPANION: below the tabs, in the room getControllerMenuHeight leaves. Centred on the
++            // whole height, the window covers half the tabs and leaves a gap at the bottom when the
++            // button hints there are hidden.
++            int y = companionInventoryTabsBottom() + (winMgr->getControllerMenuHeight() - height) / 2;
++#else
+             int y = (viewSize.height - height) / 2;
++#endif
+ 
+             MyGUI::Window* window = mMainWidget->castType<MyGUI::Window>();
+             window->setCoord(x, active ? y : viewSize.height + 1, width, height);
