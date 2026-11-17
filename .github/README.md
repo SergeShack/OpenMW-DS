@@ -64,8 +64,8 @@ controls menu. The default layout:
 | Left | Right |
 |---|---|
 | LT: quick keys menu | ≡: menu |
-| LB: journal | RB: use (attack or cast) |
-| ⧉: rest | RT: quick save |
+| LB: journal | RB: quick save |
+| ⧉: rest | RT: use (attack or cast) |
 | D-pad: inventory (up), camera zoom (left/right) | A: activate, B: jump, X: ready magic, Y: ready weapon |
 | Stick: move. Tap to sneak | ⚔: attack or cast. Hold and slide to aim |
 | | LOOK: drag to look around. In menus it scrolls. Tap to switch view |
