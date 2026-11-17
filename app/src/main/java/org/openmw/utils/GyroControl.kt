@@ -41,7 +41,7 @@ object GyroControl {
     val MODES = listOf(Mode.OFF, Mode.ALWAYS, Mode.HOLD, Mode.TOGGLE)
 
     /** How the gyroscope is used until the player picks. */
-    private val DEFAULT_MODE = Mode.TOGGLE
+    private val DEFAULT_MODE = Mode.HOLD
 
     class Button(val keyCode: Int, val label: String)
 
