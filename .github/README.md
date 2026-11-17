@@ -28,6 +28,14 @@ It is a separate app from OpenMW-DS Duo Lite and the original OpenMW-DS, and ins
 settings are in `/storage/emulated/0/OpenMW-DS-Phone/`. The settings editor is in the launcher's Settings; change
 settings with the game closed.
 
+**Optional mods:** two community mods that rework Morrowind's meshes may also help:
+[Morrowind Optimization Patch](https://www.nexusmods.com/morrowind/mods/45384) and
+[Project Atlas](https://www.nexusmods.com/morrowind/mods/45399). They are not part of this app, and they are neither
+made nor supported here; questions about them go to their authors. In a short test on the Retroid Pocket Duo Lite (not
+on phones), Project Atlas (on top of the Optimization Patch) took a little load off the CPU in towns; the Optimization
+Patch alone made no measurable difference. Follow each mod's own instructions (Mod Setup in the launcher's Settings
+shows how to add a mod folder), and keep a copy of your saves before adding mods.
+
 ---
 ## Phone + External Screen
 
