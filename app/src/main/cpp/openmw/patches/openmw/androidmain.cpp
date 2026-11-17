@@ -1646,7 +1646,8 @@ extern "C" int Java_org_libsdl_app_SDLActivity_nativeInit(JNIEnv* env, jclass cl
         "righttrigger:a4,rightx:a2,righty:a3,start:b11,x:b3,y:b4");
 
     SDL_SetHint(SDL_HINT_ANDROID_BLOCK_ON_PAUSE, "0");
-    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+    // One landscape only, as the launcher: with both, the game could start upside down.
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft");
 
     return 0;
 }
