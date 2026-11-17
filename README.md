@@ -67,6 +67,8 @@ The game runs at a 30 fps limit, and most of the work went into frames that miss
 - **Interface size** in the launcher, next to Resolution: 100% to 130%, 125% by default.
 - The bottom screen's service screens (training, spell buying, travel, repair, rest, persuasion, alchemy, enchanting,
   spellmaking, level up) share one set of text sizes, with larger text on the smallest ones.
+- **Mod profiles**: several mod setups kept by name and switched from the launcher's load order, each opening the Load
+  window on the last character played with it.
 
 ### Controls
 - Use (attack, cast) on R1 and Quick Save on R2, since the Duo Lite's triggers sit in line with the shoulder buttons.
