@@ -38,6 +38,14 @@ change settings with the game closed.
 fork were tuned in that mode. In Standard mode the device lowers the GPU clock when it warms up, and the game is less
 smooth, especially outdoors.
 
+**Optional mods:** two community mods that rework Morrowind's meshes may also help:
+[Morrowind Optimization Patch](https://www.nexusmods.com/morrowind/mods/45384) and
+[Project Atlas](https://www.nexusmods.com/morrowind/mods/45399). They are not part of this fork, and they are neither
+made nor supported here; questions about them go to their authors. In a short test on the Duo Lite, Project Atlas (on
+top of the Optimization Patch) took a little load off the CPU in towns; the Optimization Patch alone made no measurable
+difference. Follow each mod's own instructions (Mod Setup in the launcher's Settings shows how to add a mod folder),
+and keep a copy of your saves before adding mods.
+
 ---
 ## What is different from OpenMW-DS
 
