@@ -112,6 +112,7 @@ object BugReport {
             appendLine("Game display id: ${DisplayRoles.gameDisplayId(context)}")
             appendLine("Companion display id: ${DisplayRoles.companionDisplay(context)?.displayId ?: "none"}")
             appendLine("Companion host: ${if (DisplayRoles.companionUsesActivity(context)) "activity" else "presentation"}")
+            appendLine("Game in a presentation: ${org.openmw.phone.GamePresentation.describe(context)}")
             if (DisplayRoles.isCustom(context)) {
                 val (g, c) = DisplayRoles.customChoiceDescriptors(context)
                 appendLine("Custom game choice: ${g ?: "(not chosen, main display)"}")

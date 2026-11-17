@@ -59,7 +59,9 @@ fun topScreenLaunchOptions(): Bundle? =
  */
 fun gameLaunchOptions(context: Context): Bundle? =
     ActivityOptions.makeBasic()
-        .setLaunchDisplayId(DisplayRoles.gameDisplayId(context))
+        .setLaunchDisplayId(
+            org.openmw.phone.PhoneExternal.gameActivityDisplayId(context) ?: DisplayRoles.gameDisplayId(context)
+        )
         .toBundle()
 
 @OptIn(InternalCoroutinesApi::class)

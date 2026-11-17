@@ -53,6 +53,7 @@ import android.system.Os
 import android.util.Log
 import android.view.Choreographer
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
@@ -148,6 +149,7 @@ import org.openmw.utils.GameFilesPreferences.loadAutoMouseMode
 import org.openmw.utils.GameFilesPreferences.readAngle
 import org.openmw.utils.GameFilesPreferences.readSPIRV
 import org.openmw.phone.FramedCompanion
+import org.openmw.phone.GamePresentation
 import org.openmw.phone.GameScreenPad
 import org.openmw.phone.PhoneExternal
 import org.openmw.utils.DisplayRoles
@@ -304,6 +306,7 @@ class EngineActivity : SDLActivity() {
         super.onStop()
         companionBackgrounded = true
         updateCompanionForWindowState("onStop")
+        GamePresentation.onStop()
         // Keep the two tasks in lockstep: the game going away takes the second screen with it,
         // rather than leaving a live companion task on the other display with nothing behind it.
         if (companionActivityHost) CompanionActivity.moveToBack()
@@ -313,6 +316,7 @@ class EngineActivity : SDLActivity() {
         super.onStart()
         companionBackgrounded = false
         updateCompanionForWindowState("onStart")
+        GamePresentation.onStart()
         returnToGameDisplayIfMoved("onStart")
         // The companion's task is separate and excluded from recents, so restoring the game does
         // not restore it — this is what brings the second screen back with the game. Allowed where
@@ -521,6 +525,7 @@ class EngineActivity : SDLActivity() {
         // is a no-op when the Activity host was never launched.
         companionPresentation?.dismiss()
         CompanionActivity.finishIfRunning()
+        GamePresentation.release()
 
         finishAffinity() // kill all activity
         Process.killProcess(Process.myPid())
@@ -579,7 +584,11 @@ class EngineActivity : SDLActivity() {
         launchedActivity = true
         val controllerConnected = isControllerConnected(this)
 
-        setContentView(R.layout.engine_activity)
+        // Phone + external screen: on a screen the game activity may not go to, the game's views go
+        // there in a Presentation and this activity shows the companion. See GamePresentation.
+        if (!GamePresentation.setContent(this, R.layout.engine_activity) { hidePauseOverlay() }) {
+            setContentView(R.layout.engine_activity)
+        }
 
         if (!configureControls) {
             sdlView = getContentView()
@@ -633,7 +642,7 @@ class EngineActivity : SDLActivity() {
         startCompanionScreen()
 
         // Add SDL view programmatically
-        val sdlContainer = findViewById<FrameLayout>(R.id.sdl_container)
+        val sdlContainer = gameView<FrameLayout>(R.id.sdl_container)
         (sdlView.parent as? ViewGroup)?.removeView(sdlView)
         sdlContainer.addView(sdlView) // Add SDL view to the sdl_container
 
@@ -646,7 +655,7 @@ class EngineActivity : SDLActivity() {
         }
 
         // Setup Compose overlay for buttons
-        val composeViewUI = findViewById<ComposeView>(R.id.compose_overlayUI)
+        val composeViewUI = gameView<ComposeView>(R.id.compose_overlayUI)
         (composeViewUI.parent as? ViewGroup)?.removeView(composeViewUI)
         sdlContainer.addView(composeViewUI)
 
@@ -879,7 +888,7 @@ class EngineActivity : SDLActivity() {
                     }
 
                     //if (UIStateManager.tempCodeGroup == "OpenMW") {
-                    val composeViewLeftThumb = findViewById<ComposeView>(R.id.compose_leftThumb)
+                    val composeViewLeftThumb = gameView<ComposeView>(R.id.compose_leftThumb)
                     (composeViewLeftThumb.parent as? ViewGroup)?.removeView(composeViewLeftThumb)
 
                     initializeOffsetsFromStateFlow()
@@ -1390,7 +1399,9 @@ class EngineActivity : SDLActivity() {
                     "host=${if (DisplayRoles.companionUsesActivity(this)) "activity" else "presentation"}"
             )
         }
-        if (DisplayRoles.companionUsesActivity(this)) {
+        if (GamePresentation.active) {
+            Log.d(TAG, "Second-screen: companion in the game activity, game in a presentation")
+        } else if (DisplayRoles.companionUsesActivity(this)) {
             startCompanionActivity(companionDisplay.displayId)
         } else {
             startCompanionPresentation(companionDisplay)
@@ -2004,11 +2015,12 @@ class EngineActivity : SDLActivity() {
         // from the game; FLAG_NOT_TOUCHABLE is deliberately omitted so the history panel can
         // receive touch for scrolling (game-area touches above the panel still reach OpenMW).
         // The window token is null until the decor is attached — defer via post.
-        val decor = window.decorView
+        val gameWindow = gameWindow()
+        val decor = gameWindow.decorView
         decor.post {
             if (conversationTopView != null) return@post
             val token = decor.windowToken ?: return@post
-            val overlay = ComposeView(this).apply {
+            val overlay = ComposeView(gameWindow.context).apply {
                 setViewTreeLifecycleOwner(this@EngineActivity)
                 setViewTreeViewModelStoreOwner(this@EngineActivity)
                 setViewTreeSavedStateRegistryOwner(this@EngineActivity)
@@ -2022,7 +2034,7 @@ class EngineActivity : SDLActivity() {
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT
             ).apply { this.token = token }
-            runCatching { windowManager.addView(overlay, lp) }
+            runCatching { gameWindow.windowManager.addView(overlay, lp) }
                 .onSuccess { conversationTopView = overlay }
                 .onFailure { Log.e(TAG, "CONVERSATION TOP: addView failed", it) }
         }
@@ -2030,7 +2042,7 @@ class EngineActivity : SDLActivity() {
 
     private fun hideConversationTopOverlay() {
         val overlay = conversationTopView ?: return
-        runCatching { windowManager.removeView(overlay) }
+        runCatching { removeTopOverlay(overlay) }
         conversationTopView = null
     }
 
@@ -2048,11 +2060,12 @@ class EngineActivity : SDLActivity() {
         content: @Composable () -> Unit,
     ) {
         if (alreadyShown()) return
-        val decor = window.decorView
+        val gameWindow = gameWindow()
+        val decor = gameWindow.decorView
         decor.post {
             if (alreadyShown()) return@post
             val token = decor.windowToken ?: return@post
-            val overlay = ComposeView(this).apply {
+            val overlay = ComposeView(gameWindow.context).apply {
                 setViewTreeLifecycleOwner(this@EngineActivity)
                 setViewTreeViewModelStoreOwner(this@EngineActivity)
                 setViewTreeSavedStateRegistryOwner(this@EngineActivity)
@@ -2067,7 +2080,7 @@ class EngineActivity : SDLActivity() {
                     WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
                 PixelFormat.TRANSLUCENT
             ).apply { this.token = token }
-            runCatching { windowManager.addView(overlay, lp) }
+            runCatching { gameWindow.windowManager.addView(overlay, lp) }
                 .onSuccess { onAdded(overlay) }
                 .onFailure { Log.e(TAG, "TOP OVERLAY: addView failed", it) }
         }
@@ -2080,7 +2093,7 @@ class EngineActivity : SDLActivity() {
 
     private fun hideCombatTargetTopOverlay() {
         val overlay = combatTargetTopView ?: return
-        runCatching { windowManager.removeView(overlay) }
+        runCatching { removeTopOverlay(overlay) }
         combatTargetTopView = null
     }
 
@@ -2091,7 +2104,7 @@ class EngineActivity : SDLActivity() {
 
     private fun hideFpsTopOverlay() {
         val overlay = fpsTopView ?: return
-        runCatching { windowManager.removeView(overlay) }
+        runCatching { removeTopOverlay(overlay) }
         fpsTopView = null
     }
 
@@ -2102,7 +2115,7 @@ class EngineActivity : SDLActivity() {
 
     private fun hidePlayerCombatTopOverlay() {
         val overlay = playerCombatTopView ?: return
-        runCatching { windowManager.removeView(overlay) }
+        runCatching { removeTopOverlay(overlay) }
         playerCombatTopView = null
     }
 
@@ -2113,7 +2126,7 @@ class EngineActivity : SDLActivity() {
 
     private fun hideLevelUpTopOverlay() {
         val overlay = levelUpTopView ?: return
-        runCatching { windowManager.removeView(overlay) }
+        runCatching { removeTopOverlay(overlay) }
         levelUpTopView = null
     }
 
@@ -2129,7 +2142,7 @@ class EngineActivity : SDLActivity() {
 
     private fun hideAlchemyTopOverlay() {
         val overlay = alchemyTopView ?: return
-        runCatching { windowManager.removeView(overlay) }
+        runCatching { removeTopOverlay(overlay) }
         alchemyTopView = null
     }
 
@@ -2143,7 +2156,7 @@ class EngineActivity : SDLActivity() {
 
     private fun hideEnchantingTopOverlay() {
         val overlay = enchantingTopView ?: return
-        runCatching { windowManager.removeView(overlay) }
+        runCatching { removeTopOverlay(overlay) }
         enchantingTopView = null
     }
 
@@ -2156,7 +2169,7 @@ class EngineActivity : SDLActivity() {
 
     private fun hideSpellmakingTopOverlay() {
         val overlay = spellmakingTopView ?: return
-        runCatching { windowManager.removeView(overlay) }
+        runCatching { removeTopOverlay(overlay) }
         spellmakingTopView = null
     }
 
@@ -2167,7 +2180,7 @@ class EngineActivity : SDLActivity() {
 
     private fun hideMapDsTopOverlay() {
         val overlay = mapDsTopView ?: return
-        runCatching { windowManager.removeView(overlay) }
+        runCatching { removeTopOverlay(overlay) }
         mapDsTopView = null
     }
 
@@ -2178,7 +2191,7 @@ class EngineActivity : SDLActivity() {
 
     private fun hideManualJournalTopOverlay() {
         val overlay = manualJournalTopView ?: return
-        runCatching { windowManager.removeView(overlay) }
+        runCatching { removeTopOverlay(overlay) }
         manualJournalTopView = null
     }
 
@@ -2195,11 +2208,12 @@ class EngineActivity : SDLActivity() {
         content: @Composable () -> Unit,
     ) {
         if (alreadyShown()) return
-        val decor = window.decorView
+        val gameWindow = gameWindow()
+        val decor = gameWindow.decorView
         decor.post {
             if (alreadyShown()) return@post
             val token = decor.windowToken ?: return@post
-            val overlay = ComposeView(this).apply {
+            val overlay = ComposeView(gameWindow.context).apply {
                 setViewTreeLifecycleOwner(this@EngineActivity)
                 setViewTreeViewModelStoreOwner(this@EngineActivity)
                 setViewTreeSavedStateRegistryOwner(this@EngineActivity)
@@ -2213,7 +2227,7 @@ class EngineActivity : SDLActivity() {
                     WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT
             ).apply { this.token = token }
-            runCatching { windowManager.addView(overlay, lp) }
+            runCatching { gameWindow.windowManager.addView(overlay, lp) }
                 .onSuccess { onAdded(overlay) }
                 .onFailure { Log.e(TAG, "INTERACTIVE TOP OVERLAY: addView failed", it) }
         }
@@ -2226,7 +2240,7 @@ class EngineActivity : SDLActivity() {
 
     private fun hideLootingTopOverlay() {
         val overlay = lootingTopView ?: return
-        runCatching { windowManager.removeView(overlay) }
+        runCatching { removeTopOverlay(overlay) }
         lootingTopView = null
     }
 
@@ -2237,7 +2251,7 @@ class EngineActivity : SDLActivity() {
 
     private fun hidePersuasionTopOverlay() {
         val overlay = persuasionTopView ?: return
-        runCatching { windowManager.removeView(overlay) }
+        runCatching { removeTopOverlay(overlay) }
         persuasionTopView = null
     }
 
@@ -2248,7 +2262,7 @@ class EngineActivity : SDLActivity() {
 
     private fun hideBarterTopOverlay() {
         val overlay = barterTopView ?: return
-        runCatching { windowManager.removeView(overlay) }
+        runCatching { removeTopOverlay(overlay) }
         barterTopView = null
     }
 
@@ -2263,6 +2277,29 @@ class EngineActivity : SDLActivity() {
      */
     private fun companionHostWindow(): android.view.Window? =
         companionPresentation?.window ?: CompanionActivity.instance?.window
+            ?: window.takeIf { GamePresentation.active }
+
+    /**
+     * The window the game is drawn in: this activity's own, or on Phone + external screen the
+     * Presentation on the external screen ([GamePresentation]). The top-screen overlays go there.
+     */
+    private fun gameWindow(): android.view.Window = GamePresentation.gameWindow() ?: window
+
+    /** One of the game's views, wherever they are (see [gameWindow]). */
+    private fun <T : View> gameView(id: Int): T = GamePresentation.findView(id) ?: findViewById(id)
+
+    /** Removes a top-screen overlay from the window it was added to. */
+    private fun removeTopOverlay(overlay: View) {
+        (overlay.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager).removeView(overlay)
+    }
+
+    // While the game is in a Presentation, a controller's keys come to this activity's window on
+    // the phone instead of to the game surface. See GamePresentation.
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+        GamePresentation.forwardKey(event) || super.dispatchKeyEvent(event)
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
+        GamePresentation.forwardMotion(event) || super.dispatchGenericMotionEvent(event)
 
     private fun showPauseOverlay() {
         if (pauseOverlayView != null) return
@@ -2314,7 +2351,7 @@ class EngineActivity : SDLActivity() {
 
     private fun hidePauseOverlay() {
         val overlay = pauseOverlayView ?: return
-        runCatching { companionHostWindow()?.windowManager?.removeView(overlay) }
+        runCatching { removeTopOverlay(overlay) }
         pauseOverlayView = null
     }
 

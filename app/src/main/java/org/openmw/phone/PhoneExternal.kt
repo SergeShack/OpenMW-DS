@@ -48,8 +48,12 @@ object PhoneExternal {
         return others.firstOrNull { it.flags and Display.FLAG_PRESENTATION != 0 } ?: others.firstOrNull()
     }
 
-    /** True when the profile is on but nothing is connected: the phone alone, as Single Screen. */
-    fun phoneAlone(context: Context): Boolean = isActive(context) && externalDisplay(context) == null
+    /**
+     * True when the profile is on but nothing is connected: the phone alone, as Single Screen. Also
+     * once the game came over to the phone from a screen that went away ([gameMovedToPhone]).
+     */
+    fun phoneAlone(context: Context): Boolean =
+        isActive(context) && (externalDisplay(context) == null || gameMovedToPhone.value)
 
     /** The game's display: the external screen, or the phone when none is connected. */
     fun gameDisplayId(context: Context): Int = externalDisplay(context)?.displayId ?: Display.DEFAULT_DISPLAY
@@ -60,7 +64,20 @@ object PhoneExternal {
      * Taken once when the game starts. A screen connected while the game runs on the phone alone
      * must not pull it over, since the game was set up without a companion.
      */
-    fun pinnedGameDisplay(context: Context): Int? = if (isActive(context)) gameDisplayId(context) else null
+    fun pinnedGameDisplay(context: Context): Int? = when {
+        !isActive(context) -> null
+        // The game activity stays on the phone and draws the game on the external screen.
+        GamePresentation.chooseAtStart(context) -> Display.DEFAULT_DISPLAY
+        else -> gameDisplayId(context)
+    }
+
+    /**
+     * The display the launcher starts the game activity on, when it is not the game's display:
+     * the phone, for an external screen the game is drawn on from a Presentation
+     * ([GamePresentation]). Null otherwise.
+     */
+    fun gameActivityDisplayId(context: Context): Int? =
+        if (isActive(context) && GamePresentation.wanted(context)) Display.DEFAULT_DISPLAY else null
 
     /**
      * Whether the game screen gets the old touch layer. Never on this profile ([pinnedGameDisplay]
@@ -175,7 +192,7 @@ object PhoneExternal {
      */
     // EngineActivity is marked with the coroutines opt-in; its render size is only read and set here.
     @OptIn(InternalCoroutinesApi::class)
-    private fun moveGameToPhone(activity: Activity) {
+    internal fun moveGameToPhone(activity: Activity) {
         gameMovedToPhone.value = true
         CompanionActivity.finishIfRunning()
         UiPreferences.useGameWindowsUntilRestart()
@@ -222,8 +239,13 @@ object PhoneExternal {
         return null
     }
 
-    /** Whether the side controller goes over the game: this profile, with the game on the phone. */
-    fun wantsPadOverGame(pinnedGameDisplay: Int?): Boolean = pinnedGameDisplay == Display.DEFAULT_DISPLAY
+    /**
+     * Whether the side controller goes over the game: this profile, with the game on the phone. Not
+     * when the game activity is on the phone only to draw the game on the external screen
+     * ([GamePresentation]).
+     */
+    fun wantsPadOverGame(pinnedGameDisplay: Int?): Boolean =
+        pinnedGameDisplay == Display.DEFAULT_DISPLAY && !GamePresentation.chosen
 
     /**
      * Called by the game activity before the game starts, which is when the engine reads its
