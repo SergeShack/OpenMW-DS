@@ -138,6 +138,7 @@ import org.openmw.ui.controls.UIStateManager
 import org.openmw.ui.controls.UIStateManager.customCFG
 import org.openmw.ui.page.main.MainPageViewModel
 import org.openmw.ui.page.mod.ModAssistantViewModel
+import org.openmw.ui.page.mod.ModProfileSelector
 import org.openmw.ui.page.mod.ModValue
 import org.openmw.ui.page.mod.defaultEnabledFor
 import org.openmw.ui.page.mod.isTamrielData
@@ -1403,6 +1404,7 @@ private fun SimplifiedLauncherHome(onOpenSettings: () -> Unit) {
                 refreshKey = refreshKey,
                 savedPath = savedPath,
                 gameFilesMissing = gameFilesMissing,
+                onProfileChanged = { refreshKey++ },
                 // Left-aligned by being the Row's first child: its left edge is the Column's
                 // content edge, which is exactly where the game-files button above it starts.
                 modifier = Modifier
@@ -2125,6 +2127,7 @@ private fun ModLoadOrderPanel(
     refreshKey: Int,
     savedPath: String?,
     gameFilesMissing: Boolean,
+    onProfileChanged: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val contentKey = OpenMWConfigUtils.ConfigKeyType.Content.key
@@ -2227,6 +2230,14 @@ private fun ModLoadOrderPanel(
             .border(2.dp, MwBronze, RoundedCornerShape(12.dp))
             .padding(8.dp)
     ) {
+        // Mod profiles (ModProfiles.kt). Hidden until the game files are set, as there is no mod
+        // setup to keep before that.
+        if (!gameFilesMissing) {
+            ModProfileSelector(
+                onChanged = onProfileChanged,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+            )
+        }
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically

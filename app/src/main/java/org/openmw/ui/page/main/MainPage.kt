@@ -52,6 +52,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -82,6 +83,7 @@ import org.openmw.ui.controls.UIStateManager.gold
 import org.openmw.ui.controls.UIStateManager.transparentBlack
 import org.openmw.ui.navigation.LocalModAssistantViewModel
 import org.openmw.ui.page.mod.ModAssistantViewModel
+import org.openmw.ui.page.mod.ModProfileSelector
 import org.openmw.ui.page.mod.ModValuesList
 import org.openmw.ui.page.mod.readModValues
 import org.openmw.ui.view.LogRepository
@@ -111,6 +113,8 @@ fun MainPage(
     modifier: Modifier = Modifier
 ) {
     val modValues by lazy { readModValues() }
+    // Bumped after a mod profile switch, which recomposes this page and so re-reads the cfg.
+    var profileVersion by remember { mutableStateOf(0) }
     val context = LocalContext.current
     val density = LocalDensity.current
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
@@ -168,6 +172,10 @@ fun MainPage(
                             // `header`, i.e. directly BELOW the mod-category tab bar. Order:
                             // 1) game files  2) data files  3) copy saves  4) copy settings —
                             // each keeps its own show/hide gate.
+                            //
+                            // Keyed on the profile switch count: ModValuesList keeps its lists in
+                            // remembered state, so it has to be rebuilt to show another profile.
+                            key(profileVersion) {
                             ModValuesList(
                                 modValues = modValues,
                                 header = {
@@ -177,6 +185,13 @@ fun MainPage(
                                     ) {
                                         if (savedPath.isNullOrEmpty() || savedPath == "Game Files: ") {
                                             OpenMW()
+                                        } else {
+                                            ModProfileSelector(
+                                                onChanged = { profileVersion++ },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                                            )
                                         }
                                         // Data files (promoted from the old bottom FAB — same trigger + gate).
                                         if (modAssistantViewModel.selectedTabIndex.intValue == 0) {
@@ -192,6 +207,7 @@ fun MainPage(
                                     }
                                 }
                             )
+                            }
                         }
                         "UQM" -> {
                             UqmDownloads()
