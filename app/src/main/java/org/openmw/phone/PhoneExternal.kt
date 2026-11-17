@@ -98,6 +98,10 @@ object PhoneExternal {
     @JvmStatic
     private external fun gameMenuShown(): Boolean
 
+    /** Engine side: androidmain.cpp. The game shows or hides its windows again on its next frame. */
+    @JvmStatic
+    private external fun updateGameWindows()
+
     /** Engine side: androidmain.cpp. */
     @JvmStatic
     private external fun spellReady(): Boolean
@@ -175,6 +179,15 @@ object PhoneExternal {
         gameMovedToPhone.value = true
         CompanionActivity.finishIfRunning()
         UiPreferences.useGameWindowsUntilRestart()
+        // A window that was open for the companion, like a conversation, is shown again once the
+        // new modes have reached the game. They are sent as the main thread gets to them, so after
+        // this; asked twice in case it is busy.
+        val decor = activity.window.decorView
+        for (delay in longArrayOf(100L, 600L)) {
+            decor.postDelayed({
+                runCatching { updateGameWindows() }.onFailure { Log.e(TAG, "game windows not updated", it) }
+            }, delay)
+        }
         hideSystemBars(activity)
         val container = activity.findViewById<FrameLayout>(R.id.sdl_container)
         val surface = container?.let { findSurface(it) }

@@ -496,6 +496,17 @@ Java_org_openmw_phone_PhoneExternal_casting(JNIEnv* /*env*/, jclass /*cls*/)
     return g_casting.load() ? JNI_TRUE : JNI_FALSE;
 }
 
+// Phone app only: set by org.openmw.phone.PhoneExternal when the game takes its own windows back
+// from the companion (the external screen went away). The window manager decides which windows
+// are shown only when the GUI mode changes, so a window open at that moment (a conversation, say)
+// would stay hidden. The next frame shows or hides the windows again.
+static std::atomic<bool> g_phoneUpdateWindows{ false };
+extern "C" JNIEXPORT void JNICALL
+Java_org_openmw_phone_PhoneExternal_updateGameWindows(JNIEnv* /*env*/, jclass /*cls*/)
+{
+    g_phoneUpdateWindows.store(true);
+}
+
 // Called from InputWrapper::capture() every frame on the engine thread.
 void drainCompanionCommands()
 {
@@ -532,6 +543,9 @@ void drainCompanionCommands()
     // Same rationale: runs before the queue-empty early-return below, so it is a true per-frame
     // poll rather than something that only fires on frames carrying a command.
     companionApplyPendingInteriorBrightness();
+
+    if (g_phoneUpdateWindows.exchange(false))
+        companionMapUpdateVisible();
 
     pollGameMenuShown();
     pollSpellReady();
