@@ -237,6 +237,7 @@
     <string name="simplified_transfer_from_alpha3">Transfer from Alpha3</string>
     <string name="simplified_load_order">Load Order</string>
     <string name="mod_profile_label">"Mod profile: "</string>
+    <string name="mod_profile_label_short">"Profile: "</string>
     <string name="mod_profile_new">New profile…</string>
     <string name="mod_profile_rename">Rename this profile…</string>
     <string name="mod_profile_delete">Delete a profile…</string>

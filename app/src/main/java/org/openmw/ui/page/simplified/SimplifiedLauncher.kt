@@ -2231,14 +2231,6 @@ private fun ModLoadOrderPanel(
             .border(2.dp, MwBronze, RoundedCornerShape(12.dp))
             .padding(8.dp)
     ) {
-        // Mod profiles (ModProfiles.kt). Hidden until the game files are set, as there is no mod
-        // setup to keep before that.
-        if (!gameFilesMissing) {
-            ModProfileSelector(
-                onChanged = onProfileChanged,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
-            )
-        }
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -2249,8 +2241,17 @@ private fun ModLoadOrderPanel(
                 text = stringResource(R.string.simplified_load_order),
                 color = MwBronzeLight,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 4.dp).weight(1f)
+                maxLines = 1,
+                modifier = Modifier.padding(start = 4.dp)
             )
+            // Mod profiles (ModProfiles.kt), in the heading row so they take no height from the
+            // list, which on a phone has room for only a few rows. Hidden until the game files are
+            // set, as there is no mod setup to keep before that.
+            Box(modifier = Modifier.weight(1f).padding(start = 4.dp)) {
+                if (!gameFilesMissing) {
+                    ModProfileSelector(onChanged = onProfileChanged, compact = true)
+                }
+            }
             // The way back to the default order (LoadOrder.kt) once it has been rearranged — and the
             // only way for an EXISTING player to get it at all, since the default is applied when a
             // plugin is first registered and their library was registered before it existed.

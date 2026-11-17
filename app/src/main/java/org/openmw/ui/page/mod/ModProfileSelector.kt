@@ -51,12 +51,14 @@ private enum class ProfileDialog { NONE, NEW, RENAME, DELETE_PICK, DELETE_CONFIR
  * plus New, Rename and Delete. See [ModProfiles] for what a profile is.
  *
  * [onChanged] is called after the live `openmw.cfg` may have changed, so the caller can re-read
- * its mod list.
+ * its mod list. [compact] draws it as a small text button for a heading row, where a full-width
+ * button would take a line the list needs on a short screen.
  */
 @Composable
 fun ModProfileSelector(
     onChanged: () -> Unit,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<ModProfiles.State?>(null) }
@@ -84,19 +86,34 @@ fun ModProfileSelector(
     val saveFailed = stringResource(R.string.failed_to_save_openmw_config)
 
     Box(modifier = modifier) {
-        OutlinedButton(
-            onClick = { expanded = true },
-            border = BorderStroke(1.dp, MwBronzeDark),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                text = stringResource(R.string.mod_profile_label) + current.active,
-                color = MwBone,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = MwBronzeLight)
+        if (compact) {
+            // A text button that fits in a heading row, so it takes no height of its own.
+            TextButton(onClick = { expanded = true }) {
+                Text(
+                    text = stringResource(R.string.mod_profile_label_short) + current.active,
+                    color = MwBronzeLight,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = MwBronzeLight)
+            }
+        } else {
+            OutlinedButton(
+                onClick = { expanded = true },
+                border = BorderStroke(1.dp, MwBronzeDark),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = stringResource(R.string.mod_profile_label) + current.active,
+                    color = MwBone,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = MwBronzeLight)
+            }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             current.names.forEach { name ->
