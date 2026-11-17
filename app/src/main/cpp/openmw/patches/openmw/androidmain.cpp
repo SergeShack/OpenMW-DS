@@ -125,6 +125,9 @@ static std::atomic<bool> g_companionHudControllerTooltips{ true }; // controller
 static std::atomic<int> g_gyroMode{ 0 };
 static std::atomic<bool> g_gyroHeld{ false };
 static std::atomic<int> g_gyroPresses{ 0 };
+// Whether the button is the attack button (Use): the engine then reads Use itself, and a spell is
+// cast as Use is let go while the gyroscope is held on by it (gyro-on-demand.patch).
+static std::atomic<bool> g_gyroOnUse{ false };
 
 // Per-element DS-mode suppression flags (companion "Game UI" options), pushed from Kotlin.
 // true = the element is in DS mode -> the companion draws it on the bottom screen and the
@@ -1286,6 +1289,14 @@ extern "C" bool companionHudControllerTooltips() { return g_companionHudControll
 extern "C" int companionGyroMode() { return g_gyroMode.load(); }
 extern "C" bool companionGyroHeld() { return g_gyroHeld.load(); }
 extern "C" int companionGyroTakePresses() { return g_gyroPresses.exchange(0); }
+extern "C" bool companionGyroOnUse() { return g_gyroOnUse.load(); }
+extern "C" bool companionCastOnRelease() { return g_gyroMode.load() == 1 && g_gyroOnUse.load(); }
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_openmw_EngineActivity_setGyroOnAttack(JNIEnv*, jclass, jboolean onAttack)
+{
+    g_gyroOnUse.store(onAttack == JNI_TRUE);
+}
 
 extern "C" JNIEXPORT void JNICALL
 Java_org_openmw_EngineActivity_setGyroMode(JNIEnv*, jclass, jint mode)

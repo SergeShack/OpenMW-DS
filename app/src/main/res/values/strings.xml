@@ -185,7 +185,7 @@
     <string name="launcher_gyro_hold">While held</string>
     <string name="launcher_gyro_toggle">Toggle</string>
     <string name="launcher_gyro_button">Gyroscope button</string>
-    <string name="launcher_gyro_button_tip">The controller button that works the gyroscope. It keeps its own action too, so pick one you do not use while playing, or clear its action in the game\'s controls. D-pad Down has no action outside menus.</string>
+    <string name="launcher_gyro_button_tip">The button that works the gyroscope. Attack, in While held, turns the camera while you attack, and a ready spell is cast as you let go, so there is time to aim. Another controller button keeps its own action too, so pick one you do not use while playing, or clear its action in the game\'s controls. D-pad Down has no action outside menus.</string>
     <string name="launcher_resolution_native">Native</string>
     <!-- Native, with the measured size of whichever screen the game is using, so "am I actually at
          4K in the dock?" is answerable without opening settings.cfg. -->

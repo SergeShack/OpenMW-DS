@@ -2707,7 +2707,8 @@ private fun SimplifiedSettingsScreen(onBack: () -> Unit) {
                     subtitle = stringResource(R.string.launcher_gyro_button_tip)
                 ) {
                     GyroButtonDropdown(
-                        selected = gyroButton,
+                        selected = GyroControl.buttonFor(gyroButton, gyroMode),
+                        buttons = GyroControl.buttons(gyroMode),
                         onSelected = { keyCode ->
                             gyroButton = keyCode
                             GyroControl.setButton(context, keyCode)
@@ -3623,7 +3624,7 @@ private fun GyroModeDropdown(selected: GyroControl.Mode, onSelected: (GyroContro
 
 /** The gyroscope's button, from [GyroControl.BUTTONS]. */
 @Composable
-private fun GyroButtonDropdown(selected: Int, onSelected: (Int) -> Unit) {
+private fun GyroButtonDropdown(selected: Int, buttons: List<GyroControl.Button>, onSelected: (Int) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
 
     Box {
@@ -3635,7 +3636,7 @@ private fun GyroButtonDropdown(selected: Int, onSelected: (Int) -> Unit) {
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            GyroControl.BUTTONS.forEach { button ->
+            buttons.forEach { button ->
                 DropdownMenuItem(
                     text = { Text(button.label) },
                     onClick = {

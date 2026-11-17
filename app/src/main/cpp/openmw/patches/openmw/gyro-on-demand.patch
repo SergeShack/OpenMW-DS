@@ -1,6 +1,22 @@
 --- a/apps/openmw/mwinput/inputmanagerimp.cpp
 +++ b/apps/openmw/mwinput/inputmanagerimp.cpp
-@@ -27,6 +27,12 @@
+@@ -8,12 +8,15 @@
+ #include <components/settings/values.hpp>
+ 
+ #include "../mwbase/environment.hpp"
++#include "../mwbase/mechanicsmanager.hpp"
++#include "../mwbase/statemanager.hpp"
+ #include "../mwbase/windowmanager.hpp"
+ #include "../mwbase/world.hpp"
+ 
+ #include "../mwworld/esmstore.hpp"
+ 
+ #include "actionmanager.hpp"
++#include "actions.hpp"
+ #include "bindingsmanager.hpp"
+ #include "controllermanager.hpp"
+ #include "controlswitch.hpp"
+@@ -27,6 +30,14 @@
  // cursor" option is off, so the top-screen SDL cursor is suppressed for touch and
  // both thumbsticks at once (all funnel through the per-frame setMouseVisible below).
  extern "C" bool companionCursorEnabled();
@@ -10,10 +26,12 @@
 +extern "C" int companionGyroMode();
 +extern "C" bool companionGyroHeld();
 +extern "C" int companionGyroTakePresses();
++// Whether the gyroscope's button is the attack button (Use), whatever it is bound to.
++extern "C" bool companionGyroOnUse();
  #endif
  
  namespace MWInput
-@@ -94,6 +100,31 @@
+@@ -94,6 +105,42 @@
  
          if (Settings::input().mEnableGyroscope)
          {
@@ -26,6 +44,17 @@
 +            {
 +                case 1:
 +                    gyroActive = companionGyroHeld();
++                    // With the attack button: while Use is held, read as the game's Lua reads it (an
++                    // axis-bound Use counts from 0.8 of its channel), and on until a cast is over, since
++                    // a spell is then cast as Use is let go (playercontrols.lua).
++                    if (!gyroActive && companionGyroOnUse()
++                        && MWBase::Environment::get().getStateManager()->getState()
++                            == MWBase::StateManager::State_Running)
++                    {
++                        gyroActive = mBindingsManager->getActionValue(A_Use) >= 0.8f
++                            || MWBase::Environment::get().getMechanicsManager()->isCastingSpell(
++                                MWBase::Environment::get().getWorld()->getPlayerPtr());
++                    }
 +                    break;
 +                case 2:
 +                    if (presses % 2 != 0 && !MWBase::Environment::get().getWindowManager()->isGuiMode())
@@ -61,3 +90,53 @@
          switch (currentOrientation)
          {
              case SDL_ORIENTATION_UNKNOWN:
+--- a/apps/openmw/mwlua/inputbindings.cpp
++++ b/apps/openmw/mwlua/inputbindings.cpp
+@@ -35,6 +35,12 @@
+     };
+ }
+ 
++#ifdef __ANDROID__
++// COMPANION (OpenMW-DS): defined in androidmain.cpp. Whether a spell is cast as Use is let go: while
++// the attack button works the gyroscope, so there is time to aim.
++extern "C" bool companionCastOnRelease();
++#endif
++
+ namespace MWLua
+ {
+ 
+@@ -254,6 +260,10 @@
+             else
+                 return input->getActionValue(axis - SDL_CONTROLLER_AXIS_MAX) * 2 - 1;
+         };
++#ifdef __ANDROID__
++        // COMPANION (OpenMW-DS): for playercontrols.lua. Only while the gyroscope is on at all.
++        api["companionCastOnRelease"] = []() { return Settings::input().mEnableGyroscope && companionCastOnRelease(); };
++#endif
+ 
+         // input.CONTROL_SWITCH is deprecated, remove after releasing 0.49
+         api["getControlSwitch"] = [input](std::string_view key) { return input->getControlSwitch(key); };
+--- a/files/data/scripts/omw/input/playercontrols.lua
++++ b/files/data/scripts/omw/input/playercontrols.lua
+@@ -164,7 +164,21 @@
+ end))
+ 
+ local startUse = false
++-- OpenMW-DS: while the attack button works the gyroscope, a spell is cast as Use is let go rather than
++-- as it is pressed, so there is time to aim. True from a press with a spell ready until the release.
++local castOnRelease = false
+ input.registerActionHandler('Use', async:callback(function(value)
++    if input.companionCastOnRelease and input.companionCastOnRelease()
++        and Actor.getStance(self) == Actor.STANCE.Spell then
++        if value then
++            castOnRelease = true
++        elseif castOnRelease then
++            castOnRelease = false
++            if combatAllowed() then startUse = true end
++        end
++        return
++    end
++    castOnRelease = false
+     if value and combatAllowed() then startUse = true end
+ end))
+ local function processAttacking()
