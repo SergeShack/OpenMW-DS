@@ -119,6 +119,14 @@ static std::atomic<bool> g_companionHudCrosshair{ true };
 static std::atomic<bool> g_companionHudEnemy{ true }; // target/enemy health bar
 static std::atomic<bool> g_companionHudControllerTooltips{ true }; // controller button-hint bar
 
+// Gyroscope on demand, pushed from Kotlin (GyroControl): when the gyroscope turns the camera (0
+// always, 1 while its button is held, 2 switched on and off by the button), whether the button is
+// held, and how many presses the engine has not handled yet. Read on the engine thread by
+// gyro-on-demand.patch. Default always, so with no choice pushed it works as the engine's own.
+static std::atomic<int> g_gyroMode{ 0 };
+static std::atomic<bool> g_gyroHeld{ false };
+static std::atomic<int> g_gyroPresses{ 0 };
+
 // Per-element DS-mode suppression flags (companion "Game UI" options), pushed from Kotlin.
 // true = the element is in DS mode -> the companion draws it on the bottom screen and the
 // native top-screen window is SUPPRESSED; false = VANILLA -> the native window shows as normal.
@@ -1390,6 +1398,24 @@ extern "C" bool companionHudCrosshair() { return g_companionHudCrosshair.load();
 extern "C" bool companionHudEnemy() { return g_companionHudEnemy.load(); }
 extern "C" bool companionHudControllerTooltips() { return g_companionHudControllerTooltips.load(); }
 
+extern "C" int companionGyroMode() { return g_gyroMode.load(); }
+extern "C" bool companionGyroHeld() { return g_gyroHeld.load(); }
+extern "C" int companionGyroTakePresses() { return g_gyroPresses.exchange(0); }
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_openmw_EngineActivity_setGyroMode(JNIEnv*, jclass, jint mode)
+{
+    g_gyroMode.store(mode);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_openmw_EngineActivity_gyroButton(JNIEnv*, jclass, jboolean down)
+{
+    g_gyroHeld.store(down == JNI_TRUE);
+    if (down == JNI_TRUE)
+        g_gyroPresses.fetch_add(1);
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_org_openmw_EngineActivity_setMinimumInteriorBrightness(JNIEnv*, jclass, jfloat value)
 {
@@ -1761,7 +1787,8 @@ extern "C" int Java_org_libsdl_app_SDLActivity_nativeInit(JNIEnv* env, jclass cl
         "righttrigger:a4,rightx:a2,righty:a3,start:b11,x:b3,y:b4");
 
     SDL_SetHint(SDL_HINT_ANDROID_BLOCK_ON_PAUSE, "0");
-    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+    // One landscape only, as the launcher: with both, the game could start upside down.
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft");
 
     return 0;
 }

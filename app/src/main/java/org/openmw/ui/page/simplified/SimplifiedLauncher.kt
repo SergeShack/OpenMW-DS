@@ -180,6 +180,7 @@ import org.openmw.utils.InstallResult
 import org.openmw.utils.FileBrowserPopup
 import org.openmw.utils.GameFilesPreferences
 import org.openmw.utils.GameFilesPreferences.readCodeGroup
+import org.openmw.utils.GyroControl
 import org.openmw.utils.IniSettings
 import org.openmw.utils.MToast
 import org.openmw.utils.ModSetupCheck
@@ -2411,6 +2412,10 @@ private fun SimplifiedSettingsScreen(onBack: () -> Unit) {
     // re-reads after one of its own edits, so an external write is invisible to it; re-keying the
     // composable discards its remembered snapshot and forces a fresh readIniValues().
     var settingsRefreshKey by rememberSaveable { mutableStateOf(0) }
+    // Read again after the settings list may have changed `enable gyroscope`. See GyroControl.
+    var gyroMode by remember { mutableStateOf(GyroControl.Mode.OFF) }
+    LaunchedEffect(settingsRefreshKey) { gyroMode = GyroControl.mode(context) }
+    var gyroButton by remember { mutableStateOf(GyroControl.button(context)) }
     // Needed only for writeModValuesToFile — the same writer the drag-reorder UI uses.
     val modVm: ModAssistantViewModel = hiltViewModel()
 
@@ -2680,6 +2685,38 @@ private fun SimplifiedSettingsScreen(onBack: () -> Unit) {
                 )
             }
 
+            // Gyroscope. Off is the engine's own `enable gyroscope`, which the settings list below
+            // shows too, so it is re-keyed after a change here. See GyroControl.
+            SettingRow(
+                title = stringResource(R.string.launcher_gyro),
+                subtitle = stringResource(R.string.launcher_gyro_tip)
+            ) {
+                GyroModeDropdown(
+                    selected = gyroMode,
+                    onSelected = { mode ->
+                        gyroMode = mode
+                        scope.launch {
+                            GyroControl.setMode(context, mode)
+                            settingsRefreshKey++
+                        }
+                    }
+                )
+            }
+            if (gyroMode == GyroControl.Mode.HOLD || gyroMode == GyroControl.Mode.TOGGLE) {
+                SettingRow(
+                    title = stringResource(R.string.launcher_gyro_button),
+                    subtitle = stringResource(R.string.launcher_gyro_button_tip)
+                ) {
+                    GyroButtonDropdown(
+                        selected = gyroButton,
+                        onSelected = { keyCode ->
+                            gyroButton = keyCode
+                            GyroControl.setButton(context, keyCode)
+                        }
+                    )
+                }
+            }
+
             // There used to be a single-screen "On-screen keyboard button" switch here, shown only
             // under Single Screen Device. REMOVED Sep 10 2026 at the developer's call: that keyboard
             // is the ONLY route to text entry and the console on a device with no companion screen,
@@ -2762,6 +2799,12 @@ private fun SimplifiedSettingsScreen(onBack: () -> Unit) {
                         // Also rewrites settings.cfg, so the list below must re-read it.
                         settingsRefreshKey++
                         showResetDialog = false
+                        // The gyroscope goes back to on, in its default mode.
+                        scope.launch {
+                            GyroControl.reset(context)
+                            gyroButton = GyroControl.button(context)
+                            settingsRefreshKey++
+                        }
                     }
                 ) {
                     Text(stringResource(R.string.btn_confirm))
@@ -3538,6 +3581,67 @@ private fun InterfaceSizeDropdown(selected: Int, onSelected: (Int) -> Unit) {
                     onClick = {
                         expanded = false
                         if (percent != selected) onSelected(percent)
+                    }
+                )
+            }
+        }
+    }
+}
+
+/** When the gyroscope turns the camera, see [GyroControl.Mode]. */
+@Composable
+private fun GyroModeDropdown(selected: GyroControl.Mode, onSelected: (GyroControl.Mode) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val names = mapOf(
+        GyroControl.Mode.OFF to stringResource(R.string.launcher_gyro_off),
+        GyroControl.Mode.ALWAYS to stringResource(R.string.launcher_gyro_always),
+        GyroControl.Mode.HOLD to stringResource(R.string.launcher_gyro_hold),
+        GyroControl.Mode.TOGGLE to stringResource(R.string.launcher_gyro_toggle),
+    )
+    val labels = GyroControl.MODES.associateWith { names.getValue(it) }
+
+    Box {
+        OutlinedButton(onClick = { expanded = true }) {
+            Text(labels.getValue(selected))
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            labels.forEach { (mode, label) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = {
+                        expanded = false
+                        if (mode != selected) onSelected(mode)
+                    }
+                )
+            }
+        }
+    }
+}
+
+/** The gyroscope's button, from [GyroControl.BUTTONS]. */
+@Composable
+private fun GyroButtonDropdown(selected: Int, onSelected: (Int) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box {
+        OutlinedButton(onClick = { expanded = true }) {
+            Text(GyroControl.buttonLabel(selected))
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            GyroControl.BUTTONS.forEach { button ->
+                DropdownMenuItem(
+                    text = { Text(button.label) },
+                    onClick = {
+                        expanded = false
+                        if (button.keyCode != selected) onSelected(button.keyCode)
                     }
                 )
             }

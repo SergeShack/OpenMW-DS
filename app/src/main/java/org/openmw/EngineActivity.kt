@@ -573,6 +573,9 @@ class EngineActivity : SDLActivity() {
 
         super.onCreate(savedInstanceState)
 
+        // The libraries are loaded by now; the engine reads the choice from its first frame.
+        org.openmw.utils.GyroControl.start(this)
+
         launchedActivity = true
         val controllerConnected = isControllerConnected(this)
 
@@ -1198,6 +1201,12 @@ class EngineActivity : SDLActivity() {
          * There is no Lua API for engine settings, which is why this needs a native bridge at all.
          */
         @JvmStatic external fun setMinimumInteriorBrightness(value: Float)
+
+        /** When the gyroscope turns the camera, see [org.openmw.utils.GyroControl]. */
+        @JvmStatic external fun setGyroMode(mode: Int)
+
+        /** The gyroscope's button went down or up, see [org.openmw.utils.GyroControl]. */
+        @JvmStatic external fun gyroButton(down: Boolean)
 
         /**
          * The engine's recent per-frame timings, or null before any frame has been recorded.

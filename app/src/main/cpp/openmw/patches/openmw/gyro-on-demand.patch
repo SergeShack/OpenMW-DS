@@ -1,0 +1,63 @@
+--- a/apps/openmw/mwinput/inputmanagerimp.cpp
++++ b/apps/openmw/mwinput/inputmanagerimp.cpp
+@@ -27,6 +27,12 @@
+ // cursor" option is off, so the top-screen SDL cursor is suppressed for touch and
+ // both thumbsticks at once (all funnel through the per-frame setMouseVisible below).
+ extern "C" bool companionCursorEnabled();
++// COMPANION (OpenMW-DS): defined in androidmain.cpp. When the gyroscope turns the camera, chosen in
++// the launcher: 0 always, 1 while its button is held, 2 switched on and off by the button. Whether
++// the button is held now, and how many presses were not handled yet.
++extern "C" int companionGyroMode();
++extern "C" bool companionGyroHeld();
++extern "C" int companionGyroTakePresses();
+ #endif
+ 
+ namespace MWInput
+@@ -94,6 +100,31 @@
+ 
+         if (Settings::input().mEnableGyroscope)
+         {
++#ifdef __ANDROID__
++            // COMPANION (OpenMW-DS): the gyroscope on demand. A press in a menu does not switch it.
++            static bool sGyroSwitchedOn = false;
++            const int presses = companionGyroTakePresses();
++            bool gyroActive = true;
++            switch (companionGyroMode())
++            {
++                case 1:
++                    gyroActive = companionGyroHeld();
++                    break;
++                case 2:
++                    if (presses % 2 != 0 && !MWBase::Environment::get().getWindowManager()->isGuiMode())
++                    {
++                        sGyroSwitchedOn = !sGyroSwitchedOn;
++                        MWBase::Environment::get().getWindowManager()->messageBox(
++                            sGyroSwitchedOn ? "Gyroscope on" : "Gyroscope off");
++                    }
++                    gyroActive = sGyroSwitchedOn;
++                    break;
++                default:
++                    break;
++            }
++            if (!gyroActive)
++                return;
++#endif
+             bool controllerAvailable = mControllerManager->isGyroAvailable();
+             bool sensorAvailable = mSensorManager->isGyroAvailable();
+             if (controllerAvailable || sensorAvailable)
+--- a/apps/openmw/mwinput/sensormanager.cpp
++++ b/apps/openmw/mwinput/sensormanager.cpp
+@@ -43,6 +43,13 @@
+         float angle = 0;
+ 
+         SDL_DisplayOrientation currentOrientation = SDL_GetDisplayOrientation(Settings::video().mScreen);
++#ifdef __ANDROID__
++        // COMPANION (OpenMW-DS): the game screen is always landscape here. Read as the game starts,
++        // the screen can still be turning and report portrait, which swapped the two axes; a screen
++        // that is landscape by itself, like a TV, reports portrait too.
++        if (currentOrientation == SDL_ORIENTATION_PORTRAIT || currentOrientation == SDL_ORIENTATION_PORTRAIT_FLIPPED)
++            currentOrientation = SDL_ORIENTATION_LANDSCAPE;
++#endif
+         switch (currentOrientation)
+         {
+             case SDL_ORIENTATION_UNKNOWN:
