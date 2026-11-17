@@ -32,7 +32,9 @@ import kotlin.math.roundToInt
  * 1240 x 1080). A phone held in landscape is about 2.2:1, and filling it stretches every panel
  * sideways. On a screen wider than [WIDE_ASPECT] the content is centred at [FRAMED_ASPECT], and the
  * touch controller, or with a real controller connected the player's key buttons, take the two
- * sides ([CompanionSidePad]).
+ * sides ([CompanionSidePad]). With a real controller and no key buttons the sides would be empty,
+ * and the companion takes nearly the whole width: a narrow strip is left at each side
+ * ([CompanionSidePad.EDGE_DP]), for the edit button and the camera cutout.
  *
  * The frame is a View, not a Compose box, so the companion's composition root is the framed area:
  * popups placed from `boundsInRoot` land where they should. [FramedLocals] reports the frame's size
@@ -58,6 +60,11 @@ object FramedCompanion {
     fun install(activity: ComponentActivity, visible: StateFlow<Boolean>, content: @Composable () -> Unit) {
         val frameSize = mutableStateOf(IntSize.Zero)
         val sideWidth = mutableIntStateOf(0)
+        // Width of the frame, 0 when the screen is not wide enough for one.
+        var frameWidth = 0
+        // The sides have nothing to show, and the companion takes nearly the whole width.
+        var sidesEmpty = false
+        val edgePx = (CompanionSidePad.EDGE_DP * activity.resources.displayMetrics.density).roundToInt()
         val companionView = ComposeView(activity).apply {
             setContent {
                 val shown by visible.collectAsState()
@@ -73,8 +80,27 @@ object FramedCompanion {
                 Gravity.CENTER
             )
         )
+        fun place() {
+            val framed = frameWidth > 0
+            val inner = when {
+                !framed -> 0
+                sidesEmpty -> maxOf(frameWidth, root.width - 2 * edgePx)
+                else -> frameWidth
+            }
+            frameSize.value = if (framed) IntSize(inner, root.height) else IntSize.Zero
+            framedWidthPx = inner
+            if (framed) drawUnderCutout(activity)
+            val width = if (framed) inner else ViewGroup.LayoutParams.MATCH_PARENT
+            // A layout request made during layout is dropped; post it.
+            root.post { setWidth(companionView, width) }
+        }
         root.addView(
-            CompanionSidePad.view(activity, visible, sideWidth),
+            CompanionSidePad.view(activity, visible, sideWidth) { empty ->
+                if (sidesEmpty != empty) {
+                    sidesEmpty = empty
+                    place()
+                }
+            },
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
         root.addOnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
@@ -82,14 +108,11 @@ object FramedCompanion {
             val h = bottom - top
             if (w <= 0 || h <= 0) return@addOnLayoutChangeListener
             val framed = w.toFloat() / h > WIDE_ASPECT
-            val width = if (framed) (h * FRAMED_ASPECT).roundToInt() else ViewGroup.LayoutParams.MATCH_PARENT
-            frameSize.value = if (framed) IntSize(width, h) else IntSize.Zero
-            framedWidthPx = if (framed) width else 0
-            if (framed) drawUnderCutout(activity)
-            val side = if (framed) (w - width) / 2 else 0
-            sideWidth.intValue = side
-            // A layout request made during layout is dropped; post it.
-            root.post { setWidth(companionView, width) }
+            frameWidth = if (framed) (h * FRAMED_ASPECT).roundToInt() else 0
+            // The sides keep their width while the companion takes their room, for the edit button
+            // and for the key buttons once there are some.
+            sideWidth.intValue = if (framed) (w - frameWidth) / 2 else 0
+            place()
         }
         activity.setContentView(root)
     }

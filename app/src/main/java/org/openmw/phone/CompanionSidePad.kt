@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -33,7 +34,9 @@ import kotlinx.coroutines.flow.StateFlow
  *
  * While a real controller is connected the touch controller goes, and the sides hold the key buttons
  * made for that case instead: a controller has no keys for the mods they are made for. Only the edit
- * button is left then. The two cases have layouts of their own ([PadSurface]).
+ * button is left then. The two cases have layouts of their own ([PadSurface]). With no key buttons
+ * made for a controller the sides are empty, and the companion takes their room but a strip
+ * [EDGE_DP] wide at each side; the edit button stays in the top right corner, in that strip.
  *
  * One view over the whole companion screen, on top of it. Only the parts, the key buttons and the
  * tool buttons take touches; a touch anywhere else goes to the companion under it. The editor
@@ -48,20 +51,29 @@ internal object CompanionSidePad {
     /** The edit button is faint, as the tool buttons are. */
     private const val TOOL_ALPHA = 0.55f
 
+    /** Width of the strip left at each side while the sides are empty: room for the edit button. */
+    const val EDGE_DP = TOOL_DP + 2 * TOOL_PAD_DP
+
     /**
      * The view, for [FramedCompanion] to add over everything else. [sideWidthPx] is the width of
-     * each side, 0 while the companion fills the screen.
+     * each side, 0 when the screen is too narrow for them. [onEmpty] is told whether the sides have
+     * nothing to show, so the companion can take their room.
      */
-    fun view(activity: ComponentActivity, visible: StateFlow<Boolean>, sideWidthPx: State<Int>): ComposeView =
+    fun view(
+        activity: ComponentActivity,
+        visible: StateFlow<Boolean>,
+        sideWidthPx: State<Int>,
+        onEmpty: (Boolean) -> Unit,
+    ): ComposeView =
         ComposeView(activity).apply {
             setContent {
                 val shown by visible.collectAsState()
-                if (shown && sideWidthPx.value > 0) Sides(sideWidthPx.value)
+                if (shown && sideWidthPx.value > 0) Sides(sideWidthPx.value, onEmpty)
             }
         }
 
     @Composable
-    private fun Sides(sideWidthPx: Int) {
+    private fun Sides(sideWidthPx: Int, onEmpty: (Boolean) -> Unit) {
         val context = LocalContext.current
         remember(context) {
             PadHaptics.init(context.applicationContext)
@@ -86,6 +98,8 @@ internal object CompanionSidePad {
                 if (surface.hasParts) PadLayout.load(context, surface, areas) else emptyMap()
             }
             val keys = remember(areas, surface, saved) { KeyButtonLayout.load(context, surface, areas) }
+            val empty = !surface.hasParts && keys.isEmpty() && !editing
+            LaunchedEffect(empty) { onEmpty(empty) }
 
             if (editing) {
                 PadEditor(
