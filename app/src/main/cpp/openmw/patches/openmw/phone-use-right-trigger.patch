@@ -1,0 +1,84 @@
+--- a/apps/openmw/mwinput/bindingsmanager.cpp
++++ b/apps/openmw/mwinput/bindingsmanager.cpp
+@@ -95,6 +95,52 @@
+         return swapped;
+     }
+ 
++    // OpenMW-DS Phone: Use back on Right Trigger and Quick Save on Right Shoulder. A bindings file
++    // saved by an older phone build has Use on Right Shoulder, and defaults never replace an existing
++    // binding, so swap them once, only when both are exactly the old defaults. Like
++    // swapOldUseAndQuickSave, with a marker file of its own. Returns true when the bindings changed.
++    static bool phoneUseOnRightTrigger(
++        ICS::InputControlSystem* inputBinder, const std::filesystem::path& userFile, bool userFileExists)
++    {
++        const std::filesystem::path marker = userFile.parent_path() / "input_v3_phone_use_rt.done";
++        std::error_code ec;
++        if (std::filesystem::exists(marker, ec))
++            return false;
++
++        bool swapped = false;
++        if (userFileExists)
++        {
++            ICS::Control* use = inputBinder->getChannel(A_Use)->getAttachedControls().front().control;
++            ICS::Control* save = inputBinder->getChannel(A_QuickSave)->getAttachedControls().front().control;
++            if (inputBinder->getJoystickButtonBinding(use, sFakeDeviceId, ICS::Control::INCREASE)
++                    == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER
++                && inputBinder->getJoystickAxisBinding(use, sFakeDeviceId, ICS::Control::INCREASE)
++                    == ICS::InputControlSystem::UNASSIGNED
++                && inputBinder->getJoystickAxisBinding(save, sFakeDeviceId, ICS::Control::INCREASE)
++                    == SDL_CONTROLLER_AXIS_TRIGGERRIGHT
++                && inputBinder->getJoystickButtonBinding(save, sFakeDeviceId, ICS::Control::INCREASE)
++                    == ICS_MAX_DEVICE_BUTTONS)
++            {
++                clearAllControllerBindings(inputBinder, use);
++                clearAllControllerBindings(inputBinder, save);
++                use->setValue(0.5f); // axis bindings must start at 0.5
++                use->setInitialValue(0.5f);
++                inputBinder->addJoystickAxisBinding(
++                    use, sFakeDeviceId, SDL_CONTROLLER_AXIS_TRIGGERRIGHT, ICS::Control::INCREASE);
++                save->setValue(0.0f);
++                save->setInitialValue(0.0f);
++                inputBinder->addJoystickButtonBinding(
++                    save, sFakeDeviceId, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, ICS::Control::INCREASE);
++                Log(Debug::Info) << "Moved Use to Right Trigger and Quick Save to Right Shoulder";
++                swapped = true;
++            }
++        }
++
++        std::ofstream out(marker);
++        out << 1;
++        return swapped;
++    }
++
+     // COMPANION (OpenMW-DS): binding a button that another action had leaves that action with no
+     // controller binding, and the bindings file can't tell that apart from an action that never had
+     // one, so on the next start loadControllerDefaults gave it its default button back whenever that
+@@ -145,7 +191,9 @@
+         defaultButtonBindings[A_TogglePOV] = SDL_CONTROLLER_BUTTON_RIGHTSTICK;
+         defaultButtonBindings[A_Inventory] = SDL_CONTROLLER_BUTTON_DPAD_UP;
+         defaultButtonBindings[A_GameMenu] = SDL_CONTROLLER_BUTTON_START;
+-        defaultButtonBindings[A_Use] = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
++        // OpenMW-DS Phone: Use on Right Trigger and Quick Save on Right Shoulder, as in OpenMW itself.
++        // Gamepads used with a phone have their triggers under the fingers; see phoneUseOnRightTrigger.
++        defaultButtonBindings[A_QuickSave] = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
+         defaultButtonBindings[A_ZoomIn] = SDL_CONTROLLER_BUTTON_DPAD_RIGHT;
+         defaultButtonBindings[A_ZoomOut] = SDL_CONTROLLER_BUTTON_DPAD_LEFT;
+ 
+@@ -153,7 +201,7 @@
+         defaultAxisBindings[A_MoveLeftRight] = SDL_CONTROLLER_AXIS_LEFTX;
+         defaultAxisBindings[A_LookUpDown] = SDL_CONTROLLER_AXIS_RIGHTY;
+         defaultAxisBindings[A_LookLeftRight] = SDL_CONTROLLER_AXIS_RIGHTX;
+-        defaultAxisBindings[A_QuickSave] = SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
++        defaultAxisBindings[A_Use] = SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
+         defaultAxisBindings[A_QuickKeysMenu] = SDL_CONTROLLER_AXIS_TRIGGERLEFT;
+     }
+ 
+@@ -324,6 +372,8 @@
+         loadControllerDefaults();
+         if (swapOldUseAndQuickSave(mInputBinder.get(), mUserFile, userFileExists))
+             saveBindings();
++        if (phoneUseOnRightTrigger(mInputBinder.get(), mUserFile, userFileExists))
++            saveBindings();
+ 
+         for (int i = 0; i < A_Last; ++i)
+         {

@@ -211,7 +211,8 @@ object GyroControl {
 
     /**
      * A finger went down on, or up from, a part of the touch controller that holds the gyroscope on
-     * in [Mode.HOLD], as the button does: the look pad and the attack button.
+     * in [Mode.HOLD], as the button does: the look pad. The attack button is the game's Use, which the
+     * engine reads itself when it is the gyroscope's button ([ATTACK]).
      */
     fun touch(down: Boolean) {
         touches = (touches + if (down) 1 else -1).coerceAtLeast(0)

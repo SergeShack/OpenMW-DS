@@ -7,12 +7,8 @@ int stderr = 0; // Hack: fix linker error
 #include "mwbase/environment.hpp"
 #include "mwbase/journal.hpp"
 #include "mwbase/luamanager.hpp"
-#include "mwbase/mechanicsmanager.hpp"
-#include "mwbase/statemanager.hpp"
 #include "mwbase/windowmanager.hpp"
 #include "mwbase/world.hpp"
-#include "mwmechanics/drawstate.hpp"
-#include "mwworld/player.hpp"
 #include "mwdialogue/quest.hpp"
 #include "mwgui/windowbase.hpp"
 #include "mwdialogue/topic.hpp"
@@ -467,38 +463,6 @@ Java_org_openmw_phone_PhoneExternal_gameMenuShown(JNIEnv* /*env*/, jclass /*cls*
     return g_gameMenuShown.load() ? JNI_TRUE : JNI_FALSE;
 }
 
-// Phone app only: whether the player holds a spell ready, and whether a cast is still under way.
-// The attack button then casts as it is let go, so there is time to aim, and keeps the gyroscope on
-// until the cast is over. Set every frame on the engine thread, read from the UI thread
-// (PhoneExternal.spellReady, PhoneExternal.casting).
-static std::atomic<bool> g_spellReady{false};
-static std::atomic<bool> g_casting{false};
-static void pollSpellReady()
-{
-    bool ready = false;
-    bool casting = false;
-    MWBase::StateManager* state = MWBase::Environment::get().getStateManager();
-    MWBase::World* world = MWBase::Environment::get().getWorld();
-    MWBase::MechanicsManager* mechanics = MWBase::Environment::get().getMechanicsManager();
-    if (state && world && mechanics && state->getState() == MWBase::StateManager::State_Running)
-    {
-        ready = world->getPlayer().getDrawState() == MWMechanics::DrawState::Spell;
-        casting = mechanics->isCastingSpell(world->getPlayerPtr());
-    }
-    g_spellReady.store(ready);
-    g_casting.store(casting);
-}
-extern "C" JNIEXPORT jboolean JNICALL
-Java_org_openmw_phone_PhoneExternal_spellReady(JNIEnv* /*env*/, jclass /*cls*/)
-{
-    return g_spellReady.load() ? JNI_TRUE : JNI_FALSE;
-}
-extern "C" JNIEXPORT jboolean JNICALL
-Java_org_openmw_phone_PhoneExternal_casting(JNIEnv* /*env*/, jclass /*cls*/)
-{
-    return g_casting.load() ? JNI_TRUE : JNI_FALSE;
-}
-
 // Phone app only: set by org.openmw.phone.PhoneExternal when the game takes its own windows back
 // from the companion (the external screen went away). The window manager decides which windows
 // are shown only when the GUI mode changes, so a window open at that moment (a conversation, say)
@@ -551,7 +515,6 @@ void drainCompanionCommands()
         companionMapUpdateVisible();
 
     pollGameMenuShown();
-    pollSpellReady();
 
     std::deque<std::string> pending;
     {

@@ -2,7 +2,6 @@ package org.openmw.phone
 
 import android.content.Context
 import android.os.Build
-import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -470,23 +469,17 @@ private class MenuTouchpad {
 /**
  * The main action (Use: attack or cast), a wide button just above the look pad, within reach of
  * the right thumb without covering any of the pad.
- * It is the right shoulder to the game, so the binding and any rebinding stay the same. Sliding
- * the finger while holding it aims as on the look pad, so you can attack and turn in one touch.
- * With a spell ready it casts as it is let go, not as it is touched, since a spell goes off at
- * once: hold to aim (by finger or gyroscope), let go to cast, as with a bow.
+ * It is the right trigger to the game, where the phone build binds Use, so the binding and any
+ * rebinding stay the same. Sliding the finger while holding it aims as on the look pad, so you can
+ * attack and turn in one touch. With the gyroscope worked by the attack button, the engine holds
+ * it on while this is held and casts a ready spell as it is let go (gyro-on-demand.patch).
  */
 @Composable
 internal fun AttackButton(modifier: Modifier) {
     var pressed by remember { mutableStateOf(false) }
-    // Decided per touch: true while a spell waits for the finger to lift.
-    var castOnRelease by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
     DisposableEffect(Unit) {
         onDispose {
-            if (pressed) {
-                if (!castOnRelease) VirtualPad.button(KeyEvent.KEYCODE_BUTTON_R1, false)
-                GyroControl.touch(false)
-            }
+            if (pressed) VirtualPad.trigger(VirtualPad.AXIS_RIGHT_TRIGGER, false)
         }
     }
     Box(
@@ -498,14 +491,8 @@ internal fun AttackButton(modifier: Modifier) {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     down.consume()
                     pressed = true
-                    GyroControl.touch(true)
-                    castOnRelease = PhoneExternal.isSpellReady()
-                    if (castOnRelease) {
-                        PadHaptics.play(PadHaptic.FACE)
-                    } else {
-                        PadHaptics.play(PadHaptic.ATTACK)
-                        VirtualPad.button(KeyEvent.KEYCODE_BUTTON_R1, true)
-                    }
+                    PadHaptics.play(PadHaptic.ATTACK)
+                    VirtualPad.trigger(VirtualPad.AXIS_RIGHT_TRIGGER, true)
                     var last = down.position
                     while (true) {
                         val event = awaitPointerEvent()
@@ -516,28 +503,8 @@ internal fun AttackButton(modifier: Modifier) {
                         last = change.position
                     }
                     pressed = false
-                    if (castOnRelease) {
-                        PadHaptics.play(PadHaptic.ATTACK)
-                        // The gyroscope stays on until the cast is over, so the aim can be kept to
-                        // the end. If no cast starts (not enough magicka), it lets go soon after.
-                        scope.launch {
-                            try {
-                                VirtualPad.button(KeyEvent.KEYCODE_BUTTON_R1, true)
-                                delay(80)
-                                VirtualPad.button(KeyEvent.KEYCODE_BUTTON_R1, false)
-                                val start = SystemClock.uptimeMillis()
-                                fun since() = SystemClock.uptimeMillis() - start
-                                while (!PhoneExternal.isCasting() && since() < CAST_START_WAIT_MS) delay(16)
-                                while (PhoneExternal.isCasting() && since() < CAST_LONGEST_MS) delay(16)
-                            } finally {
-                                GyroControl.touch(false)
-                            }
-                        }
-                    } else {
-                        GyroControl.touch(false)
-                        VirtualPad.button(KeyEvent.KEYCODE_BUTTON_R1, false)
-                        PadHaptics.play(PadHaptic.RELEASE)
-                    }
+                    VirtualPad.trigger(VirtualPad.AXIS_RIGHT_TRIGGER, false)
+                    PadHaptics.play(PadHaptic.RELEASE)
                 }
             },
         contentAlignment = Alignment.Center,
@@ -545,12 +512,6 @@ internal fun AttackButton(modifier: Modifier) {
         Text("⚔", color = PadBronze, fontSize = 30.sp)
     }
 }
-
-/** How long the attack button waits for a cast to start after it is let go. */
-private const val CAST_START_WAIT_MS = 500L
-
-/** The longest a cast is waited for, should it never seem to end. */
-private const val CAST_LONGEST_MS = 4000L
 
 @Composable
 private fun PadRow(content: @Composable RowScope.() -> Unit) {

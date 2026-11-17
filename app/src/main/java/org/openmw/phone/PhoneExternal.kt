@@ -119,20 +119,6 @@ object PhoneExternal {
     @JvmStatic
     private external fun updateGameWindows()
 
-    /** Engine side: androidmain.cpp. */
-    @JvmStatic
-    private external fun spellReady(): Boolean
-
-    /** Whether the player holds a spell ready, so the attack button casts as it is let go ([AttackButton]). */
-    fun isSpellReady(): Boolean = runCatching { spellReady() }.getOrDefault(false)
-
-    /** Engine side: androidmain.cpp. */
-    @JvmStatic
-    private external fun casting(): Boolean
-
-    /** Whether the player's cast is still under way, its animation not yet over ([AttackButton]). */
-    fun isCasting(): Boolean = runCatching { casting() }.getOrDefault(false)
-
     /**
      * Whether the open menu is drawn on the game screen: a game window shown there, or the console.
      * False when nothing is open, or the menu is the companion's own screen (the game window is
