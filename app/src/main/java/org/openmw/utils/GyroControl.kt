@@ -21,7 +21,9 @@ import java.io.File
  * itself, so the launcher and the settings editor always agree.
  *
  * The choice is pushed to the engine when the game starts ([start]), and the button's presses as
- * they happen ([onPadKey]). The engine decides from them on its own thread (gyro-on-demand.patch),
+ * they happen ([onPadKey]). The attack button ([ATTACK], the default, While held only) is read by
+ * the engine itself from the game's Use action, whatever it is bound to; a spell is then cast as
+ * Use is let go, so there is time to aim, and the gyroscope stays on until the cast is over. The engine decides from them on its own thread (gyro-on-demand.patch),
  * where it knows whether a menu is open: a press in a menu does not switch the gyroscope. The button
  * still reaches the game too, so in menus it does what it always did.
  */
@@ -45,8 +47,15 @@ object GyroControl {
 
     class Button(val keyCode: Int, val label: String)
 
+    /** The attack button: the game's Use action, read by the engine. Not a key code. */
+    const val ATTACK = -1
+
+    /** The button until the player picks. */
+    private const val DEFAULT_BUTTON = ATTACK
+
     /** Buttons that can work the gyroscope. D-pad Down has no action of its own outside menus. */
     val BUTTONS = listOf(
+        Button(ATTACK, "Attack"),
         Button(KeyEvent.KEYCODE_DPAD_DOWN, "D-pad Down"),
         Button(KeyEvent.KEYCODE_BUTTON_THUMBL, "L3"),
         Button(KeyEvent.KEYCODE_BUTTON_THUMBR, "R3"),
@@ -77,7 +86,14 @@ object GyroControl {
         runCatching { Mode.valueOf(prefs(context).getString(KEY_MODE, null) ?: "") }
             .getOrNull()?.takeIf { it != Mode.OFF } ?: DEFAULT_MODE
 
-    fun button(context: Context): Int = prefs(context).getInt(KEY_BUTTON, KeyEvent.KEYCODE_DPAD_DOWN)
+    fun button(context: Context): Int = prefs(context).getInt(KEY_BUTTON, DEFAULT_BUTTON)
+
+    /** The buttons [mode] can use: the attack button holds the gyroscope on, it does not switch it. */
+    fun buttons(mode: Mode): List<Button> = if (mode == Mode.HOLD) BUTTONS else BUTTONS.filter { it.keyCode != ATTACK }
+
+    /** The button [mode] works with: D-pad Down where the attack button cannot be used. */
+    fun buttonFor(stored: Int, mode: Mode): Int =
+        if (stored == ATTACK && mode != Mode.HOLD) KeyEvent.KEYCODE_DPAD_DOWN else stored
 
     fun buttonLabel(keyCode: Int): String = BUTTONS.firstOrNull { it.keyCode == keyCode }?.label ?: "?"
 
@@ -136,13 +152,14 @@ object GyroControl {
     /** Push the choice to the engine as the game starts. */
     fun start(context: Context) {
         activeMode = storedMode(context)
-        activeButton = button(context)
+        activeButton = buttonFor(button(context), activeMode)
         keyDown = false
         hatDown = false
         touches = 0
         buttonDown = false
         runCatching {
             EngineActivity.setGyroMode(activeMode.engineValue)
+            EngineActivity.setGyroOnAttack(activeButton == ATTACK)
             EngineActivity.gyroButton(false)
         }.onFailure { Log.e(TAG, "setGyroMode failed", it) }
         Log.i(TAG, "mode $activeMode, button ${buttonLabel(activeButton)}")

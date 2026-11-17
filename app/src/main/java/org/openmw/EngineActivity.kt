@@ -1217,6 +1217,9 @@ class EngineActivity : SDLActivity() {
         /** The gyroscope's button went down or up, see [org.openmw.utils.GyroControl]. */
         @JvmStatic external fun gyroButton(down: Boolean)
 
+        /** The gyroscope's button is the attack button, see [org.openmw.utils.GyroControl]. */
+        @JvmStatic external fun setGyroOnAttack(onAttack: Boolean)
+
         /**
          * The engine's recent per-frame timings, or null before any frame has been recorded.
          *
