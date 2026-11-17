@@ -1361,6 +1361,8 @@ public class SDLActivity extends AppCompatActivity implements View.OnSystemUiVis
         // SOURCE_JOYSTICK, while its key events arrive from the keyboard source
         // So, retrieve the device itself and check all of its sources
         if (SDLControllerManager.isDeviceSDLJoystick(deviceId)) {
+            // The gyroscope's button, if one is chosen. It still goes on to the game below.
+            org.openmw.utils.GyroControl.onPadKey(keyCode, event);
             // Note that we process events with specific key codes here
             if (event.getAction() == KeyEvent.ACTION_DOWN) {
                 if (SDLControllerManager.onNativePadDown(deviceId, keyCode) == 0) {

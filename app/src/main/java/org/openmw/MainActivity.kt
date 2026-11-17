@@ -199,6 +199,8 @@ class MainActivity : ComponentActivity() {
             applyGameScreenResolution()
             // Rewrite the Book size override from the stored setting every launch. See applyBookSize.
             applyBookSize()
+            // The gyroscope starts on, in its default mode, until the player picks. See GyroControl.
+            org.openmw.utils.GyroControl.applyDefault(this@MainActivity)
             withContext(Dispatchers.IO) {
                 // Rides the same settings.cfg pass, on the same IO dispatcher. Unrelated to the
                 // resolution insertion and deliberately NOT gated by its opt-out, which is about

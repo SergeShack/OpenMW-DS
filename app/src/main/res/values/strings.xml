@@ -178,6 +178,14 @@
     <string name="launcher_book_size">Book size</string>
     <string name="launcher_book_size_tip">Draws books, scrolls and the journal larger on the game screen, text and pictures alike. Pages keep their original layout. Applies the next time you start the game.</string>
     <string name="launcher_book_size_vanilla">Original (100%)</string>
+    <string name="launcher_gyro">Gyroscope</string>
+    <string name="launcher_gyro_tip">Turns the camera as you tilt and turn the device, outside menus. It can work all the time, while a button is held, or be switched on and off by a button. Speed and axes are in the settings below, in the Input section. Applies the next time you start the game.</string>
+    <string name="launcher_gyro_off">Off</string>
+    <string name="launcher_gyro_always">Always</string>
+    <string name="launcher_gyro_hold">While held</string>
+    <string name="launcher_gyro_toggle">Toggle</string>
+    <string name="launcher_gyro_button">Gyroscope button</string>
+    <string name="launcher_gyro_button_tip">The controller button that works the gyroscope. It keeps its own action too, so pick one you do not use while playing, or clear its action in the game\'s controls. D-pad Down has no action outside menus.</string>
     <string name="launcher_resolution_native">Native</string>
     <!-- Native, with the measured size of whichever screen the game is using, so "am I actually at
          4K in the dock?" is answerable without opening settings.cfg. -->

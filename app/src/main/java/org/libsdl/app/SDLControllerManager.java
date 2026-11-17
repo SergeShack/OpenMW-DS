@@ -295,6 +295,10 @@ class SDLJoystickHandler_API16 extends SDLJoystickHandler {
                 for (int i = 0; i < joystick.hats.size() / 2; i++) {
                     int hatX = Math.round(event.getAxisValue(joystick.hats.get(2 * i).getAxis(), actionPointerIndex));
                     int hatY = Math.round(event.getAxisValue(joystick.hats.get(2 * i + 1).getAxis(), actionPointerIndex));
+                    // A D-pad can come as this hat rather than as keys; the gyroscope's button may be on it.
+                    if (i == 0) {
+                        org.openmw.utils.GyroControl.onPadHat(hatY);
+                    }
                     SDLControllerManager.onNativeHat(joystick.device_id, i, hatX, hatY);
                 }
             }

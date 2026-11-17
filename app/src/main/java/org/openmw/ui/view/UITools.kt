@@ -981,7 +981,7 @@ private fun turnShadowsOn(lines: MutableList<String>) {
  * NOTE the engine's parser does NOT strip trailing comments — `parser.cpp` says so itself — so the
  * value written here must never carry an inline `#`, or it becomes part of the value.
  */
-private fun setSettingInSection(
+internal fun setSettingInSection(
     lines: MutableList<String>,
     section: String,
     key: String,
@@ -1014,7 +1014,7 @@ private fun setSettingInSection(
  * Value of `key` inside [section] of a settings.cfg line list, or null if it is not there. Matches
  * keys the same way as [setSettingInSection].
  */
-private fun getSettingInSection(lines: List<String>, section: String, key: String): String? {
+internal fun getSettingInSection(lines: List<String>, section: String, key: String): String? {
     val sectionStart = lines.indexOfFirst { it.trim().equals(section, ignoreCase = true) }
     if (sectionStart < 0) return null
     for (i in sectionStart + 1 until lines.size) {
