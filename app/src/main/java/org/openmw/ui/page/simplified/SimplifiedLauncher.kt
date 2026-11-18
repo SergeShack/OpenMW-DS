@@ -2428,6 +2428,7 @@ private fun SimplifiedSettingsScreen(onBack: () -> Unit) {
     var gyroMode by remember { mutableStateOf(GyroControl.Mode.OFF) }
     LaunchedEffect(settingsRefreshKey) { gyroMode = GyroControl.mode(context) }
     var gyroButton by remember { mutableStateOf(GyroControl.button(context)) }
+    var gyroSource by remember { mutableStateOf(GyroControl.source(context)) }
     // Needed only for writeModValuesToFile — the same writer the drag-reorder UI uses.
     val modVm: ModAssistantViewModel = hiltViewModel()
 
@@ -2713,6 +2714,20 @@ private fun SimplifiedSettingsScreen(onBack: () -> Unit) {
                         }
                     }
                 )
+            }
+            if (gyroMode != GyroControl.Mode.OFF) {
+                SettingRow(
+                    title = stringResource(R.string.launcher_gyro_source),
+                    subtitle = stringResource(R.string.launcher_gyro_source_tip)
+                ) {
+                    GyroSourceDropdown(
+                        selected = gyroSource,
+                        onSelected = { source ->
+                            gyroSource = source
+                            GyroControl.setSource(context, source)
+                        }
+                    )
+                }
             }
             if (gyroMode == GyroControl.Mode.HOLD || gyroMode == GyroControl.Mode.TOGGLE) {
                 SettingRow(
@@ -3628,6 +3643,37 @@ private fun GyroModeDropdown(selected: GyroControl.Mode, onSelected: (GyroContro
                     onClick = {
                         expanded = false
                         if (mode != selected) onSelected(mode)
+                    }
+                )
+            }
+        }
+    }
+}
+
+/** Which gyroscope turns the camera, see [GyroControl.Source]. */
+@Composable
+private fun GyroSourceDropdown(selected: GyroControl.Source, onSelected: (GyroControl.Source) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val names = mapOf(
+        GyroControl.Source.AUTO to stringResource(R.string.launcher_gyro_source_auto),
+        GyroControl.Source.PHONE to stringResource(R.string.launcher_gyro_source_phone),
+    )
+
+    Box {
+        OutlinedButton(onClick = { expanded = true }) {
+            Text(names.getValue(selected))
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            GyroControl.SOURCES.forEach { source ->
+                DropdownMenuItem(
+                    text = { Text(names.getValue(source)) },
+                    onClick = {
+                        expanded = false
+                        if (source != selected) onSelected(source)
                     }
                 )
             }

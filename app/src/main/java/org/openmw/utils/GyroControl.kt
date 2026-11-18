@@ -39,6 +39,15 @@ object GyroControl {
         TOGGLE(2),
     }
 
+    /**
+     * Which gyroscope turns the camera: a controller's own when it has one the game can read
+     * ([PadGyro], or SDL for one on USB), or always the phone's, for a controller the phone is held in.
+     */
+    enum class Source { AUTO, PHONE }
+
+    /** The sources the launcher offers, in its order. */
+    val SOURCES = listOf(Source.AUTO, Source.PHONE)
+
     /** The modes the launcher offers, in its order. */
     val MODES = listOf(Mode.OFF, Mode.ALWAYS, Mode.HOLD, Mode.TOGGLE)
 
@@ -67,6 +76,7 @@ object GyroControl {
     private const val KEY_MODE = "mode"
     private const val KEY_BUTTON = "button"
     private const val KEY_CHOSEN = "chosen"
+    private const val KEY_SOURCE = "source"
     private const val INPUT = "[Input]"
     private const val ENABLE = "enable gyroscope"
     private const val HORIZONTAL = "gyro horizontal sensitivity"
@@ -87,6 +97,13 @@ object GyroControl {
             .getOrNull()?.takeIf { it != Mode.OFF } ?: DEFAULT_MODE
 
     fun button(context: Context): Int = prefs(context).getInt(KEY_BUTTON, DEFAULT_BUTTON)
+
+    fun source(context: Context): Source =
+        runCatching { Source.valueOf(prefs(context).getString(KEY_SOURCE, null) ?: "") }.getOrDefault(Source.AUTO)
+
+    fun setSource(context: Context, source: Source) {
+        prefs(context).edit().putString(KEY_SOURCE, source.name).apply()
+    }
 
     /** The buttons [mode] can use: the attack button holds the gyroscope on, it does not switch it. */
     fun buttons(mode: Mode): List<Button> = if (mode == Mode.HOLD) BUTTONS else BUTTONS.filter { it.keyCode != ATTACK }
@@ -160,6 +177,7 @@ object GyroControl {
         runCatching {
             EngineActivity.setGyroMode(activeMode.engineValue)
             EngineActivity.setGyroOnAttack(activeButton == ATTACK)
+            EngineActivity.setGyroPhoneOnly(source(context) == Source.PHONE)
             EngineActivity.gyroButton(false)
         }.onFailure { Log.e(TAG, "setGyroMode failed", it) }
         Log.i(TAG, "mode $activeMode, button ${buttonLabel(activeButton)}")
