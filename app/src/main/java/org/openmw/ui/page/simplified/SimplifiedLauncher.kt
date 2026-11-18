@@ -2429,6 +2429,7 @@ private fun SimplifiedSettingsScreen(onBack: () -> Unit) {
     LaunchedEffect(settingsRefreshKey) { gyroMode = GyroControl.mode(context) }
     var gyroButton by remember { mutableStateOf(GyroControl.button(context)) }
     var gyroSource by remember { mutableStateOf(GyroControl.source(context)) }
+    var gyroAxes by remember { mutableStateOf(GyroControl.axes(context)) }
     // Needed only for writeModValuesToFile — the same writer the drag-reorder UI uses.
     val modVm: ModAssistantViewModel = hiltViewModel()
 
@@ -2725,6 +2726,20 @@ private fun SimplifiedSettingsScreen(onBack: () -> Unit) {
                         onSelected = { source ->
                             gyroSource = source
                             GyroControl.setSource(context, source)
+                        }
+                    )
+                }
+            }
+            if (gyroMode != GyroControl.Mode.OFF && gyroSource == GyroControl.Source.AUTO) {
+                SettingRow(
+                    title = stringResource(R.string.launcher_gyro_axes),
+                    subtitle = stringResource(R.string.launcher_gyro_axes_tip)
+                ) {
+                    GyroAxesDropdown(
+                        selected = gyroAxes,
+                        onSelected = { axes ->
+                            gyroAxes = axes
+                            GyroControl.setAxes(context, axes)
                         }
                     )
                 }
@@ -3674,6 +3689,38 @@ private fun GyroSourceDropdown(selected: GyroControl.Source, onSelected: (GyroCo
                     onClick = {
                         expanded = false
                         if (source != selected) onSelected(source)
+                    }
+                )
+            }
+        }
+    }
+}
+
+/** The axes of a controller's gyroscope, see [GyroControl.Axes]. */
+@Composable
+private fun GyroAxesDropdown(selected: GyroControl.Axes, onSelected: (GyroControl.Axes) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val names = mapOf(
+        GyroControl.Axes.AUTO to stringResource(R.string.launcher_gyro_axes_auto),
+        GyroControl.Axes.STANDARD to stringResource(R.string.launcher_gyro_axes_standard),
+        GyroControl.Axes.SWAPPED to stringResource(R.string.launcher_gyro_axes_swapped),
+    )
+
+    Box {
+        OutlinedButton(onClick = { expanded = true }) {
+            Text(names.getValue(selected))
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            GyroControl.AXES.forEach { axes ->
+                DropdownMenuItem(
+                    text = { Text(names.getValue(axes)) },
+                    onClick = {
+                        expanded = false
+                        if (axes != selected) onSelected(axes)
                     }
                 )
             }
