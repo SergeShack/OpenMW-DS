@@ -260,6 +260,9 @@ internal fun PadEditor(
                         }
                     }
                 },
+                onSave = { name ->
+                    PadPresets.confirm(context, "Save the layout in use over “$name”?", "Save") { saveLayout(name) }
+                },
                 onLoad = { name ->
                     PadPresets.confirm(
                         context,

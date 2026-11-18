@@ -23,8 +23,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * The saved layouts ([PadPresets]), in the editor: each can be loaded, renamed or deleted, and the
- * layout in use saved under a new name. [status] is a line about the last thing done.
+ * The saved layouts ([PadPresets]), in the editor: the layout in use can be saved over each one, or
+ * under a new name, and each can be loaded, renamed or deleted. [status] is a line about the last
+ * thing done.
  */
 @Composable
 internal fun LayoutsPanel(
@@ -32,6 +33,7 @@ internal fun LayoutsPanel(
     names: List<String>,
     status: String?,
     onSaveAs: () -> Unit,
+    onSave: (String) -> Unit,
     onLoad: (String) -> Unit,
     onRename: (String) -> Unit,
     onDelete: (String) -> Unit,
@@ -72,6 +74,7 @@ internal fun LayoutsPanel(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
+                    BarButton("Save") { onSave(name) }
                     BarButton("Load") { onLoad(name) }
                     BarButton("Rename") { onRename(name) }
                     BarButton("Delete") { onDelete(name) }
