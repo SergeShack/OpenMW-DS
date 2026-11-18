@@ -128,6 +128,12 @@ static std::atomic<int> g_gyroPresses{ 0 };
 // Whether the button is the attack button (Use): the engine then reads Use itself, and a spell is
 // cast as Use is let go while the gyroscope is held on by it (gyro-on-demand.patch).
 static std::atomic<bool> g_gyroOnUse{ false };
+// The gyroscope of a controller connected over Bluetooth, read by Android and pushed from Kotlin
+// (PadGyro): SDL has a controller's gyroscope only on USB. Read by pad-gyro-android.patch.
+static std::atomic<bool> g_padGyro{ false };
+static std::atomic<float> g_padGyroX{ 0.f };
+static std::atomic<float> g_padGyroY{ 0.f };
+static std::atomic<float> g_padGyroZ{ 0.f };
 
 // Per-element DS-mode suppression flags (companion "Game UI" options), pushed from Kotlin.
 // true = the element is in DS mode -> the companion draws it on the bottom screen and the
@@ -1291,6 +1297,30 @@ extern "C" bool companionGyroHeld() { return g_gyroHeld.load(); }
 extern "C" int companionGyroTakePresses() { return g_gyroPresses.exchange(0); }
 extern "C" bool companionGyroOnUse() { return g_gyroOnUse.load(); }
 extern "C" bool companionCastOnRelease() { return g_gyroMode.load() == 1 && g_gyroOnUse.load(); }
+extern "C" bool companionPadGyroAvailable() { return g_padGyro.load(); }
+extern "C" void companionPadGyroValues(float* values)
+{
+    values[0] = g_padGyroX.load();
+    values[1] = g_padGyroY.load();
+    values[2] = g_padGyroZ.load();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_openmw_EngineActivity_setPadGyro(JNIEnv*, jclass, jboolean available)
+{
+    g_padGyroX.store(0.f);
+    g_padGyroY.store(0.f);
+    g_padGyroZ.store(0.f);
+    g_padGyro.store(available == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_openmw_EngineActivity_padGyro(JNIEnv*, jclass, jfloat x, jfloat y, jfloat z)
+{
+    g_padGyroX.store(x);
+    g_padGyroY.store(y);
+    g_padGyroZ.store(z);
+}
 
 extern "C" JNIEXPORT void JNICALL
 Java_org_openmw_EngineActivity_setGyroOnAttack(JNIEnv*, jclass, jboolean onAttack)

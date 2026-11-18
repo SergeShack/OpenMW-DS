@@ -1,0 +1,33 @@
+--- a/apps/openmw/mwinput/controllermanager.cpp
++++ b/apps/openmw/mwinput/controllermanager.cpp
+@@ -952,8 +952,19 @@
+         mGyroAvailable = true;
+     }
+ 
++#ifdef __ANDROID__
++    // COMPANION (OpenMW-DS): defined in androidmain.cpp. The gyroscope of a controller connected over
++    // Bluetooth, read by Android: SDL has a controller's gyroscope only on USB. Used while SDL has none.
++    extern "C" bool companionPadGyroAvailable();
++    extern "C" void companionPadGyroValues(float* values);
++#endif
++
+     bool ControllerManager::isGyroAvailable() const
+     {
++#ifdef __ANDROID__
++        if (!mGyroAvailable)
++            return companionPadGyroAvailable();
++#endif
+         return mGyroAvailable;
+     }
+ 
+@@ -967,6 +978,10 @@
+             if (result < 0)
+                 Log(Debug::Error) << "Failed to get game controller sensor data: " << SDL_GetError();
+         }
++#ifdef __ANDROID__
++        else if (companionPadGyroAvailable())
++            companionPadGyroValues(gyro);
++#endif
+         return std::array<float, 3>({ gyro[0], gyro[1], gyro[2] });
+     }
+ 

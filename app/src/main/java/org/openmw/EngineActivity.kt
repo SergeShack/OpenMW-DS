@@ -491,6 +491,7 @@ class EngineActivity : SDLActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        org.openmw.utils.PadGyro.stop()
 
         hidePauseOverlay()
         hideConversationTopOverlay()
@@ -562,6 +563,7 @@ class EngineActivity : SDLActivity() {
 
         // The libraries are loaded by now; the engine reads the choice from its first frame.
         org.openmw.utils.GyroControl.start(this)
+        org.openmw.utils.PadGyro.start(this)
 
         launchedActivity = true
         val controllerConnected = isControllerConnected(this)
@@ -1188,6 +1190,12 @@ class EngineActivity : SDLActivity() {
 
         /** The gyroscope's button is the attack button, see [org.openmw.utils.GyroControl]. */
         @JvmStatic external fun setGyroOnAttack(onAttack: Boolean)
+
+        /** Whether a controller's gyroscope is read by Android, see [org.openmw.utils.PadGyro]. */
+        @JvmStatic external fun setPadGyro(available: Boolean)
+
+        /** A reading of that gyroscope, in rad/s, see [org.openmw.utils.PadGyro]. */
+        @JvmStatic external fun padGyro(x: Float, y: Float, z: Float)
 
         /**
          * The engine's recent per-frame timings, or null before any frame has been recorded.
