@@ -1191,6 +1191,9 @@ class EngineActivity : SDLActivity() {
         /** The gyroscope's button is the attack button, see [org.openmw.utils.GyroControl]. */
         @JvmStatic external fun setGyroOnAttack(onAttack: Boolean)
 
+        /** Whether only the phone's gyroscope turns the camera, see [org.openmw.utils.GyroControl.Source]. */
+        @JvmStatic external fun setGyroPhoneOnly(phoneOnly: Boolean)
+
         /** Whether a controller's gyroscope is read by Android, see [org.openmw.utils.PadGyro]. */
         @JvmStatic external fun setPadGyro(available: Boolean)
 

@@ -36,9 +36,58 @@ object PadGyro {
     private var deviceId = -1
     private var sensorManager: SensorManager? = null
 
+    // A controller's gyroscope reads a little turn even when it lies still, and the camera then
+    // drifts. While the readings stay nearly the same for a while, the controller is taken to be
+    // still and their average to be that offset, which is taken off every reading after it.
+    private const val STILL_WINDOW_NS = 1_000_000_000L
+    private const val STILL_MIN_READINGS = 20
+    // How far apart the readings of a still controller may be, in rad/s.
+    private const val STILL_SPREAD = 0.03f
+    // The largest offset taken as one, in rad/s. A steady turn faster than this is never taken for one.
+    private const val MAX_OFFSET = 0.1f
+
+    private val offset = FloatArray(3)
+    private val sum = FloatArray(3)
+    private val low = FloatArray(3)
+    private val high = FloatArray(3)
+    private var readings = 0
+    private var windowStart = 0L
+
+    private fun resetWindow(time: Long) {
+        windowStart = time
+        readings = 0
+        sum.fill(0f)
+        low.fill(Float.MAX_VALUE)
+        high.fill(-Float.MAX_VALUE)
+    }
+
+    private fun calibrate(values: FloatArray, time: Long) {
+        if (readings == 0 && windowStart == 0L) resetWindow(time)
+        for (i in 0..2) {
+            sum[i] += values[i]
+            low[i] = minOf(low[i], values[i])
+            high[i] = maxOf(high[i], values[i])
+        }
+        readings++
+        if (time - windowStart < STILL_WINDOW_NS) return
+        val still = readings >= STILL_MIN_READINGS && (0..2).all { high[it] - low[it] < STILL_SPREAD }
+        if (still) {
+            val mean = FloatArray(3) { sum[it] / readings }
+            if (mean.all { kotlin.math.abs(it) < MAX_OFFSET }) {
+                if ((0..2).any { kotlin.math.abs(mean[it] - offset[it]) > 0.002f }) {
+                    Log.i(TAG, "Offset %.4f %.4f %.4f".format(mean[0], mean[1], mean[2]))
+                }
+                mean.copyInto(offset)
+            }
+        }
+        resetWindow(time)
+    }
+
     private val sensorListener = object : SensorEventListener {
         override fun onSensorChanged(event: SensorEvent) {
-            runCatching { EngineActivity.padGyro(event.values[0], event.values[1], event.values[2]) }
+            val v = event.values
+            calibrate(v, event.timestamp)
+            runCatching { EngineActivity.padGyro(v[0] - offset[0], v[1] - offset[1], v[2] - offset[2]) }
         }
 
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
@@ -60,6 +109,7 @@ object PadGyro {
     fun start(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
         if (thread != null) return
+        if (GyroControl.source(context) != GyroControl.Source.AUTO) return
         val manager = context.getSystemService(InputManager::class.java) ?: return
         val t = HandlerThread(TAG).also { it.start() }
         val h = Handler(t.looper)
@@ -113,5 +163,8 @@ object PadGyro {
         if (sensorManager != null) runCatching { EngineActivity.setPadGyro(false) }
         sensorManager = null
         deviceId = -1
+        offset.fill(0f)
+        windowStart = 0L
+        readings = 0
     }
 }

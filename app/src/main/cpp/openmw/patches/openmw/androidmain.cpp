@@ -131,6 +131,8 @@ static std::atomic<bool> g_gyroOnUse{ false };
 // The gyroscope of a controller connected over Bluetooth, read by Android and pushed from Kotlin
 // (PadGyro): SDL has a controller's gyroscope only on USB. Read by pad-gyro-android.patch.
 static std::atomic<bool> g_padGyro{ false };
+// Whether only the phone's gyroscope turns the camera, never a controller's (GyroControl).
+static std::atomic<bool> g_gyroPhoneOnly{ false };
 static std::atomic<float> g_padGyroX{ 0.f };
 static std::atomic<float> g_padGyroY{ 0.f };
 static std::atomic<float> g_padGyroZ{ 0.f };
@@ -1297,12 +1299,19 @@ extern "C" bool companionGyroHeld() { return g_gyroHeld.load(); }
 extern "C" int companionGyroTakePresses() { return g_gyroPresses.exchange(0); }
 extern "C" bool companionGyroOnUse() { return g_gyroOnUse.load(); }
 extern "C" bool companionCastOnRelease() { return g_gyroMode.load() == 1 && g_gyroOnUse.load(); }
+extern "C" bool companionGyroPhoneOnly() { return g_gyroPhoneOnly.load(); }
 extern "C" bool companionPadGyroAvailable() { return g_padGyro.load(); }
 extern "C" void companionPadGyroValues(float* values)
 {
     values[0] = g_padGyroX.load();
     values[1] = g_padGyroY.load();
     values[2] = g_padGyroZ.load();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_openmw_EngineActivity_setGyroPhoneOnly(JNIEnv*, jclass, jboolean phoneOnly)
+{
+    g_gyroPhoneOnly.store(phoneOnly == JNI_TRUE);
 }
 
 extern "C" JNIEXPORT void JNICALL
