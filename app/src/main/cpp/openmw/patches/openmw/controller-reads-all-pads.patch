@@ -1,0 +1,58 @@
+--- a/apps/openmw/mwinput/controllermanager.cpp
++++ b/apps/openmw/mwinput/controllermanager.cpp
+@@ -912,10 +912,39 @@
+         return true;
+     }
+ 
++#ifdef __ANDROID__
++    // COMPANION (OpenMW-DS): a stick, trigger or button read straight from the controller, as Lua mods
++    // do, is read from every open controller rather than only the first one. The touch controller is
++    // a controller of its own, so with another one open first, a mod reading a stick or a trigger saw
++    // only that one. Of the readings, the one furthest from rest is taken.
++    namespace
++    {
++        template <class Function>
++        void forEachOpenController(Function function)
++        {
++            for (int i = 0; i < SDL_NumJoysticks(); ++i)
++            {
++                if (SDL_GameController* controller
++                    = SDL_GameControllerFromInstanceID(SDL_JoystickGetDeviceInstanceID(i)))
++                    function(controller);
++            }
++        }
++    }
++#endif
++
+     float ControllerManager::getAxisValue(SDL_GameControllerAxis axis) const
+     {
+-        SDL_GameController* cntrl = mBindingsManager->getControllerOrNull();
+         constexpr float axisMaxAbsoluteValue = 32768;
++#ifdef __ANDROID__
++        float strongest = 0.f;
++        forEachOpenController([&](SDL_GameController* controller) {
++            const float value = SDL_GameControllerGetAxis(controller, axis) / axisMaxAbsoluteValue;
++            if (std::abs(value) > std::abs(strongest))
++                strongest = value;
++        });
++        return strongest;
++#endif
++        SDL_GameController* cntrl = mBindingsManager->getControllerOrNull();
+         if (cntrl != nullptr)
+             return SDL_GameControllerGetAxis(cntrl, axis) / axisMaxAbsoluteValue;
+         return 0;
+@@ -929,6 +958,14 @@
+ 
+     bool ControllerManager::isButtonPressed(SDL_GameControllerButton button) const
+     {
++#ifdef __ANDROID__
++        bool pressed = false;
++        forEachOpenController([&](SDL_GameController* controller) {
++            if (SDL_GameControllerGetButton(controller, button) > 0)
++                pressed = true;
++        });
++        return pressed;
++#endif
+         SDL_GameController* cntrl = mBindingsManager->getControllerOrNull();
+         if (cntrl)
+             return SDL_GameControllerGetButton(cntrl, button) > 0;
