@@ -75,6 +75,10 @@ The game runs at a 30 fps limit, and most of the work went into frames that miss
 - L2 opens the quick keys menu: move with the D-pad, R1 uses the slot, A assigns it, R3 shows its tooltip.
 - An action you leave without a button stays unbound after a restart.
 - A D-pad direction held in a menu keeps moving the selection, faster after a few steps, so long lists scroll by.
+- **Gyroscope** in the launcher: it turns the camera all the time, while a button is held, or switched on and off
+  by a button. A controller connected over Bluetooth can turn it with its own gyroscope when Android can read it
+  (DualSense, DualShock 4, Switch Pro Controller), calibrated while the controller lies still.
+- Mods that read a controller's sticks, triggers or buttons see every connected controller, not only the first one.
 
 ### Fixes
 - A crash while walking, in the vibration code.
