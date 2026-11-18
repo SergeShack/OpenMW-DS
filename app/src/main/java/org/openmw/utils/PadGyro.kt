@@ -24,10 +24,14 @@ import org.openmw.EngineActivity
  * while SDL has none (pad-gyro-android.patch). The readings are in rad/s, as SDL gives them.
  *
  * The first connected controller with a gyroscope is used, until it is disconnected.
+ *
+ * Android does not give every controller's axes in the same order: a DualSense turned left reads as
+ * tilted up. [GyroControl.Axes] says whether the first two are swapped; Auto swaps them for Sony's.
  */
 @OptIn(InternalCoroutinesApi::class)
 object PadGyro {
     private const val TAG = "PadGyro"
+    private const val SONY = 0x054c
 
     // All of the below is used on [thread] only, apart from [start] and [stop].
     private var thread: HandlerThread? = null
@@ -35,6 +39,8 @@ object PadGyro {
     private var inputManager: InputManager? = null
     private var deviceId = -1
     private var sensorManager: SensorManager? = null
+    private var axes = GyroControl.Axes.AUTO
+    private var swapAxes = false
 
     // A controller's gyroscope reads a little turn even when it lies still, and the camera then
     // drifts. While the readings stay nearly the same for a while, the controller is taken to be
@@ -87,7 +93,10 @@ object PadGyro {
         override fun onSensorChanged(event: SensorEvent) {
             val v = event.values
             calibrate(v, event.timestamp)
-            runCatching { EngineActivity.padGyro(v[0] - offset[0], v[1] - offset[1], v[2] - offset[2]) }
+            val x = v[0] - offset[0]
+            val y = v[1] - offset[1]
+            val z = v[2] - offset[2]
+            runCatching { if (swapAxes) EngineActivity.padGyro(y, x, z) else EngineActivity.padGyro(x, y, z) }
         }
 
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
@@ -111,6 +120,7 @@ object PadGyro {
         if (thread != null) return
         if (GyroControl.source(context) != GyroControl.Source.AUTO) return
         val manager = context.getSystemService(InputManager::class.java) ?: return
+        axes = GyroControl.axes(context)
         val t = HandlerThread(TAG).also { it.start() }
         val h = Handler(t.looper)
         thread = t
@@ -153,8 +163,13 @@ object PadGyro {
         }
         sensorManager = manager
         deviceId = device.id
+        swapAxes = when (axes) {
+            GyroControl.Axes.AUTO -> device.vendorId == SONY
+            GyroControl.Axes.STANDARD -> false
+            GyroControl.Axes.SWAPPED -> true
+        }
         runCatching { EngineActivity.setPadGyro(true) }
-        Log.i(TAG, "Gyroscope of ${device.name}")
+        Log.i(TAG, "Gyroscope of ${device.name}" + if (swapAxes) ", axes swapped" else "")
         return true
     }
 

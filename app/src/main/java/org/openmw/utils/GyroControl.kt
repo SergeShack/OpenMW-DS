@@ -48,6 +48,15 @@ object GyroControl {
     /** The sources the launcher offers, in its order. */
     val SOURCES = listOf(Source.AUTO, Source.PHONE)
 
+    /**
+     * The axes of a controller's gyroscope read over Bluetooth ([PadGyro]): as Android gives them, or
+     * with the first two swapped, as a DualSense needs. Auto swaps them for Sony's controllers.
+     */
+    enum class Axes { AUTO, STANDARD, SWAPPED }
+
+    /** The axes choices the launcher offers, in its order. */
+    val AXES = listOf(Axes.AUTO, Axes.STANDARD, Axes.SWAPPED)
+
     /** The modes the launcher offers, in its order. */
     val MODES = listOf(Mode.OFF, Mode.ALWAYS, Mode.HOLD, Mode.TOGGLE)
 
@@ -77,6 +86,7 @@ object GyroControl {
     private const val KEY_BUTTON = "button"
     private const val KEY_CHOSEN = "chosen"
     private const val KEY_SOURCE = "source"
+    private const val KEY_AXES = "axes"
     private const val INPUT = "[Input]"
     private const val ENABLE = "enable gyroscope"
     private const val HORIZONTAL = "gyro horizontal sensitivity"
@@ -103,6 +113,13 @@ object GyroControl {
 
     fun setSource(context: Context, source: Source) {
         prefs(context).edit().putString(KEY_SOURCE, source.name).apply()
+    }
+
+    fun axes(context: Context): Axes =
+        runCatching { Axes.valueOf(prefs(context).getString(KEY_AXES, null) ?: "") }.getOrDefault(Axes.AUTO)
+
+    fun setAxes(context: Context, axes: Axes) {
+        prefs(context).edit().putString(KEY_AXES, axes.name).apply()
     }
 
     /** The buttons [mode] can use: the attack button holds the gyroscope on, it does not switch it. */
