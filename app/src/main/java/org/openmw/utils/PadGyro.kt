@@ -26,7 +26,8 @@ import org.openmw.EngineActivity
  * The first connected controller with a gyroscope is used, until it is disconnected.
  *
  * Android does not give every controller's axes in the same order: a DualSense turned left reads as
- * tilted up. [GyroControl.Axes] says whether the first two are swapped; Auto swaps them for Sony's.
+ * tilted up, and tilted up as turned left. [GyroControl.Axes] says whether the first two are swapped,
+ * each taking the other's value with its sign reversed; Auto swaps them for Sony's.
  */
 @OptIn(InternalCoroutinesApi::class)
 object PadGyro {
@@ -96,7 +97,7 @@ object PadGyro {
             val x = v[0] - offset[0]
             val y = v[1] - offset[1]
             val z = v[2] - offset[2]
-            runCatching { if (swapAxes) EngineActivity.padGyro(y, x, z) else EngineActivity.padGyro(x, y, z) }
+            runCatching { if (swapAxes) EngineActivity.padGyro(-y, -x, z) else EngineActivity.padGyro(x, y, z) }
         }
 
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
