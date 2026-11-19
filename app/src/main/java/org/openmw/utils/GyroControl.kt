@@ -87,6 +87,8 @@ object GyroControl {
     private const val KEY_CHOSEN = "chosen"
     private const val KEY_SOURCE = "source"
     private const val KEY_AXES = "axes"
+    private const val KEY_INVERT_HORIZONTAL = "invert_horizontal"
+    private const val KEY_INVERT_VERTICAL = "invert_vertical"
     private const val INPUT = "[Input]"
     private const val ENABLE = "enable gyroscope"
     private const val HORIZONTAL = "gyro horizontal sensitivity"
@@ -120,6 +122,20 @@ object GyroControl {
 
     fun setAxes(context: Context, axes: Axes) {
         prefs(context).edit().putString(KEY_AXES, axes.name).apply()
+    }
+
+    /** Whether a controller's gyroscope turns the camera the other way left and right ([PadGyro]). */
+    fun invertHorizontal(context: Context): Boolean = prefs(context).getBoolean(KEY_INVERT_HORIZONTAL, false)
+
+    fun setInvertHorizontal(context: Context, invert: Boolean) {
+        prefs(context).edit().putBoolean(KEY_INVERT_HORIZONTAL, invert).apply()
+    }
+
+    /** Whether a controller's gyroscope turns the camera the other way up and down ([PadGyro]). */
+    fun invertVertical(context: Context): Boolean = prefs(context).getBoolean(KEY_INVERT_VERTICAL, false)
+
+    fun setInvertVertical(context: Context, invert: Boolean) {
+        prefs(context).edit().putBoolean(KEY_INVERT_VERTICAL, invert).apply()
     }
 
     /** The buttons [mode] can use: the attack button holds the gyroscope on, it does not switch it. */

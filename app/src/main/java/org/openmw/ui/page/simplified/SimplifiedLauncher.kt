@@ -2430,6 +2430,8 @@ private fun SimplifiedSettingsScreen(onBack: () -> Unit) {
     var gyroButton by remember { mutableStateOf(GyroControl.button(context)) }
     var gyroSource by remember { mutableStateOf(GyroControl.source(context)) }
     var gyroAxes by remember { mutableStateOf(GyroControl.axes(context)) }
+    var gyroInvertHorizontal by remember { mutableStateOf(GyroControl.invertHorizontal(context)) }
+    var gyroInvertVertical by remember { mutableStateOf(GyroControl.invertVertical(context)) }
     // Needed only for writeModValuesToFile — the same writer the drag-reorder UI uses.
     val modVm: ModAssistantViewModel = hiltViewModel()
 
@@ -2740,6 +2742,30 @@ private fun SimplifiedSettingsScreen(onBack: () -> Unit) {
                         onSelected = { axes ->
                             gyroAxes = axes
                             GyroControl.setAxes(context, axes)
+                        }
+                    )
+                }
+                SettingRow(
+                    title = stringResource(R.string.launcher_gyro_invert_horizontal),
+                    subtitle = stringResource(R.string.launcher_gyro_invert_horizontal_tip)
+                ) {
+                    Switch(
+                        checked = gyroInvertHorizontal,
+                        onCheckedChange = {
+                            gyroInvertHorizontal = it
+                            GyroControl.setInvertHorizontal(context, it)
+                        }
+                    )
+                }
+                SettingRow(
+                    title = stringResource(R.string.launcher_gyro_invert_vertical),
+                    subtitle = stringResource(R.string.launcher_gyro_invert_vertical_tip)
+                ) {
+                    Switch(
+                        checked = gyroInvertVertical,
+                        onCheckedChange = {
+                            gyroInvertVertical = it
+                            GyroControl.setInvertVertical(context, it)
                         }
                     )
                 }
