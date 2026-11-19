@@ -27,7 +27,9 @@ import org.openmw.EngineActivity
  *
  * Android does not give every controller's axes in the same order: a DualSense turned reads as
  * tilted, and tilted as turned. [GyroControl.Axes] says whether the first two are swapped, as a
- * DualSense needs them (the second one's sign reversed); Auto swaps them for Sony's.
+ * DualSense needs them (the second one's sign reversed); Auto swaps them for Sony's. After that, the
+ * camera's horizontal or vertical turn can each be reversed ([GyroControl.invertHorizontal]). The
+ * engine takes the horizontal turn from the first axis and the vertical one from the second.
  */
 @OptIn(InternalCoroutinesApi::class)
 object PadGyro {
@@ -42,6 +44,8 @@ object PadGyro {
     private var sensorManager: SensorManager? = null
     private var axes = GyroControl.Axes.AUTO
     private var swapAxes = false
+    private var horizontalSign = 1f
+    private var verticalSign = 1f
 
     // A controller's gyroscope reads a little turn even when it lies still, and the camera then
     // drifts. While the readings stay nearly the same for a while, the controller is taken to be
@@ -97,7 +101,9 @@ object PadGyro {
             val x = v[0] - offset[0]
             val y = v[1] - offset[1]
             val z = v[2] - offset[2]
-            runCatching { if (swapAxes) EngineActivity.padGyro(y, -x, z) else EngineActivity.padGyro(x, y, z) }
+            val horizontal = if (swapAxes) y else x
+            val vertical = if (swapAxes) -x else y
+            runCatching { EngineActivity.padGyro(horizontal * horizontalSign, vertical * verticalSign, z) }
         }
 
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
@@ -122,6 +128,8 @@ object PadGyro {
         if (GyroControl.source(context) != GyroControl.Source.AUTO) return
         val manager = context.getSystemService(InputManager::class.java) ?: return
         axes = GyroControl.axes(context)
+        horizontalSign = if (GyroControl.invertHorizontal(context)) -1f else 1f
+        verticalSign = if (GyroControl.invertVertical(context)) -1f else 1f
         val t = HandlerThread(TAG).also { it.start() }
         val h = Handler(t.looper)
         thread = t

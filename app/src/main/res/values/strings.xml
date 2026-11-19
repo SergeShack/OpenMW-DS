@@ -193,6 +193,10 @@
     <string name="launcher_gyro_axes_auto">Auto</string>
     <string name="launcher_gyro_axes_standard">Standard</string>
     <string name="launcher_gyro_axes_swapped">Swapped</string>
+    <string name="launcher_gyro_invert_horizontal">Invert controller gyroscope horizontal</string>
+    <string name="launcher_gyro_invert_horizontal_tip">Turns the camera the other way left and right with a controller connected over Bluetooth. Applies after the axes above. Applies the next time you start the game.</string>
+    <string name="launcher_gyro_invert_vertical">Invert controller gyroscope vertical</string>
+    <string name="launcher_gyro_invert_vertical_tip">Turns the camera the other way up and down with a controller connected over Bluetooth. Applies after the axes above. Applies the next time you start the game.</string>
     <string name="launcher_gyro_button">Gyroscope button</string>
     <string name="launcher_gyro_button_tip">The button that works the gyroscope. Attack, in While held, turns the camera while you attack, and a ready spell is cast as you let go, so there is time to aim. Another controller button keeps its own action too, so pick one you do not use while playing, or clear its action in the game\'s controls. D-pad Down has no action outside menus.</string>
     <string name="launcher_resolution_native">Native</string>
