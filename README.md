@@ -77,7 +77,8 @@ The game runs at a 30 fps limit, and most of the work went into frames that miss
 - A D-pad direction held in a menu keeps moving the selection, faster after a few steps, so long lists scroll by.
 - **Gyroscope** in the launcher: it turns the camera all the time, while a button is held, or switched on and off
   by a button. A controller connected over Bluetooth can turn it with its own gyroscope when Android can read it
-  (DualSense, DualShock 4, Switch Pro Controller), calibrated while the controller lies still.
+  (DualSense, DualShock 4, Switch Pro Controller), calibrated while the controller lies still. Its axes can be
+  swapped and each direction reversed in the launcher, for controllers whose axes come out differently.
 - Mods that read a controller's sticks, triggers or buttons see every connected controller, not only the first one.
 
 ### Fixes
