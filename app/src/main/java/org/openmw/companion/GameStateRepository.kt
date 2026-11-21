@@ -974,7 +974,17 @@ object GameStateRepository {
                 LogParser.parseNav(trimmed)?.let { factory -> _navEvent.value = factory(navSeq++) }
             }
             trimmed.contains(LogParser.P_INVPAD) -> {
-                LogParser.parseInvPad(trimmed)?.let { factory -> _invPadEvent.value = factory(invPadSeq++) }
+                LogParser.parseInvPad(trimmed)?.let { factory ->
+                    val ev = factory(invPadSeq++)
+                    // a button the gyroscope is worked by stays the gyroscope's
+                    val gyroButton = when (ev) {
+                        is InvPadEvent.Down -> android.view.KeyEvent.KEYCODE_DPAD_DOWN
+                        is InvPadEvent.Info, is InvPadEvent.Use -> android.view.KeyEvent.KEYCODE_BUTTON_THUMBR
+                        else -> null
+                    }
+                    if (gyroButton == null || !org.openmw.utils.GyroControl.usesButton(gyroButton))
+                        _invPadEvent.value = ev
+                }
             }
             trimmed.contains(LogParser.P_CRIME_MSG) -> {
                 val text = trimmed.substring(trimmed.indexOf(LogParser.P_CRIME_MSG) + LogParser.P_CRIME_MSG.length).trim()
