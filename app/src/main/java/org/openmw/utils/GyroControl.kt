@@ -71,7 +71,8 @@ object GyroControl {
     /** The button until the player picks. */
     private const val DEFAULT_BUTTON = ATTACK
 
-    /** Buttons that can work the gyroscope. D-pad Down has no action of its own outside menus. */
+    /** Buttons that can work the gyroscope. D-pad Down has no game action of its own outside menus; the
+     *  companion inventory leaves the gyroscope's button alone (see [usesButton]). */
     val BUTTONS = listOf(
         Button(ATTACK, "Attack"),
         Button(KeyEvent.KEYCODE_DPAD_DOWN, "D-pad Down"),
@@ -100,6 +101,10 @@ object GyroControl {
 
     @Volatile
     private var activeButton = KeyEvent.KEYCODE_DPAD_DOWN
+
+    // Whether settings.cfg has the gyroscope on for this game.
+    @Volatile
+    private var enabled = false
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -203,6 +208,9 @@ object GyroControl {
     fun start(context: Context) {
         activeMode = storedMode(context)
         activeButton = buttonFor(button(context), activeMode)
+        enabled = runCatching {
+            getSettingInSection(File(Constants.SETTINGS_FILE).readLines(), INPUT, ENABLE)
+        }.getOrNull() == "true"
         keyDown = false
         hatDown = false
         touches = 0
@@ -251,6 +259,10 @@ object GyroControl {
         }
         update()
     }
+
+    /** Whether the gyroscope is worked by [keyCode] in this game, so nothing else should act on it. */
+    fun usesButton(keyCode: Int): Boolean =
+        enabled && (activeMode == Mode.HOLD || activeMode == Mode.TOGGLE) && activeButton == keyCode
 
     /** The first hat's up/down on its way to the game: the D-pad on controllers that send it so. */
     @JvmStatic
