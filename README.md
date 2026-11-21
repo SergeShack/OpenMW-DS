@@ -67,6 +67,8 @@ The game runs at a 30 fps limit, and most of the work went into frames that miss
 - **Interface size** in the launcher, next to Resolution: 100% to 130%, 125% by default.
 - The bottom screen's service screens (training, spell buying, travel, repair, rest, persuasion, alchemy, enchanting,
   spellmaking, level up) share one set of text sizes, with larger text on the smallest ones.
+- **Inventory cards** show every name at one size, shortened before it is cut; potions and scrolls show their first
+  effect, and a filled soul gem names its soul.
 - **Mod profiles**: several mod setups kept by name and switched from the launcher's load order, each opening the Load
   window on the last character played with it.
 
@@ -75,6 +77,9 @@ The game runs at a 30 fps limit, and most of the work went into frames that miss
 - L2 opens the quick keys menu: move with the D-pad, R1 uses the slot, A assigns it, R3 shows its tooltip.
 - An action you leave without a button stays unbound after a restart.
 - A D-pad direction held in a menu keeps moving the selection, faster after a few steps, so long lists scroll by.
+- During play, D-pad left and right step through the bottom screen's inventory cards (held, they keep going), down
+  goes to the next category, a tap on R3 shows the item's details and holding R3 uses it. D-pad up still opens the
+  game's own inventory.
 - **Gyroscope** in the launcher: it turns the camera all the time, while a button is held, or switched on and off
   by a button. A controller connected over Bluetooth can turn it with its own gyroscope when Android can read it
   (DualSense, DualShock 4, Switch Pro Controller), calibrated while the controller lies still. Its axes can be
