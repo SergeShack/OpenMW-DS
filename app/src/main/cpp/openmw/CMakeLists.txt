@@ -837,6 +837,7 @@ set(OPENMW_PATCH
 	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/openmw/patches/openmw/water-sun-glint.patch || true &&
 	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/openmw/patches/openmw/terrain-underwater-composite.patch || true &&
 	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/openmw/patches/openmw/reflection-every-other-frame.patch || true &&
+	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/openmw/patches/openmw/reflection-reprojection.patch || true &&
 	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/openmw/patches/openmw/menu-dpad-repeat.patch || true &&
 	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/openmw/patches/openmw/companion-tabs-without-hints.patch || true &&
 	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/openmw/patches/openmw/companion-text-input-change-event.patch || true &&
@@ -847,7 +848,8 @@ set(OPENMW_PATCH
 	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/openmw/patches/openmw/phone-window-places.patch || true &&
 	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/openmw/patches/openmw/phone-use-right-trigger.patch || true &&
 	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/openmw/patches/openmw/pad-gyro-android.patch || true &&
-	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/openmw/patches/openmw/controller-reads-all-pads.patch || true
+	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/openmw/patches/openmw/controller-reads-all-pads.patch || true &&
+	patch -d <SOURCE_DIR> -p1 -t -N < ${CMAKE_SOURCE_DIR}/openmw/patches/openmw/companion-inventory-dpad.patch || true
 )
 
 if(OPENMW_SRC)

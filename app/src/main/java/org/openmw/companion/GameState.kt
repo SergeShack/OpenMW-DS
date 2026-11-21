@@ -34,7 +34,9 @@ data class InventoryItem(
      *  the field still parses (those items simply sort as worthless). */
     val value: Int = 0,
     /** Enchantment (id + type label + effects) for the info popup; null = not enchanted. */
-    val enchant: ItemEnchant? = null
+    val enchant: ItemEnchant? = null,
+    /** The trapped creature's name on a filled soul gem; "" for an empty gem or any other item. */
+    val soul: String = ""
 )
 
 // ---- Item classification (tap/long-press behaviour), keyed off the coarse category Lua's
@@ -199,6 +201,42 @@ fun abbreviateEffectWords(name: String): String {
  */
 fun favouriteSlotLabel(name: String, category: String, fits: (String) -> Boolean): String {
     val stage1 = if (category == "potion") potionCoreName(name) else name
+    if (fits(stage1)) return stage1
+    val stage2 = dropLeadingPossessive(stage1)
+    if (fits(stage2)) return stage2
+    return abbreviateEffectWords(stage2)
+}
+
+/** [abbreviateEffectWords] for the upper-case effect names of the inventory cards' stat labels. */
+fun abbreviateEffectWordsUpper(name: String): String {
+    var s = name
+    for ((long, short) in EFFECT_ABBREVIATIONS) s = s.replace(long.uppercase(), short.uppercase())
+    return s
+}
+
+/** A potion's name without the word "Potion", keeping its quality tier: "Bargain Potion of Fortify
+ *  Agility" → "Bargain Fortify Agility", "Quality Restore Magicka Potion" → "Quality Restore
+ *  Magicka". Never empties the string. */
+fun potionNameWithoutPotionWord(name: String): String {
+    val s = name.trim()
+    val out = when {
+        s.startsWith("Potion of ") -> s.removePrefix("Potion of ")
+        s.contains(" Potion of ") -> s.replace(" Potion of ", " ")
+        s.endsWith(" Potion") -> s.removeSuffix(" Potion")
+        else -> s
+    }.trim()
+    return out.ifEmpty { s }
+}
+
+/**
+ * The inventory card's name: like [favouriteSlotLabel], least-lossy first, but a potion keeps its
+ * quality tier, since the inventory can hold several tiers of one potion side by side.
+ */
+fun inventoryCardLabel(name: String, category: String, fits: (String) -> Boolean): String {
+    if (fits(name)) return name
+    // a filled soul gem's trapped soul (see displayName) matters more than the word "Soul"
+    val stage1 = if (category == "potion") potionNameWithoutPotionWord(name)
+        else name.replace(" Soul Gem (", " Gem (")
     if (fits(stage1)) return stage1
     val stage2 = dropLeadingPossessive(stage1)
     if (fits(stage2)) return stage2
@@ -1375,6 +1413,21 @@ data class StickState(
     companion object {
         val NEUTRAL = StickState()
     }
+}
+
+/**
+ * A one-shot signal for the companion's inventory during play (companion-inventory-dpad.patch →
+ * COMPANION_INVPAD_* log lines): D-pad left/right step the focus to the previous/next card (held,
+ * they repeat), down goes to the next category, an R3 tap shows the item's details and holding R3
+ * is the item's tap action. Stamped with a [seq] like [NavEvent], so repeated presses are distinct.
+ */
+sealed class InvPadEvent {
+    abstract val seq: Long
+    data class Left(override val seq: Long) : InvPadEvent()
+    data class Right(override val seq: Long) : InvPadEvent()
+    data class Down(override val seq: Long) : InvPadEvent()
+    data class Info(override val seq: Long) : InvPadEvent()
+    data class Use(override val seq: Long) : InvPadEvent()
 }
 
 /**

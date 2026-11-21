@@ -980,9 +980,48 @@ end
 --   WeaponRecord.{chop,slash,thrust}{Min,Max}Damage, .type, .health
 --   ArmorRecord.baseArmor, .health   Lockpick/ProbeRecord.quality, .maxCondition
 --   per-instance condition: types.Item.itemData(item).condition
+-- The soul trapped in a soul gem: the creature's name and its soul value, or nil for an empty gem
+-- or any other item. The value is the creature's, not the gem's capacity; it is what enchanting uses.
+local function itemSoul(item)
+    local name, value
+    pcall(function()
+        local data = types.Item.itemData(item)
+        local soul = data and data.soul
+        if soul and soul ~= "" then
+            local crea = types.Creature.record(soul)
+            name = (crea and crea.name ~= "" and crea.name) or soul
+            value = (crea and crea.soulValue) or 0
+        end
+    end)
+    return name, value
+end
+
+-- The first effect of a potion or a scroll, as (value, KEY): its magnitude and its name, or "" for
+-- an effect without a magnitude (Mark, Recall). nil when there is none.
+local function firstEffectStat(effects)
+    local eff = effects and effects[1]
+    if not eff then return nil end
+    local nm = magicEffectName(eff)
+    if not nm then return nil end
+    -- "Fortify Attribute" alone does not say which one; name it, as the info popup does
+    pcall(function()
+        if eff.affectedAttribute then
+            nm = nm:gsub(" Attribute$", "") .. " " .. tostring(eff.affectedAttribute)
+        elseif eff.affectedSkill then
+            nm = nm:gsub(" Skill$", "") .. " " .. tostring(eff.affectedSkill)
+        end
+    end)
+    local mag = 0
+    pcall(function() mag = math.floor((eff.magnitudeMax or eff.magnitudeMin or 0) + 0.5) end)
+    return mag > 0 and string.format("%d", mag) or "", string.upper(nm)
+end
+
 local function itemStats(item, cat)
     local okr, rec = pcall(function() return item.type.record(item) end)
     if not okr or not rec then return "", "", nil end
+
+    local soulName, soulValue = itemSoul(item)
+    if soulName then return tostring(soulValue), "SOUL", nil end
 
     -- Per-instance condition against a record max. A nil instance condition
     -- means the item is pristine (never modified) => treat as full.
@@ -1031,15 +1070,18 @@ local function itemStats(item, cat)
         -- No quality stat for lockpicks/probes (not gameplay-relevant); keep the uses-left bar.
         return "", "", condRatio(rec.maxCondition)
     elseif cat == "potion" then
-        local eff = rec.effects and rec.effects[1]
-        if eff then
-            local nm = magicEffectName(eff)
-            if nm then
-                local mag = 0
-                pcall(function() mag = math.floor((eff.magnitudeMax or eff.magnitudeMin or 0) + 0.5) end)
-                return string.format("%d", mag), string.upper(nm), nil
-            end
-        end
+        local v, k = firstEffectStat(rec.effects)
+        if k then return v, k, nil end
+    elseif cat == "scroll" then
+        -- a scroll's effects are in its enchantment, not in the book record
+        local effects
+        pcall(function()
+            local enchId = itemEnchantId(item)
+            local ench = enchId and core.magic.enchantments.records[enchId]
+            effects = ench and ench.effects
+        end)
+        local v, k = firstEffectStat(effects)
+        if k then return v, k, nil end
     elseif cat == "ingredient" then
         local n = 0
         pcall(function()
@@ -1127,12 +1169,16 @@ local function itemJson(item)
     local statVal, statKey, cond = itemStats(item, cat)
     local condField = ""
     if cond ~= nil then condField = string.format(',"cond":%.3f', cond) end
+    -- only on a filled soul gem, so every other item line stays as it was
+    local soulField = ""
+    local soulName = itemSoul(item)
+    if soulName then soulField = string.format(',"soul":"%s"', jsonEscape(soulName)) end
     return string.format(
         '{"id":"%s","sid":"%s","name":"%s","count":%d,"cat":"%s","icon":"%s","weight":%.2f,"value":%d,' ..
-            '"statVal":"%s","statKey":"%s"%s%s}',
+            '"statVal":"%s","statKey":"%s"%s%s%s}',
         jsonEscape(item.recordId), jsonEscape(sid), jsonEscape(itemName(item)),
         item.count, cat, jsonEscape(icon), weight, value,
-        jsonEscape(statVal), jsonEscape(statKey), condField, enchantJson(item))
+        jsonEscape(statVal), jsonEscape(statKey), condField, soulField, enchantJson(item))
 end
 
 local lastInventoryStr = nil

@@ -65,6 +65,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.foundation.layout.heightIn
@@ -196,6 +197,7 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -601,8 +603,11 @@ private enum class Tab(val label: String) {
     INVENTORY("Inventory"), MAGIC("Spells"), HUD("HUD"), STATS("Stats"), JOURNAL("Journal")
 }
 
-private fun InventoryItem.displayName(): String =
-    if (name.isNotBlank()) name else prettify(id)
+/** A filled soul gem names its soul, as the game's own tooltip does: "Grand Soul Gem (Golden Saint)". */
+private fun InventoryItem.displayName(): String {
+    val base = if (name.isNotBlank()) name else prettify(id)
+    return if (soul.isNotEmpty()) "$base ($soul)" else base
+}
 
 private fun SpellEntry.displayName(): String =
     if (name.isNotBlank()) name else prettify(id)
@@ -1223,6 +1228,25 @@ private fun CompanionScreenContent() {
     var tab by remember { mutableStateOf(Tab.HUD) }
     // Dismiss the item info popup when the tab changes so it never lingers over another screen.
     LaunchedEffect(tab) { ItemInfoPopupState.close() }
+
+    // While this screen is shown, D-pad left/right/down and R3 work the inventory cards during play
+    // (companion-inventory-dpad.patch). From another tab the first press opens the inventory;
+    // ItemCardGrid and InventoryPanel take the presses after that.
+    DisposableEffect(Unit) {
+        GameStateRepository.inventoryPadActive.value = true
+        onDispose { GameStateRepository.inventoryPadActive.value = false }
+    }
+    LaunchedEffect(Unit) {
+        var lastSeq = GameStateRepository.invPadEvent.value?.seq ?: -1L
+        GameStateRepository.invPadEvent.collect { ev ->
+            if (ev == null || ev.seq <= lastSeq) return@collect
+            lastSeq = ev.seq
+            if (tab != Tab.INVENTORY) {
+                tab = Tab.INVENTORY
+                InventoryPadFocus.visible = true
+            }
+        }
+    }
 
     // Companion data arrives solely via the native JNI push (core.companionPush →
     // companionPushLine → EngineActivity.onCompanionLine → GameStateRepository.onJniLine).
@@ -15974,8 +15998,9 @@ private fun FavSlotView(
 
     // ---- Label fitting. The pill is FAV_SLOT_WIDTH wide and most item names are wider than the
     // room left once the count chip is in, so the label is measured and progressively shortened
-    // (see favouriteSlotLabel). This is the ONLY place any name is shortened: the lists, and this
-    // slot's own long-press menu below, all render slot.name untouched.
+    // (see favouriteSlotLabel). Besides the inventory cards (see inventoryCardLabel), this is the only
+    // place a name is shortened: the lists, and this slot's own long-press menu below, all render
+    // slot.name untouched.
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val nameStyle = TextStyle(fontSize = 11.sp, fontFamily = MwBody)
@@ -16152,6 +16177,23 @@ private fun InventoryPanel(state: GameState) {
     // the (now-hidden) tab doesn't leave a blank list selected.
     LaunchedEffect(hasEquipped) {
         if (!hasEquipped && selectedCategoryLabel == EQUIPPED_FILTER) selectedCategoryLabel = null
+    }
+    // D-pad down during play: the next category, round to All again (companion-inventory-dpad.patch).
+    val padTabOrder = rememberUpdatedState(buildList<String?> {
+        add(null)
+        if (hasEquipped) add(EQUIPPED_FILTER)
+        presentCategories.forEach { add(it.label) }
+    })
+    LaunchedEffect(Unit) {
+        var lastSeq = GameStateRepository.invPadEvent.value?.seq ?: -1L
+        GameStateRepository.invPadEvent.collect { ev ->
+            if (ev == null || ev.seq <= lastSeq) return@collect
+            lastSeq = ev.seq
+            if (ev !is InvPadEvent.Down) return@collect
+            selectedCategoryLabel = cycleValue(padTabOrder.value, selectedCategoryLabel, 1)
+            InventoryPadFocus.index = 0
+            InventoryPadFocus.visible = true
+        }
     }
 
     Column(
@@ -16463,20 +16505,24 @@ private fun CategorySubTabs(
     // costing. Scrolling the tabs is the cheaper trade here.
     // Side effect of this shape: the nested horizontal scroller consumes drags that START on the
     // tab row, so categorySwipe only fires from the list body below.
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+    // A LazyRow, so a category chosen off screen (swipe, D-pad down) is scrolled into view, the same
+    // way as in CategoryTabStrip.
+    val labels = buildList<String?> {
+        add(null)
+        // "Equipped" filter — first after All, only when something is equipped.
+        if (hasEquipped) add(EQUIPPED_FILTER)
+        categories.forEach { add(it.label) }
+    }
+    val state = rememberLazyListState()
+    WindowedFocusScroll(state, labels.indexOf(selected).coerceAtLeast(0), labels.size, labels)
+    LazyRow(
+        state = state,
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        CategoryTab(label = "All", active = selected == null) { onSelect(null) }
-        // "Equipped" filter — first after All, only when something is equipped.
-        if (hasEquipped) {
-            CategoryTab(label = EQUIPPED_FILTER, active = selected == EQUIPPED_FILTER) { onSelect(EQUIPPED_FILTER) }
-        }
-        categories.forEach { cat ->
-            CategoryTab(label = cat.label, active = selected == cat.label) { onSelect(cat.label) }
+        items(labels) { label ->
+            CategoryTab(label = label ?: "All", active = selected == label) { onSelect(label) }
         }
     }
 }
@@ -16646,6 +16692,7 @@ private fun InventoryItemList(
                 // Card Size: 4 rows, or 3 for Large. Hiding the Equipped bar no longer adds a 5th
                 // row; the cards just get bigger (see INV_CARD_*).
                 rows = cardRows,
+                padNav = true,
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp)
             )
         } else {
@@ -16714,6 +16761,14 @@ private fun InventoryItemList(
     }
 }
 
+/** The D-pad focus over the inventory cards during play (companion-inventory-dpad.patch). Kept
+ *  outside the grid so the tab switch can show it and it keeps its place between visits. Shown from
+ *  the first press until the inventory is left. */
+private object InventoryPadFocus {
+    var index by mutableStateOf(0)
+    var visible by mutableStateOf(false)
+}
+
 /** A fixed-row horizontal grid of condensed [ItemCard]s + the shared [HorizontalGridScrollbar]. Fill
  *  order is column-major (top-to-bottom, then left-to-right) — same as the SPLIT loot/barter grids —
  *  so the caller's canonical sort reads down each column. [modifier] must bound the height (the main
@@ -16725,9 +16780,63 @@ private fun ItemCardGrid(
     forceHighlight: Boolean,
     chargeById: Map<String, Pair<Int, Int>>,
     rows: Int = INV_CARD_ROWS,
+    // The main inventory grid: D-pad left/right move the focus here during play, an R3 tap shows the
+    // focused card's details and holding R3 taps it (see InventoryPadFocus).
+    padNav: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val gridState = rememberLazyGridState()
+    val focusIndex = if (padNav && InventoryPadFocus.visible && items.isNotEmpty())
+        InventoryPadFocus.index.coerceIn(0, items.size - 1) else -1
+    if (padNav) {
+        val itemsState = rememberUpdatedState(items)
+        val isWornState = rememberUpdatedState(isWorn)
+        LaunchedEffect(Unit) {
+            var lastSeq = GameStateRepository.invPadEvent.value?.seq ?: -1L
+            GameStateRepository.invPadEvent.collect { ev ->
+                if (ev == null || ev.seq <= lastSeq) return@collect
+                lastSeq = ev.seq
+                if (ev is InvPadEvent.Down) return@collect // the category, see InventoryPanel
+                val list = itemsState.value
+                val n = list.size
+                if (n == 0) return@collect
+                val i = InventoryPadFocus.index.coerceIn(0, n - 1)
+                // the first press only shows the focus where it was
+                if (!InventoryPadFocus.visible) {
+                    InventoryPadFocus.index = i
+                    InventoryPadFocus.visible = true
+                    return@collect
+                }
+                // left/right step through the cards in the grid's own order, down each column and on
+                // to the next, round to the start again
+                when (ev) {
+                    is InvPadEvent.Right -> InventoryPadFocus.index = (i + 1) % n
+                    is InvPadEvent.Left -> InventoryPadFocus.index = (i - 1 + n) % n
+                    is InvPadEvent.Info -> {
+                        val item = list[i]
+                        ItemInfoPopupState.toggle(item.id, item.displayName(), item.enchant)
+                    }
+                    is InvPadEvent.Use -> {
+                        val item = list[i]
+                        itemPrimaryAction(
+                            item, isWornState.value(item), item.isEquippable(), item.isUsable(), item.isReadable()
+                        )
+                    }
+                    is InvPadEvent.Down -> Unit
+                }
+            }
+        }
+        // an open details card follows the focus, also when the list itself changes under it
+        val focusedItem = items.getOrNull(focusIndex)
+        LaunchedEffect(focusedItem?.id) {
+            if (focusedItem != null && ItemInfoPopupState.isOpen && ItemInfoPopupState.focusLinked)
+                ItemInfoPopupState.follow(focusedItem.id, focusedItem.displayName(), focusedItem.enchant)
+        }
+        DisposableEffect(Unit) {
+            onDispose { InventoryPadFocus.visible = false }
+        }
+        WindowedFocusScroll(gridState, focusIndex, items.size, items)
+    }
     Column(modifier) {
         LazyHorizontalGrid(
             state = gridState,
@@ -16736,12 +16845,13 @@ private fun ItemCardGrid(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            gridItemsIndexed(items) { _, item ->
+            gridItemsIndexed(items) { index, item ->
                 val worn = isWorn(item)
                 ItemCard(
                     item, worn = worn, equippable = item.isEquippable(),
                     usable = item.isUsable(), readable = item.isReadable(),
                     highlight = forceHighlight || worn,
+                    focused = index == focusIndex,
                     iconBitmap = rememberItemIcon(item.icon),
                     enchantCharge = chargeById[item.id]
                 )
@@ -16942,30 +17052,46 @@ private fun textSlotGrow(): Float =
     (LocalTextSizeScale.current * LocalPageTextScale.current).coerceAtLeast(1f)
 
 /** "DMG 2-14": key and value on one line instead of two. Used by the inventory cards, whose height
- *  is fixed, so there is room for larger text. The value is cut off before the key. */
+ *  is fixed, so there is room for larger text. A key too long for the slot, like a potion's effect,
+ *  is abbreviated ("FORT. AGI."), and only then cut; the value is always shown whole. */
 @Composable
 private fun InlineStatLabel(key: String, value: String) {
-    Row {
-        if (key.isNotEmpty()) {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val keyStyle = LocalTextStyle.current.merge(
+        TextStyle(fontSize = 8.sp, fontFamily = MwBody, letterSpacing = 0.5.sp)
+    )
+    val valueStyle = LocalTextStyle.current.merge(TextStyle(fontSize = 11.sp, fontFamily = MwData))
+    BoxWithConstraints {
+        val budget = constraints.maxWidth
+        val shownKey = remember(key, value, budget, density, keyStyle, valueStyle) {
+            if (key.isEmpty() || !constraints.hasBoundedWidth) key
+            else {
+                val rest = measurer.measure(AnnotatedString(value), valueStyle, maxLines = 1).size.width +
+                    with(density) { 3.dp.roundToPx() }
+                val fullWidth = measurer.measure(AnnotatedString(key), keyStyle, maxLines = 1).size.width
+                if (fullWidth + rest <= budget) key else abbreviateEffectWordsUpper(key)
+            }
+        }
+        Row {
+            if (shownKey.isNotEmpty()) {
+                Text(
+                    shownKey,
+                    color = BoneDim,
+                    style = keyStyle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.alignByBaseline().weight(1f, fill = false).padding(end = 3.dp)
+                )
+            }
             Text(
-                key,
-                color = BoneDim,
-                fontSize = 8.sp,
-                fontFamily = MwBody,
-                letterSpacing = 0.5.sp,
+                value,
+                color = BronzeLight,
+                style = valueStyle,
                 maxLines = 1,
-                modifier = Modifier.alignByBaseline().padding(end = 3.dp)
+                modifier = Modifier.alignByBaseline()
             )
         }
-        Text(
-            value,
-            color = BronzeLight,
-            fontSize = 11.sp,
-            fontFamily = MwData,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.alignByBaseline().weight(1f, fill = false)
-        )
     }
 }
 
@@ -16985,7 +17111,8 @@ private fun ItemStatColumn(
         if (width != null) Modifier.width(width * textSlotGrow()) else Modifier,
         contentAlignment = if (cardStyle) Alignment.Center else Alignment.CenterEnd
     ) {
-        if (statVal.isNotEmpty()) {
+        // a key without a value is an effect without a magnitude (a Recall scroll), shown by name
+        if (statVal.isNotEmpty() || statKey.isNotEmpty()) {
             if (inlineLabel) {
                 InlineStatLabel(statKey, statVal)
             } else if (cardStyle) {
@@ -17102,7 +17229,8 @@ private fun ItemWeightColumn(
  *  ItemRow. Charge takes priority when present (those items have no durability, so no conflict). */
 @Composable
 private fun ItemConditionColumn(cond: Float?, enchantCharge: Pair<Int, Int>?, width: Dp = 50.dp) {
-    // Grows with the text like the other columns, otherwise COND/CHARGE wraps.
+    // Grows with the text like the other columns. The label never wraps: when it is still wider
+    // than the bar it stays on one line, centred over it.
     Box(Modifier.width(width * textSlotGrow()), contentAlignment = Alignment.Center) {
         val chargePair = enchantCharge?.takeIf { it.second > 0 }
         when {
@@ -17116,7 +17244,10 @@ private fun ItemConditionColumn(cond: Float?, enchantCharge: Pair<Int, Int>?, wi
                         color = BoneDim,
                         fontSize = 7.sp,
                         fontFamily = MwBody,
-                        letterSpacing = 0.5.sp
+                        letterSpacing = 0.5.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.wrapContentWidth(unbounded = true)
                     )
                     Box(
                         modifier = Modifier
@@ -17143,7 +17274,10 @@ private fun ItemConditionColumn(cond: Float?, enchantCharge: Pair<Int, Int>?, wi
                         color = BoneDim,
                         fontSize = 7.sp,
                         fontFamily = MwBody,
-                        letterSpacing = 0.5.sp
+                        letterSpacing = 0.5.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.wrapContentWidth(unbounded = true)
                     )
                     Box(
                         modifier = Modifier
@@ -17423,27 +17557,32 @@ private fun Modifier.reportHeightOverflow(onOverflow: (Float) -> Unit): Modifier
         layout(placeable.width, height) { placeable.place(0, (height - placeable.height) / 2) }
     }
 
-/** A single-line item name that shrinks 13sp → 11sp before ellipsis-truncating, staying within the
- *  card's fixed name width. Mirrors the CornerNameLabel onTextLayout measure trick: render at the
- *  larger size, and if it overflows, drop to the smaller size (which then ellipsis-truncates). */
+/** A single-line item name, the same size on every card. A name that does not fit is shortened
+ *  (see [inventoryCardLabel]) and only then cut with an ellipsis. It used to step down to a smaller
+ *  size instead, so neighbouring cards showed names in two sizes. */
 @Composable
-private fun AutoShrinkItemName(text: String, color: Color, modifier: Modifier = Modifier) {
-    // Two-stage: try 13sp; on visual overflow, fall back to 11sp (still single-line, ellipsis).
-    var shrink by remember(text) { mutableStateOf(false) }
-    Text(
-        text,
-        color = color,
-        fontSize = if (shrink) 11.sp else 13.sp,
-        fontFamily = MwBody,
-        fontWeight = FontWeight.Normal,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        onTextLayout = { result ->
-            // Only step down once (13 → 11); at 11sp we keep the ellipsis rather than shrinking further.
-            if (!shrink && result.hasVisualOverflow) shrink = true
-        },
-        modifier = modifier
+private fun CardItemName(item: InventoryItem, color: Color, modifier: Modifier = Modifier) {
+    val measurer = rememberTextMeasurer()
+    val style = LocalTextStyle.current.merge(
+        TextStyle(fontSize = 13.sp, fontFamily = MwBody, fontWeight = FontWeight.Normal)
     )
+    val density = LocalDensity.current
+    BoxWithConstraints(modifier) {
+        val budget = constraints.maxWidth
+        val name = item.displayName()
+        val label = remember(name, item.category, budget, density, style) {
+            inventoryCardLabel(name, item.category) { candidate ->
+                measurer.measure(AnnotatedString(candidate), style, maxLines = 1).size.width <= budget
+            }
+        }
+        Text(
+            label,
+            color = color,
+            style = style,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
 }
 
 /** One condensed inventory card: icon on the left, name over a compact stat row on the right. Reuses
@@ -17459,6 +17598,8 @@ private fun ItemCard(
     usable: Boolean = false,
     readable: Boolean,
     highlight: Boolean = false,
+    // the D-pad focus (see InventoryPadFocus)
+    focused: Boolean = false,
     iconBitmap: ImageBitmap? = null,
     enchantCharge: Pair<Int, Int>? = null
 ) {
@@ -17505,8 +17646,22 @@ private fun ItemCard(
                         .clip(RoundedCornerShape(3.dp))
                         // Equipped items get the same faint fill + BronzeLight outline as the List
                         // highlight; otherwise a plain slot panel so cards read as discrete tiles.
-                        .background(if (highlight) BronzeLight.copy(alpha = 0.06f) else StoneDark)
-                        .border(1.dp, if (highlight) BronzeLight else BronzeDark, RoundedCornerShape(3.dp))
+                        .background(
+                            when {
+                                focused -> BronzeLight.copy(alpha = 0.15f)
+                                highlight -> BronzeLight.copy(alpha = 0.06f)
+                                else -> StoneDark
+                            }
+                        )
+                        .border(
+                            if (focused) 2.dp else 1.dp,
+                            when {
+                                focused -> BoneBright
+                                highlight -> BronzeLight
+                                else -> BronzeDark
+                            },
+                            RoundedCornerShape(3.dp)
+                        )
                         .combinedClickable(
                             onClick = { itemPrimaryAction(item, worn, equippable, usable, readable) },
                             onLongClick = { menuOpen = true; DropdownState.open() }
@@ -17522,8 +17677,8 @@ private fun ItemCard(
                         Modifier.weight(1f).reportHeightOverflow { CardTextFit.overflowed(base.fontScale, it) },
                         verticalArrangement = Arrangement.Center
                     ) {
-                        AutoShrinkItemName(
-                            item.displayName(),
+                        CardItemName(
+                            item,
                             color = if (worn) BoneBright else BoneMuted,
                             modifier = Modifier.fillMaxWidth()
                         )

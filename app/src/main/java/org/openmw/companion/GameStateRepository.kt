@@ -165,6 +165,14 @@ object GameStateRepository {
     private val _navEvent = MutableStateFlow<NavEvent?>(null)
     val navEvent: StateFlow<NavEvent?> = _navEvent.asStateFlow()
 
+    // D-pad for the companion's inventory during play (native COMPANION_INVPAD_* → parseInvPad).
+    private var invPadSeq = 0L
+    private val _invPadEvent = MutableStateFlow<InvPadEvent?>(null)
+    val invPadEvent: StateFlow<InvPadEvent?> = _invPadEvent.asStateFlow()
+    /** Set by the companion screen while it is shown: native then sends D-pad left/right/down and
+     *  R3 as [invPadEvent] during play. */
+    val inventoryPadActive = MutableStateFlow(false)
+
     // Live analog thumbstick state for the DS map (COMPANION_STICK). Unlike navEvent this is STATE,
     // not a stream of one-shots, so it is deliberately NOT seq-stamped: two consecutive identical
     // readings mean the sticks have not moved, and deduping them is exactly what we want. Native
@@ -964,6 +972,9 @@ object GameStateRepository {
             }
             trimmed.contains(LogParser.P_NAV) -> {
                 LogParser.parseNav(trimmed)?.let { factory -> _navEvent.value = factory(navSeq++) }
+            }
+            trimmed.contains(LogParser.P_INVPAD) -> {
+                LogParser.parseInvPad(trimmed)?.let { factory -> _invPadEvent.value = factory(invPadSeq++) }
             }
             trimmed.contains(LogParser.P_CRIME_MSG) -> {
                 val text = trimmed.substring(trimmed.indexOf(LogParser.P_CRIME_MSG) + LogParser.P_CRIME_MSG.length).trim()
