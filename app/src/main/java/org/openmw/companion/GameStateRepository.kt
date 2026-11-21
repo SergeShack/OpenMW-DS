@@ -167,8 +167,30 @@ object GameStateRepository {
 
     // D-pad for the companion's inventory during play (native COMPANION_INVPAD_* → parseInvPad).
     private var invPadSeq = 0L
+    // when the last of those signals arrived, see inventoryPadRecent
+    @Volatile
+    private var invPadAtMs = 0L
     private val _invPadEvent = MutableStateFlow<InvPadEvent?>(null)
     val invPadEvent: StateFlow<InvPadEvent?> = _invPadEvent.asStateFlow()
+    @Synchronized
+    private fun pushInvPad(ev: InvPadEvent) {
+        _invPadEvent.value = ev
+        invPadAtMs = android.os.SystemClock.uptimeMillis()
+    }
+
+    /** Whether the inventory was worked by the D-pad or R3 in the last few seconds, so its focus is
+     *  in use. A touch control can then take a held finger as "use the focused item". */
+    fun inventoryPadRecent(): Boolean =
+        inventoryPadActive.value && android.os.SystemClock.uptimeMillis() - invPadAtMs < INVENTORY_PAD_RECENT_MS
+
+    /** Use the inventory's focused item, as holding R3 does. For touch controls, see [inventoryPadRecent]. */
+    @Synchronized
+    fun useFocusedInventoryItem() {
+        pushInvPad(InvPadEvent.Use(invPadSeq++))
+    }
+
+    private const val INVENTORY_PAD_RECENT_MS = 5000L
+
     /** Set by the companion screen while it is shown: native then sends D-pad left/right/down and
      *  R3 as [invPadEvent] during play. */
     val inventoryPadActive = MutableStateFlow(false)
@@ -983,7 +1005,7 @@ object GameStateRepository {
                         else -> null
                     }
                     if (gyroButton == null || !org.openmw.utils.GyroControl.usesButton(gyroButton))
-                        _invPadEvent.value = ev
+                        pushInvPad(ev)
                 }
             }
             trimmed.contains(LogParser.P_CRIME_MSG) -> {
