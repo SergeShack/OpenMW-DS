@@ -298,6 +298,18 @@ object LogParser {
      *  means its own branch in onRawLine rather than an ordering rule to remember. */
     const val P_STICK = "COMPANION_STICK:"
     const val P_NAV = "COMPANION_NAV_"
+    /** D-pad for the companion's inventory during play (companion-inventory-dpad.patch). Its own
+     *  namespace so the DS overlays' [NavEvent] collectors never see it. */
+    const val P_INVPAD = "COMPANION_INVPAD_"
+
+    fun parseInvPad(line: String): ((Long) -> InvPadEvent)? = when {
+        line.contains("COMPANION_INVPAD_LEFT:") -> { seq -> InvPadEvent.Left(seq) }
+        line.contains("COMPANION_INVPAD_RIGHT:") -> { seq -> InvPadEvent.Right(seq) }
+        line.contains("COMPANION_INVPAD_DOWN:") -> { seq -> InvPadEvent.Down(seq) }
+        line.contains("COMPANION_INVPAD_INFO:") -> { seq -> InvPadEvent.Info(seq) }
+        line.contains("COMPANION_INVPAD_USE:") -> { seq -> InvPadEvent.Use(seq) }
+        else -> null
+    }
     const val P_NAV_LEFT = "COMPANION_NAV_LEFT:"
     const val P_NAV_RIGHT = "COMPANION_NAV_RIGHT:"
     const val P_NAV_UP = "COMPANION_NAV_UP:"

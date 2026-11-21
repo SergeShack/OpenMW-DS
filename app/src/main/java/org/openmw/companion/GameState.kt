@@ -1416,6 +1416,21 @@ data class StickState(
 }
 
 /**
+ * A one-shot signal for the companion's inventory during play (companion-inventory-dpad.patch →
+ * COMPANION_INVPAD_* log lines): D-pad left/right step the focus to the previous/next card (held,
+ * they repeat), down goes to the next category, an R3 tap shows the item's details and holding R3
+ * is the item's tap action. Stamped with a [seq] like [NavEvent], so repeated presses are distinct.
+ */
+sealed class InvPadEvent {
+    abstract val seq: Long
+    data class Left(override val seq: Long) : InvPadEvent()
+    data class Right(override val seq: Long) : InvPadEvent()
+    data class Down(override val seq: Long) : InvPadEvent()
+    data class Info(override val seq: Long) : InvPadEvent()
+    data class Use(override val seq: Long) : InvPadEvent()
+}
+
+/**
  * A one-shot controller-navigation signal for the DS overlays, produced natively
  * (companion-controller-nav.patch → COMPANION_NAV_* log lines) while a DS overlay owns input
  * (companionNavActive()). Exposed as GameStateRepository.navEvent: StateFlow<NavEvent?>.

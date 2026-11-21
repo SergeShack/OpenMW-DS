@@ -186,6 +186,11 @@ static std::atomic<bool> g_companionDsTravel{ false };      // GM_Travel
 // behaviour. std::atomic: written on a JNI thread, read on the input thread.
 static std::atomic<bool> g_companionNavActive{ false };
 
+// Pushed from Kotlin (setCompanionInventoryPad). True while the bottom screen shows the companion:
+// during play, D-pad left, right and down and R3 then work its inventory instead of their bindings.
+// Read by ControllerManager (companion-inventory-dpad.patch).
+static std::atomic<bool> g_companionInventoryPadActive{ false };
+
 // True while a bottom-screen quantity selector is open (pushed from Kotlin). Read by
 // ControllerManager (companion-controller-nav.patch): while set, the controller B button is
 // intercepted as a CANCEL of just the selector (COMPANION_NAV_CANCEL) instead of closing the
@@ -1206,6 +1211,10 @@ extern "C" bool companionNavActive()
 {
     return g_companionNavActive.load();
 }
+extern "C" bool companionInventoryPadActive()
+{
+    return g_companionInventoryPadActive.load();
+}
 // Read by ControllerManager (companion-controller-nav.patch): true while a quantity selector is up,
 // so B cancels just the selector (COMPANION_NAV_CANCEL) rather than closing the whole overlay.
 extern "C" bool companionQtySelectorOpen()
@@ -1233,6 +1242,12 @@ extern "C" JNIEXPORT void JNICALL
 Java_org_openmw_EngineActivity_setCompanionNavActive(JNIEnv* /*env*/, jclass /*cls*/, jboolean active)
 {
     g_companionNavActive.store(active == JNI_TRUE);
+}
+// Pushed from Kotlin whenever the companion's inventory D-pad state changes (see g_companionInventoryPadActive).
+extern "C" JNIEXPORT void JNICALL
+Java_org_openmw_EngineActivity_setCompanionInventoryPad(JNIEnv* /*env*/, jclass /*cls*/, jboolean active)
+{
+    g_companionInventoryPadActive.store(active == JNI_TRUE);
 }
 // Pushed from Kotlin whenever a quantity selector opens/closes. Caches into
 // g_companionQtySelectorOpen for companionQtySelectorOpen() above (B-cancel interception).

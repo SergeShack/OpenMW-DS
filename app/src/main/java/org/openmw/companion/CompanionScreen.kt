@@ -1228,6 +1228,25 @@ private fun CompanionScreenContent() {
     // Dismiss the item info popup when the tab changes so it never lingers over another screen.
     LaunchedEffect(tab) { ItemInfoPopupState.close() }
 
+    // While this screen is shown, D-pad left/right/down and R3 work the inventory cards during play
+    // (companion-inventory-dpad.patch). From another tab the first press opens the inventory;
+    // ItemCardGrid and InventoryPanel take the presses after that.
+    DisposableEffect(Unit) {
+        GameStateRepository.inventoryPadActive.value = true
+        onDispose { GameStateRepository.inventoryPadActive.value = false }
+    }
+    LaunchedEffect(Unit) {
+        var lastSeq = GameStateRepository.invPadEvent.value?.seq ?: -1L
+        GameStateRepository.invPadEvent.collect { ev ->
+            if (ev == null || ev.seq <= lastSeq) return@collect
+            lastSeq = ev.seq
+            if (tab != Tab.INVENTORY) {
+                tab = Tab.INVENTORY
+                InventoryPadFocus.visible = true
+            }
+        }
+    }
+
     // Companion data arrives solely via the native JNI push (core.companionPush →
     // companionPushLine → EngineActivity.onCompanionLine → GameStateRepository.onJniLine).
     // There is no file-tail fallback: companion lines are no longer written to openmw.log at
@@ -16156,6 +16175,23 @@ private fun InventoryPanel(state: GameState) {
     LaunchedEffect(hasEquipped) {
         if (!hasEquipped && selectedCategoryLabel == EQUIPPED_FILTER) selectedCategoryLabel = null
     }
+    // D-pad down during play: the next category, round to All again (companion-inventory-dpad.patch).
+    val padTabOrder = rememberUpdatedState(buildList<String?> {
+        add(null)
+        if (hasEquipped) add(EQUIPPED_FILTER)
+        presentCategories.forEach { add(it.label) }
+    })
+    LaunchedEffect(Unit) {
+        var lastSeq = GameStateRepository.invPadEvent.value?.seq ?: -1L
+        GameStateRepository.invPadEvent.collect { ev ->
+            if (ev == null || ev.seq <= lastSeq) return@collect
+            lastSeq = ev.seq
+            if (ev !is InvPadEvent.Down) return@collect
+            selectedCategoryLabel = cycleValue(padTabOrder.value, selectedCategoryLabel, 1)
+            InventoryPadFocus.index = 0
+            InventoryPadFocus.visible = true
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -16649,6 +16685,7 @@ private fun InventoryItemList(
                 // Card Size: 4 rows, or 3 for Large. Hiding the Equipped bar no longer adds a 5th
                 // row; the cards just get bigger (see INV_CARD_*).
                 rows = cardRows,
+                padNav = true,
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp)
             )
         } else {
@@ -16717,6 +16754,14 @@ private fun InventoryItemList(
     }
 }
 
+/** The D-pad focus over the inventory cards during play (companion-inventory-dpad.patch). Kept
+ *  outside the grid so the tab switch can show it and it keeps its place between visits. Shown from
+ *  the first press until the inventory is left. */
+private object InventoryPadFocus {
+    var index by mutableStateOf(0)
+    var visible by mutableStateOf(false)
+}
+
 /** A fixed-row horizontal grid of condensed [ItemCard]s + the shared [HorizontalGridScrollbar]. Fill
  *  order is column-major (top-to-bottom, then left-to-right) — same as the SPLIT loot/barter grids —
  *  so the caller's canonical sort reads down each column. [modifier] must bound the height (the main
@@ -16728,9 +16773,63 @@ private fun ItemCardGrid(
     forceHighlight: Boolean,
     chargeById: Map<String, Pair<Int, Int>>,
     rows: Int = INV_CARD_ROWS,
+    // The main inventory grid: D-pad left/right move the focus here during play, an R3 tap shows the
+    // focused card's details and holding R3 taps it (see InventoryPadFocus).
+    padNav: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val gridState = rememberLazyGridState()
+    val focusIndex = if (padNav && InventoryPadFocus.visible && items.isNotEmpty())
+        InventoryPadFocus.index.coerceIn(0, items.size - 1) else -1
+    if (padNav) {
+        val itemsState = rememberUpdatedState(items)
+        val isWornState = rememberUpdatedState(isWorn)
+        LaunchedEffect(Unit) {
+            var lastSeq = GameStateRepository.invPadEvent.value?.seq ?: -1L
+            GameStateRepository.invPadEvent.collect { ev ->
+                if (ev == null || ev.seq <= lastSeq) return@collect
+                lastSeq = ev.seq
+                if (ev is InvPadEvent.Down) return@collect // the category, see InventoryPanel
+                val list = itemsState.value
+                val n = list.size
+                if (n == 0) return@collect
+                val i = InventoryPadFocus.index.coerceIn(0, n - 1)
+                // the first press only shows the focus where it was
+                if (!InventoryPadFocus.visible) {
+                    InventoryPadFocus.index = i
+                    InventoryPadFocus.visible = true
+                    return@collect
+                }
+                // left/right step through the cards in the grid's own order, down each column and on
+                // to the next, round to the start again
+                when (ev) {
+                    is InvPadEvent.Right -> InventoryPadFocus.index = (i + 1) % n
+                    is InvPadEvent.Left -> InventoryPadFocus.index = (i - 1 + n) % n
+                    is InvPadEvent.Info -> {
+                        val item = list[i]
+                        ItemInfoPopupState.toggle(item.id, item.displayName(), item.enchant)
+                    }
+                    is InvPadEvent.Use -> {
+                        val item = list[i]
+                        itemPrimaryAction(
+                            item, isWornState.value(item), item.isEquippable(), item.isUsable(), item.isReadable()
+                        )
+                    }
+                    is InvPadEvent.Down -> Unit
+                }
+            }
+        }
+        // an open details card follows the focus, also when the list itself changes under it
+        val focusedItem = items.getOrNull(focusIndex)
+        LaunchedEffect(focusedItem?.id) {
+            if (focusedItem != null && ItemInfoPopupState.isOpen && ItemInfoPopupState.focusLinked)
+                ItemInfoPopupState.follow(focusedItem.id, focusedItem.displayName(), focusedItem.enchant)
+        }
+        DisposableEffect(Unit) {
+            onDispose { InventoryPadFocus.visible = false }
+        }
+        WindowedFocusScroll(gridState, focusIndex, items.size, items)
+    }
     Column(modifier) {
         LazyHorizontalGrid(
             state = gridState,
@@ -16739,12 +16838,13 @@ private fun ItemCardGrid(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            gridItemsIndexed(items) { _, item ->
+            gridItemsIndexed(items) { index, item ->
                 val worn = isWorn(item)
                 ItemCard(
                     item, worn = worn, equippable = item.isEquippable(),
                     usable = item.isUsable(), readable = item.isReadable(),
                     highlight = forceHighlight || worn,
+                    focused = index == focusIndex,
                     iconBitmap = rememberItemIcon(item.icon),
                     enchantCharge = chargeById[item.id]
                 )
@@ -17490,6 +17590,8 @@ private fun ItemCard(
     usable: Boolean = false,
     readable: Boolean,
     highlight: Boolean = false,
+    // the D-pad focus (see InventoryPadFocus)
+    focused: Boolean = false,
     iconBitmap: ImageBitmap? = null,
     enchantCharge: Pair<Int, Int>? = null
 ) {
@@ -17536,8 +17638,22 @@ private fun ItemCard(
                         .clip(RoundedCornerShape(3.dp))
                         // Equipped items get the same faint fill + BronzeLight outline as the List
                         // highlight; otherwise a plain slot panel so cards read as discrete tiles.
-                        .background(if (highlight) BronzeLight.copy(alpha = 0.06f) else StoneDark)
-                        .border(1.dp, if (highlight) BronzeLight else BronzeDark, RoundedCornerShape(3.dp))
+                        .background(
+                            when {
+                                focused -> BronzeLight.copy(alpha = 0.15f)
+                                highlight -> BronzeLight.copy(alpha = 0.06f)
+                                else -> StoneDark
+                            }
+                        )
+                        .border(
+                            if (focused) 2.dp else 1.dp,
+                            when {
+                                focused -> BoneBright
+                                highlight -> BronzeLight
+                                else -> BronzeDark
+                            },
+                            RoundedCornerShape(3.dp)
+                        )
                         .combinedClickable(
                             onClick = { itemPrimaryAction(item, worn, equippable, usable, readable) },
                             onLongClick = { menuOpen = true; DropdownState.open() }

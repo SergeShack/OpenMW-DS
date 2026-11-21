@@ -1,0 +1,146 @@
+--- a/apps/openmw/mwinput/controllermanager.cpp
++++ b/apps/openmw/mwinput/controllermanager.cpp
+@@ -64,10 +64,47 @@
+ // companion-map-export.patch (an identical redeclaration is legal and keeps the patches
+ // independently resettable).
+ extern "C" bool companionDsMapActive();
++// COMPANION: defined in androidmain.cpp. While the bottom screen shows the companion, D-pad left, right
++// and down and R3 work its inventory during play. D-pad up still opens the game's own inventory.
++extern "C" bool companionInventoryPadActive();
+ #endif
+ 
+ namespace MWInput
+ {
++#ifdef __ANDROID__
++    namespace
++    {
++        // Buttons whose press went to the companion's inventory, so their release is kept from the
++        // bindings too.
++        bool sInventoryPadHeld[SDL_CONTROLLER_BUTTON_MAX] = {};
++        // D-pad left or right held down, -1 if none, and when it repeats next. The same pace as in the
++        // menus: a pause, then steps that get faster.
++        int sInventoryPadRepeatButton = -1;
++        float sInventoryPadRepeatTimer = 0.f;
++        int sInventoryPadRepeatCount = 0;
++        // R3: a short press shows the item's details, holding it uses the item.
++        constexpr float sInventoryPadHoldTime = 0.4f;
++        bool sInventoryPadR3Down = false;
++        bool sInventoryPadR3Used = false;
++        float sInventoryPadR3Time = 0.f;
++
++        const char* inventoryPadDpadSignal(int button)
++        {
++            switch (button)
++            {
++                case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
++                    return "COMPANION_INVPAD_LEFT:";
++                case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
++                    return "COMPANION_INVPAD_RIGHT:";
++                case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
++                    return "COMPANION_INVPAD_DOWN:";
++                default:
++                    return nullptr;
++            }
++        }
++    }
++#endif
++
+     ControllerManager::ControllerManager(BindingsManager* bindingsManager, MouseManager* mouseManager,
+         const std::filesystem::path& userControllerBindingsFile, const std::filesystem::path& controllerBindingsFile)
+         : mBindingsManager(bindingsManager)
+@@ -134,6 +171,37 @@
+ 
+     void ControllerManager::update(float dt)
+     {
++#ifdef __ANDROID__
++        {
++            // the companion inventory's held D-pad repeat and R3 hold (see buttonPressed)
++            const bool padOn = companionInventoryPadActive()
++                && !MWBase::Environment::get().getWindowManager()->isGuiMode();
++            if (!padOn)
++            {
++                sInventoryPadRepeatButton = -1;
++                sInventoryPadR3Down = false;
++            }
++            if (sInventoryPadRepeatButton >= 0)
++            {
++                sInventoryPadRepeatTimer -= dt;
++                if (sInventoryPadRepeatTimer <= 0.f)
++                {
++                    sInventoryPadRepeatTimer = sInventoryPadRepeatCount < 10 ? 0.08f : 0.04f;
++                    ++sInventoryPadRepeatCount;
++                    Log(Debug::Info) << inventoryPadDpadSignal(sInventoryPadRepeatButton);
++                }
++            }
++            if (sInventoryPadR3Down && !sInventoryPadR3Used)
++            {
++                sInventoryPadR3Time += dt;
++                if (sInventoryPadR3Time >= sInventoryPadHoldTime)
++                {
++                    sInventoryPadR3Used = true;
++                    Log(Debug::Info) << "COMPANION_INVPAD_USE:";
++                }
++            }
++        }
++#endif
+         // A d-pad direction held in a menu keeps moving the selection, as in console games: after a short
+         // pause it repeats, and after a few steps it goes faster, so a long list can be scrolled through
+         // without pressing again and again.
+@@ -515,6 +583,34 @@
+             { MWBase::LuaManager::InputEvent::ControllerPressed, arg.button });
+ 
+         mJoystickLastUsed = true;
++#ifdef __ANDROID__
++        // during play, these buttons work the companion's inventory instead of their bindings
++        if (!MWBase::Environment::get().getWindowManager()->isGuiMode()
++            && !MWBase::Environment::get().getInputManager()->controlsDisabled() && companionInventoryPadActive()
++            && arg.button < SDL_CONTROLLER_BUTTON_MAX)
++        {
++            if (const char* signal = inventoryPadDpadSignal(arg.button))
++            {
++                Log(Debug::Info) << signal;
++                sInventoryPadHeld[arg.button] = true;
++                if (arg.button != SDL_CONTROLLER_BUTTON_DPAD_DOWN)
++                {
++                    sInventoryPadRepeatButton = arg.button;
++                    sInventoryPadRepeatTimer = 0.4f;
++                    sInventoryPadRepeatCount = 0;
++                }
++                return;
++            }
++            if (arg.button == SDL_CONTROLLER_BUTTON_RIGHTSTICK)
++            {
++                sInventoryPadHeld[arg.button] = true;
++                sInventoryPadR3Down = true;
++                sInventoryPadR3Used = false;
++                sInventoryPadR3Time = 0.f;
++                return;
++            }
++        }
++#endif
+         if (MWBase::Environment::get().getWindowManager()->isGuiMode())
+         {
+             if (isGuiDpadButton(arg.button))
+@@ -563,6 +659,22 @@
+     {
+         if (arg.button == mHeldGuiDpadButton)
+             mHeldGuiDpadButton = -1;
++#ifdef __ANDROID__
++        if (arg.button == sInventoryPadRepeatButton)
++            sInventoryPadRepeatButton = -1;
++        if (arg.button < SDL_CONTROLLER_BUTTON_MAX && sInventoryPadHeld[arg.button])
++        {
++            sInventoryPadHeld[arg.button] = false;
++            if (arg.button == SDL_CONTROLLER_BUTTON_RIGHTSTICK)
++            {
++                // released before it counted as held: show the item's details
++                if (sInventoryPadR3Down && !sInventoryPadR3Used)
++                    Log(Debug::Info) << "COMPANION_INVPAD_INFO:";
++                sInventoryPadR3Down = false;
++            }
++            return;
++        }
++#endif
+ 
+         if (mBindingsManager->isDetectingBindingState())
+         {

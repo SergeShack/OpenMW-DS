@@ -1151,6 +1151,13 @@ class EngineActivity : SDLActivity() {
         external fun setCompanionNavActive(active: Boolean)
 
         /**
+         * Push whether the bottom screen shows the companion (companion-inventory-dpad.patch). While
+         * true, D-pad left/right/down and R3 work its inventory during play instead of their bindings.
+         */
+        @JvmStatic
+        external fun setCompanionInventoryPad(active: Boolean)
+
+        /**
          * Push whether a bottom-screen quantity selector is open. While true, native
          * ControllerManager intercepts B as a CANCEL of just the selector (COMPANION_NAV_CANCEL)
          * instead of closing the whole overlay. Pushed on open/close from QuantitySelector.
@@ -1857,6 +1864,13 @@ class EngineActivity : SDLActivity() {
                 session != null && loc == ScreenLocation.SPLIT && mode == GameUiMode.DS
             }.distinctUntilChanged().collect { show ->
                 if (show) showBarterTopOverlay() else hideBarterTopOverlay()
+            }
+        }
+
+        // The companion inventory's D-pad during play, on while the companion screen is shown.
+        lifecycleScope.launch {
+            GameStateRepository.inventoryPadActive.collect { active ->
+                runCatching { setCompanionInventoryPad(active) }
             }
         }
 
