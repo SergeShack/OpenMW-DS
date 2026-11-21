@@ -1035,6 +1035,14 @@ local function itemStats(item, cat)
         if eff then
             local nm = magicEffectName(eff)
             if nm then
+                -- "Fortify Attribute" alone does not say which one; name it, as the info popup does
+                pcall(function()
+                    if eff.affectedAttribute then
+                        nm = nm:gsub(" Attribute$", "") .. " " .. tostring(eff.affectedAttribute)
+                    elseif eff.affectedSkill then
+                        nm = nm:gsub(" Skill$", "") .. " " .. tostring(eff.affectedSkill)
+                    end
+                end)
                 local mag = 0
                 pcall(function() mag = math.floor((eff.magnitudeMax or eff.magnitudeMin or 0) + 0.5) end)
                 return string.format("%d", mag), string.upper(nm), nil

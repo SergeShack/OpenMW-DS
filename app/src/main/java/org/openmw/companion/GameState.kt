@@ -205,6 +205,40 @@ fun favouriteSlotLabel(name: String, category: String, fits: (String) -> Boolean
     return abbreviateEffectWords(stage2)
 }
 
+/** [abbreviateEffectWords] for the upper-case effect names of the inventory cards' stat labels. */
+fun abbreviateEffectWordsUpper(name: String): String {
+    var s = name
+    for ((long, short) in EFFECT_ABBREVIATIONS) s = s.replace(long.uppercase(), short.uppercase())
+    return s
+}
+
+/** A potion's name without the word "Potion", keeping its quality tier: "Bargain Potion of Fortify
+ *  Agility" → "Bargain Fortify Agility", "Quality Restore Magicka Potion" → "Quality Restore
+ *  Magicka". Never empties the string. */
+fun potionNameWithoutPotionWord(name: String): String {
+    val s = name.trim()
+    val out = when {
+        s.startsWith("Potion of ") -> s.removePrefix("Potion of ")
+        s.contains(" Potion of ") -> s.replace(" Potion of ", " ")
+        s.endsWith(" Potion") -> s.removeSuffix(" Potion")
+        else -> s
+    }.trim()
+    return out.ifEmpty { s }
+}
+
+/**
+ * The inventory card's name: like [favouriteSlotLabel], least-lossy first, but a potion keeps its
+ * quality tier, since the inventory can hold several tiers of one potion side by side.
+ */
+fun inventoryCardLabel(name: String, category: String, fits: (String) -> Boolean): String {
+    if (fits(name)) return name
+    val stage1 = if (category == "potion") potionNameWithoutPotionWord(name) else name
+    if (fits(stage1)) return stage1
+    val stage2 = dropLeadingPossessive(stage1)
+    if (fits(stage2)) return stage2
+    return abbreviateEffectWords(stage2)
+}
+
 /** One enchantment effect line for the item info popup (from the streamed item exports). */
 data class ItemEnchantEffect(
     val id: String = "", val name: String = "", val mag: String = "",
