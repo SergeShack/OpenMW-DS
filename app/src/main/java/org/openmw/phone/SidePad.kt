@@ -1,5 +1,6 @@
 package org.openmw.phone
 
+import org.openmw.companion.GameStateRepository
 import android.content.Context
 import android.os.Build
 import android.os.VibrationEffect
@@ -258,8 +259,22 @@ internal fun LookPad(clickKey: Int, touchpadInMenus: Boolean, menu: Boolean, mod
                     var last = down.position
                     var travelled = 0f
                     var lastTime = down.uptimeMillis
+                    // While the D-pad or R3 has just been working the companion's inventory, a finger
+                    // held still is R3 held: it uses the focused item. Otherwise holding is looking.
+                    var holdToUse = !inMenu && GameStateRepository.inventoryPadRecent()
                     while (true) {
-                        val event = awaitPointerEvent()
+                        val event = if (holdToUse) {
+                            val left = LOOK_HOLD_USE_MS - (lastTime - down.uptimeMillis)
+                            withTimeoutOrNull(left.coerceAtLeast(1L)) { awaitPointerEvent() }
+                        } else {
+                            awaitPointerEvent()
+                        }
+                        if (event == null) {
+                            holdToUse = false
+                            PadHaptics.play(PadHaptic.FACE)
+                            GameStateRepository.useFocusedInventoryItem()
+                            continue
+                        }
                         val change = event.changes.firstOrNull { it.id == down.id } ?: break
                         change.consume()
                         lastTime = change.uptimeMillis
@@ -267,6 +282,7 @@ internal fun LookPad(clickKey: Int, touchpadInMenus: Boolean, menu: Boolean, mod
                         val d = change.position - last
                         last = change.position
                         travelled += hypot(d.x, d.y)
+                        if (travelled >= tapSlop) holdToUse = false
                         if (asStick) {
                             val o = change.position - down.position
                             VirtualPad.axis(VirtualPad.AXIS_RIGHT_X, o.x / stickRadius)
@@ -679,3 +695,6 @@ internal fun PadStick(axisX: Int, axisY: Int, clickKey: Int, modifier: Modifier)
         }
     }
 }
+
+/** How long a finger held still on the look pad counts as R3 held, see [LookPad]. */
+private const val LOOK_HOLD_USE_MS = 400L
