@@ -16502,20 +16502,24 @@ private fun CategorySubTabs(
     // costing. Scrolling the tabs is the cheaper trade here.
     // Side effect of this shape: the nested horizontal scroller consumes drags that START on the
     // tab row, so categorySwipe only fires from the list body below.
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+    // A LazyRow, so a category chosen off screen (swipe, D-pad down) is scrolled into view, the same
+    // way as in CategoryTabStrip.
+    val labels = buildList<String?> {
+        add(null)
+        // "Equipped" filter — first after All, only when something is equipped.
+        if (hasEquipped) add(EQUIPPED_FILTER)
+        categories.forEach { add(it.label) }
+    }
+    val state = rememberLazyListState()
+    WindowedFocusScroll(state, labels.indexOf(selected).coerceAtLeast(0), labels.size, labels)
+    LazyRow(
+        state = state,
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        CategoryTab(label = "All", active = selected == null) { onSelect(null) }
-        // "Equipped" filter — first after All, only when something is equipped.
-        if (hasEquipped) {
-            CategoryTab(label = EQUIPPED_FILTER, active = selected == EQUIPPED_FILTER) { onSelect(EQUIPPED_FILTER) }
-        }
-        categories.forEach { cat ->
-            CategoryTab(label = cat.label, active = selected == cat.label) { onSelect(cat.label) }
+        items(labels) { label ->
+            CategoryTab(label = label ?: "All", active = selected == label) { onSelect(label) }
         }
     }
 }
@@ -17104,7 +17108,8 @@ private fun ItemStatColumn(
         if (width != null) Modifier.width(width * textSlotGrow()) else Modifier,
         contentAlignment = if (cardStyle) Alignment.Center else Alignment.CenterEnd
     ) {
-        if (statVal.isNotEmpty()) {
+        // a key without a value is an effect without a magnitude (a Recall scroll), shown by name
+        if (statVal.isNotEmpty() || statKey.isNotEmpty()) {
             if (inlineLabel) {
                 InlineStatLabel(statKey, statVal)
             } else if (cardStyle) {

@@ -996,6 +996,26 @@ local function itemSoul(item)
     return name, value
 end
 
+-- The first effect of a potion or a scroll, as (value, KEY): its magnitude and its name, or "" for
+-- an effect without a magnitude (Mark, Recall). nil when there is none.
+local function firstEffectStat(effects)
+    local eff = effects and effects[1]
+    if not eff then return nil end
+    local nm = magicEffectName(eff)
+    if not nm then return nil end
+    -- "Fortify Attribute" alone does not say which one; name it, as the info popup does
+    pcall(function()
+        if eff.affectedAttribute then
+            nm = nm:gsub(" Attribute$", "") .. " " .. tostring(eff.affectedAttribute)
+        elseif eff.affectedSkill then
+            nm = nm:gsub(" Skill$", "") .. " " .. tostring(eff.affectedSkill)
+        end
+    end)
+    local mag = 0
+    pcall(function() mag = math.floor((eff.magnitudeMax or eff.magnitudeMin or 0) + 0.5) end)
+    return mag > 0 and string.format("%d", mag) or "", string.upper(nm)
+end
+
 local function itemStats(item, cat)
     local okr, rec = pcall(function() return item.type.record(item) end)
     if not okr or not rec then return "", "", nil end
@@ -1050,23 +1070,18 @@ local function itemStats(item, cat)
         -- No quality stat for lockpicks/probes (not gameplay-relevant); keep the uses-left bar.
         return "", "", condRatio(rec.maxCondition)
     elseif cat == "potion" then
-        local eff = rec.effects and rec.effects[1]
-        if eff then
-            local nm = magicEffectName(eff)
-            if nm then
-                -- "Fortify Attribute" alone does not say which one; name it, as the info popup does
-                pcall(function()
-                    if eff.affectedAttribute then
-                        nm = nm:gsub(" Attribute$", "") .. " " .. tostring(eff.affectedAttribute)
-                    elseif eff.affectedSkill then
-                        nm = nm:gsub(" Skill$", "") .. " " .. tostring(eff.affectedSkill)
-                    end
-                end)
-                local mag = 0
-                pcall(function() mag = math.floor((eff.magnitudeMax or eff.magnitudeMin or 0) + 0.5) end)
-                return string.format("%d", mag), string.upper(nm), nil
-            end
-        end
+        local v, k = firstEffectStat(rec.effects)
+        if k then return v, k, nil end
+    elseif cat == "scroll" then
+        -- a scroll's effects are in its enchantment, not in the book record
+        local effects
+        pcall(function()
+            local enchId = itemEnchantId(item)
+            local ench = enchId and core.magic.enchantments.records[enchId]
+            effects = ench and ench.effects
+        end)
+        local v, k = firstEffectStat(effects)
+        if k then return v, k, nil end
     elseif cat == "ingredient" then
         local n = 0
         pcall(function()
