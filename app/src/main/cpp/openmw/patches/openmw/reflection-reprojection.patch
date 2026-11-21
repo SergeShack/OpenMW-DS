@@ -1,0 +1,176 @@
+--- a/apps/openmw/mwrender/water.cpp
++++ b/apps/openmw/mwrender/water.cpp
+@@ -326,9 +326,11 @@
+         }
+ 
+         // Drawing the reflection costs the draw thread as much as a second view of the terrain. Every other frame
+-        // the water shows the last one, a frame late, which its ripples hide. While the camera turns, a frame-old
+-        // reflection would jump back and forth, so then it is drawn in every frame. Decided once per frame, since
+-        // both the culling of the reflection and the water's choice of texture ask.
++        // the water shows the last one, read where each point of the water was on the screen when it was drawn
++        // (see ShaderWaterStateSetUpdater), so it stays in place while the camera moves. While the camera turns
++        // faster, the edge of the screen would show the stretched border of the last image, so then it is drawn in
++        // every frame. Decided once per frame, since both the culling of the reflection and the water's choice of
++        // texture ask.
+         bool renderInFrame(osgUtil::CullVisitor* cv) override
+         {
+             if (!mEveryOtherFrame)
+@@ -339,8 +341,8 @@
+             const osg::Matrix& view = *cv->getModelViewMatrix();
+             osg::Vec3f dir(view(0, 2), view(1, 2), view(2, 2));
+             dir.normalize();
+-            // about half a degree away from the view of the last drawn reflection
+-            const bool turned = dir * mLastRenderedDir < 0.99996f;
++            // about one degree away from the view of the last drawn reflection
++            const bool turned = dir * mLastRenderedDir < 0.99985f;
+             mRenderDecided = frameNumber % 2 == 0 || turned;
+             mDecidedFrame = frameNumber;
+             if (mRenderDecided)
+@@ -685,6 +687,7 @@
+                 stateset->addUniform(new osg::Uniform("rippleMap", 4));
+             }
+             stateset->addUniform(new osg::Uniform("nodePosition", osg::Vec3f(mWater->getPosition())));
++            stateset->addUniform(new osg::Uniform("reflectionReproject", osg::Matrixf()));
+         }
+ 
+         void apply(osg::StateSet* stateset, osg::NodeVisitor* nv) override
+@@ -702,6 +705,34 @@
+                 stateset->setTextureAttributeAndModes(4, mRipples->getColorTexture(), osg::StateAttribute::ON);
+             }
+             stateset->getUniform("nodePosition")->set(osg::Vec3f(mWater->getPosition()));
++            // A reflection drawn in an earlier frame is read where the water was on the screen then. A point on the
++            // water plane is its own mirror image, so this is exact for the flat water. The matrix takes the water's
++            // view coordinates now to how much its clip coordinates have changed since that frame. Only the change
++            // goes to the shader: the water mesh reaches hundreds of thousands of units away, and the whole moved
++            // position would lose the small change to float rounding. Both model views are taken here, so with the
++            // camera still the change is exactly zero. The reflection, shadow and local map cameras cull the water
++            // too, with this same state set; only the main view sets the uniform.
++            if (cv->getCurrentCamera()->getRenderOrder() != osg::Camera::PRE_RENDER)
++            {
++                const unsigned int frameNumber = cv->getFrameStamp()->getFrameNumber();
++                const osg::Matrixd& modelView = *cv->getModelViewMatrix();
++                osg::Matrixf reproject(
++                    0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f);
++                unsigned int shownFrameNumber = 0;
++                if (!mReflection->getShownEarlierFrame(cv, shownFrameNumber))
++                {
++                    mDrawnModelView = modelView;
++                    mDrawnFrameNumber = frameNumber;
++                }
++                else if (shownFrameNumber == mDrawnFrameNumber)
++                {
++                    osg::Matrixd toDrawn = osg::Matrixd::inverse(modelView) * mDrawnModelView;
++                    for (int i = 0; i < 4; ++i)
++                        toDrawn(i, i) -= 1.0;
++                    reproject = toDrawn * *cv->getProjectionMatrix();
++                }
++                stateset->getUniform("reflectionReproject")->set(reproject);
++            }
+             // without a sun glint (night, rain, overcast) the shadow lookup would change nothing, and only having
+             // it in the shader costs time, so the water is drawn with a program without it
+             stateset->setAttributeAndModes(
+@@ -716,6 +747,9 @@
+         osg::ref_ptr<osg::Program> mProgram;
+         osg::ref_ptr<osg::Program> mProgramNoGlint;
+         osg::ref_ptr<osg::Texture2D> mNormalMap;
++        // the water's model view in the frame the shown reflection was drawn
++        osg::Matrixd mDrawnModelView;
++        unsigned int mDrawnFrameNumber = ~0u;
+     };
+ 
+     void Water::createShaderWaterStateSet(osg::Node* node)
+--- a/components/sceneutil/rtt.cpp
++++ b/components/sceneutil/rtt.cpp
+@@ -66,6 +66,7 @@
+             }
+             vdd->mCamera->accept(*cv);
+             vdd->mRendered = true;
++            vdd->mRenderedFrameNumber = frameNumber;
+             mLastRendered = mViewDependentDataMap[shouldDoPerViewMapping() ? cv : nullptr];
+         }
+         vdd->mFrameNumber = frameNumber;
+@@ -167,6 +168,18 @@
+         return vdd;
+     }
+ 
++    bool RTTNode::getShownEarlierFrame(osgUtil::CullVisitor* cv, unsigned int& frameNumber)
++    {
++        // the same choice as getShownViewDependentData()
++        auto* vdd = getViewDependentData(cv);
++        if (vdd->mRendered && mLastRendered && !renderInFrame(cv))
++        {
++            frameNumber = mLastRendered->mRenderedFrameNumber;
++            return true;
++        }
++        return false;
++    }
++
+     osg::Texture* RTTNode::getColorTexture(osgUtil::CullVisitor* cv)
+     {
+         return getShownViewDependentData(cv)->mColorTexture;
+--- a/components/sceneutil/rtt.hpp
++++ b/components/sceneutil/rtt.hpp
+@@ -58,6 +58,9 @@
+ 
+         osg::Camera* getCamera(osgUtil::CullVisitor* cv);
+ 
++        /// Whether the shown textures were rendered in an earlier frame (see renderInFrame()), and in which.
++        bool getShownEarlierFrame(osgUtil::CullVisitor* cv, unsigned int& frameNumber);
++
+         /// Set default settings - optionally override in derived classes
+         virtual void setDefaults(osg::Camera* camera) {}
+ 
+@@ -101,6 +104,7 @@
+             osg::ref_ptr<osg::Texture> mDepthTexture;
+             unsigned int mFrameNumber = 0;
+             bool mRendered = false;
++            unsigned int mRenderedFrameNumber = 0;
+         };
+ 
+         ViewDependentData* getViewDependentData(osgUtil::CullVisitor* cv);
+--- a/files/shaders/compatibility/water.frag
++++ b/files/shaders/compatibility/water.frag
+@@ -68,6 +68,8 @@
+ varying vec3 worldPos;
+ 
+ varying vec2 rippleMapUV;
++varying vec4 clipPos;
++varying vec4 reflectionClipShift;
+ 
+ varying vec4 position;
+ varying float linearDepth;
+@@ -152,8 +154,11 @@
+     float waterDepthDistorted = max(depthSampleDistorted - surfaceDepth, 0.0);
+     screenCoordsOffset *= clamp(realWaterDepth / BUMP_SUPPRESS_DEPTH, 0.0, 1.0);
+ #endif
+-    // reflection
+-    vec3 reflection = sampleReflectionMap(screenCoords + screenCoordsOffset).rgb;
++    // reflection, read where this point was on the screen when the reflection was drawn, which may be a frame ago
++    vec2 ndc = clipPos.xy / clipPos.w;
++    vec2 reflectionCoords = screenCoords
++        + 0.5 * (reflectionClipShift.xy - ndc * reflectionClipShift.w) / (clipPos.w + reflectionClipShift.w);
++    vec3 reflection = sampleReflectionMap(reflectionCoords + screenCoordsOffset).rgb;
+ 
+     vec3 waterColor = WATER_COLOR * sunFade;
+ 
+--- a/files/shaders/compatibility/water.vert
++++ b/files/shaders/compatibility/water.vert
+@@ -10,13 +10,18 @@
+ 
+ uniform vec3 nodePosition;
+ uniform vec3 playerPos;
++uniform mat4 reflectionReproject;
+ 
+ varying vec3 worldPos;
+ varying vec2 rippleMapUV;
++varying vec4 clipPos;
++varying vec4 reflectionClipShift;
+ 
+ void main(void)
+ {
+     gl_Position = modelToClip(gl_Vertex);
++    clipPos = gl_Position;
++    reflectionClipShift = reflectionReproject * modelToView(gl_Vertex);
+ 
+     position = gl_Vertex;
+ 
