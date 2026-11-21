@@ -602,8 +602,11 @@ private enum class Tab(val label: String) {
     INVENTORY("Inventory"), MAGIC("Spells"), HUD("HUD"), STATS("Stats"), JOURNAL("Journal")
 }
 
-private fun InventoryItem.displayName(): String =
-    if (name.isNotBlank()) name else prettify(id)
+/** A filled soul gem names its soul, as the game's own tooltip does: "Grand Soul Gem (Golden Saint)". */
+private fun InventoryItem.displayName(): String {
+    val base = if (name.isNotBlank()) name else prettify(id)
+    return if (soul.isNotEmpty()) "$base ($soul)" else base
+}
 
 private fun SpellEntry.displayName(): String =
     if (name.isNotBlank()) name else prettify(id)

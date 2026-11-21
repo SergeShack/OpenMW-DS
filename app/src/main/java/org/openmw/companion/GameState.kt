@@ -34,7 +34,9 @@ data class InventoryItem(
      *  the field still parses (those items simply sort as worthless). */
     val value: Int = 0,
     /** Enchantment (id + type label + effects) for the info popup; null = not enchanted. */
-    val enchant: ItemEnchant? = null
+    val enchant: ItemEnchant? = null,
+    /** The trapped creature's name on a filled soul gem; "" for an empty gem or any other item. */
+    val soul: String = ""
 )
 
 // ---- Item classification (tap/long-press behaviour), keyed off the coarse category Lua's
@@ -232,7 +234,9 @@ fun potionNameWithoutPotionWord(name: String): String {
  */
 fun inventoryCardLabel(name: String, category: String, fits: (String) -> Boolean): String {
     if (fits(name)) return name
-    val stage1 = if (category == "potion") potionNameWithoutPotionWord(name) else name
+    // a filled soul gem's trapped soul (see displayName) matters more than the word "Soul"
+    val stage1 = if (category == "potion") potionNameWithoutPotionWord(name)
+        else name.replace(" Soul Gem (", " Gem (")
     if (fits(stage1)) return stage1
     val stage2 = dropLeadingPossessive(stage1)
     if (fits(stage2)) return stage2
